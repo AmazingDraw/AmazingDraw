@@ -142,17 +142,6 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 - `girlslike_zi_glnz.safetensors`（古力娜扎）
 - `girlslike_zi_lq.safetensors`（李沁）
 
-### 4.4 可选辅助 LoRA
-
-默认 Moody 工作流不强制，需要时再放进 `models/loras/`：
-
-| 文件 | 用途 | 来源 |
-| :--- | :--- | :--- |
-| `zit_sda_diversity.safetensors` | ZIT 多样性修复 | [Hugging Face · F16/z-image-turbo-sda](https://huggingface.co/F16/z-image-turbo-sda) |
-| `HandFocus_zib_style.safetensors` | ZIB 手部修正 | [CivitAI · HandFocus](https://civitai.red/models/421162) |
-
-> ZIB LoRA 只兼容 Z-Image Base，不兼容 ZIT Turbo（MoodyRealMix / harukiMIX）。
-
 ---
 
 ## 5. 🦞 OpenClaw Agent 网关
