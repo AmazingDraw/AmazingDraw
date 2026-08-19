@@ -7,7 +7,7 @@ Copyright (c) 2026 AmazingDraw
 开源外壳 — MIT License
 ================================================================
 
-以下内容按 MIT 许可：scripts/（WebUI、gpu-pipeline、CLI 壳、validation shim）、
+以下内容按 MIT 许可：scripts/（WebUI、gpu-pipeline、CLI 壳、validation shim，含 check_prompt.sh / check_prompt_multi.sh 短 shim）、
 doc/、SKILL.md、library/、user_presets/、workflows/、ComfyUI-Card-Engine/、
 install.sh 以及仓库根目录的用户文档。
 
