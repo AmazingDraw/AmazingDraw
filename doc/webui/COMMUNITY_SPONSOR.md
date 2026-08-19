@@ -1,7 +1,7 @@
 # amazing-draw · 交流与赞助 (COMMUNITY & SPONSOR)
 
 > **感谢您对 amazing-draw 抽卡控制台项目的关注与支持！**  
-> 本项目由 **小灰 (Github: ShuaiHui)** 倾心打造与维护，专注于为您提供极致优雅的本地 AI 绘图与 Agent 协同体验。
+> 本项目由 **AmazingDraw** 维护，做本地 AI 绘图与 Agent 协同。
 
 ---
 
