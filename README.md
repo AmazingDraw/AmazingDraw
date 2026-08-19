@@ -1,12 +1,12 @@
 # AmazingDraw
 
-抽卡引擎，带 WebUI 与 CLI。支持 **macOS** 与 **Windows（Git Bash）**。
+抽卡引擎，带 WebUI 与 CLI。**macOS** 为实际使用平台；**Windows（Git Bash）** 有发行包，尚未在实机上测试。
 
 ![总架构](doc/architecture.svg)
 
 ## 安装
 
-到 GitHub **[Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载对应压缩包，解压后在目录里执行。文件名里的 `cp39` / `cp312` 就是 Python 主版本。
+到 GitHub **[Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载对应压缩包，解压到一个固定目录（例如 macOS `~/AmazingDraw`，Windows `C:\AmazingDraw`）。这个目录就是运行时（WebUI / CLI / skill），可以放在任意位置；不要拆散文件，不要解压进 ComfyUI。然后在解压后的根目录执行 `bash install.sh`。文件名里的 `cp39` / `cp312` 就是 Python 主版本。
 
 | 包 | 系统 | Python |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 bash install.sh
 ```
 
-Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bash。PowerShell 不能直接跑 `install.sh`。
+Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bash。PowerShell 不能直接跑 `install.sh`。Windows 安装路径按 Git Bash 写了，但尚未在实机上测试。
 
 安装会按 `config.example.json` 生成 `~/.openclaw/draw-cards/config.json`（已有则不覆盖）。对话后端默认 `custom`，OpenClaw 可选。
 
@@ -45,7 +45,7 @@ python3 card_cli.py create --person "OL" --scene "停车场"
 bash scripts/gpu-pipeline/comfyui-start.sh start
 ```
 
-`install.sh` 会把 `ComfyUI-Card-Engine/` 装进 ComfyUI 的 custom_nodes。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
+`install.sh` 会把工作流拷到 `~/ComfyUI/workflows/`，并把 `ComfyUI-Card-Engine/` 装进 ComfyUI 的 custom_nodes。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
 
 ## 内核
 

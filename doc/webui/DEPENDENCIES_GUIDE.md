@@ -1,7 +1,9 @@
 # amazing-draw · 软件、模型与环境依赖全量指南 (DEPENDENCIES)
 
 > **目标**：为全新的 macOS / Windows 机器提供从零搭建、环境依赖、模型下载、软件放置到一键绿线验证的完整指南。
-> **平台兼容**：内核按平台分发：macOS 在本机编译 `.so`，Windows 由 CI 编译 `.pyd`。Windows 用 [Git for Windows](https://git-scm.com/download/win) 提供 bash 层（见 §1.2 / §8）。
+> **平台兼容**：内核按平台分发：macOS 在本机编译 `.so`，Windows 由 CI 编译 `.pyd`。Windows 用 [Git for Windows](https://git-scm.com/download/win) 提供 bash 层（见 §1.2 / §8）。**Windows 尚未实机测试。**
+>
+> **发行包放哪**：zip 解压到任意固定目录即可（例如 macOS `~/AmazingDraw`，Windows `C:\AmazingDraw`）。解压目录就是运行时（WebUI / CLI / skill），不要拆散、不要放进 ComfyUI，也不要把 `assets.bin` 从 `card_engine_core/native/` 拆走。`install.sh` 会把工作流拷到 `~/ComfyUI/workflows/`、自定义节点拷到 ComfyUI `custom_nodes/`；配置写到 `~/.openclaw/draw-cards/config.json`。
 
 ---
 
@@ -30,7 +32,7 @@ macOS 可用 [Homebrew](https://brew.sh/)；Windows 也可用 [`uv`](https://git
 
 ### 1.2 Windows 特别说明
 
-Windows 下 bash 由 **[Git for Windows](https://git-scm.com/download/win)** 提供（Git Bash），补上后 shell 管线（`gpu-pipeline/*.sh`）才能运行。安装页：[git-scm.com/download/win](https://git-scm.com/download/win)。
+Windows 下 bash 由 **[Git for Windows](https://git-scm.com/download/win)** 提供（Git Bash），补上后 shell 管线（`gpu-pipeline/*.sh`）才能运行。安装页：[git-scm.com/download/win](https://git-scm.com/download/win)。**Windows 发行包尚未在实机上测试。**
 
 ⚠️ **关键**：Windows 内核是 `.pyd`（非 macOS 的 `.so`），且 `.pyd` 的 Python 主版本必须与运行环境一致（必须与 zip 标签一致：`cp39` 跑 3.9，`cp312` 跑 3.12）。只装 [Git for Windows](https://git-scm.com/download/win)、不配对应 `.pyd`，内核无法加载（详见 §8）。
 
