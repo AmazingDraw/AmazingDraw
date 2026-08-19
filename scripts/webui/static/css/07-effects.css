@@ -1,0 +1,2215 @@
+/* 07-effects.css — 提示词面板、思考气泡、动效、模式栏与响应式
+   由 app.css 连续切分而来；<link> 顺序即层叠顺序，不可调换。 */
+/* =====================================================================
+   🎨 Modern Elegant Prompt Board Layout (Mac Window Vibe)
+   ===================================================================== */
+.prompt-board-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 6px;
+}
+
+.prompt-section-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft), var(--shadow-subtle);
+}
+
+html.light-mode .prompt-section-card {
+  background: #ffffff;
+  box-shadow: var(--shadow-soft), var(--shadow-subtle);
+}
+
+.prompt-section-card:hover {
+  border-color: rgba(124, 108, 255, 0.34);
+  box-shadow: 0 12px 28px rgba(101, 87, 221, 0.10), var(--shadow-subtle);
+}
+
+.prompt-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.prompt-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* MacOS Window Dots */
+.mac-window-dots {
+  display: flex;
+  gap: 6px;
+  margin-right: 4px;
+}
+
+.mac-window-dots .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.mac-window-dots .dot.close { background: #ff5f56; }
+.mac-window-dots .dot.minimize { background: #ffbd2e; }
+.mac-window-dots .dot.maximize { background: #27c93f; }
+
+.prompt-card-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.prompt-card-title i {
+  color: var(--color-primary);
+}
+
+/* Words / Tag Badge */
+.prompt-words-badge {
+  background: var(--color-primary-dim);
+  color: var(--color-primary);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.btn-copy-prompt {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: var(--transition-smooth);
+}
+
+.btn-copy-prompt:hover {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.prompt-content-area {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--text-main);
+  word-break: break-word;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-subtle);
+}
+
+html.light-mode .prompt-content-area {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-main);
+}
+
+.prompt-content-area.chinese-content {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+/* Flash highlight keyframes for prompts */
+.prompt-section-card.updated-flash {
+  animation: borderGlow 1.2s ease;
+}
+
+@keyframes borderGlow {
+  0%, 100% {
+    border-color: var(--border-color);
+    box-shadow: none;
+  }
+  50% {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 12px rgba(79, 70, 229, 0.3);
+  }
+}
+
+/* Quick Actions button details overrides */
+.queue-quick-actions {
+  gap: 8px !important; /* 加大队列间距 */
+}
+
+.queue-quick-actions button {
+  gap: 8px !important; /* 图标和文字保持 8px 完美空气感 */
+  font-weight: 500 !important;
+}
+
+.queue-quick-actions button#btn-quick-terminate:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.queue-quick-actions button#btn-quick-clear:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* =====================================================================
+   🏁 Draw Modes Added Styles
+   ===================================================================== */
+
+/* Navigation Sections and Dividers */
+.nav-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  padding: 8px 14px 4px 14px;
+}
+.nav-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 8px 12px;
+}
+
+.minimal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.minimal-table th,
+.minimal-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.minimal-table th {
+  color: var(--text-bright);
+  font-weight: 650;
+  background: var(--bg-soft);
+}
+
+.minimal-table tbody tr {
+  transition: var(--transition-smooth);
+}
+
+.minimal-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.minimal-table .badge-status {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  display: inline-block;
+  border: 1px solid transparent;
+}
+
+.minimal-table .badge-status.draft {
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  border-color: var(--border-soft);
+}
+
+.minimal-table .badge-status.queued {
+  background: rgba(56, 189, 248, 0.13);
+  color: var(--color-info);
+  border-color: rgba(56, 189, 248, 0.20);
+}
+
+.minimal-table .badge-status.rendering {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--color-warning);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.minimal-table .badge-status.success,
+.minimal-table .badge-status.rendered {
+  background: rgba(34, 197, 94, 0.13);
+  color: var(--color-success);
+  border-color: rgba(34, 197, 94, 0.20);
+}
+
+.minimal-table .badge-status.failed {
+  background: rgba(239, 68, 68, 0.13);
+  color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+.minimal-table .btn-action-sm {
+  padding: 6px 9px;
+  font-size: 0.72rem;
+  margin-right: 5px;
+  border-radius: 7px;
+}
+
+/* =====================================================================
+   🎬 Modern Glassmorphic Director Thinking Bubble & Milestones
+   ===================================================================== */
+.director-thinking-bubble {
+  background: linear-gradient(135deg, rgba(20, 21, 30, 0.92) 0%, rgba(10, 11, 16, 0.96) 100%) !important;
+  border: 1px solid rgba(79, 70, 229, 0.25) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), 
+              inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  padding: 16px 20px !important;
+  border-radius: 12px !important;
+  max-width: 500px;
+}
+
+/* Light Mode Override for Director Thinking Bubble */
+html.light-mode .director-thinking-bubble {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 243, 240, 0.98) 100%) !important;
+  border: 1px solid rgba(79, 70, 229, 0.15) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08), 
+              inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.thinking-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.thinking-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thinking-title i {
+  color: var(--color-primary);
+}
+
+.thinking-step {
+  font-size: 0.72rem;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.thinking-progress-bar {
+  height: 5px;
+  background: var(--border-color);
+  border-radius: 2.5px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.thinking-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary) 0%, #818cf8 50%, var(--color-primary) 100%);
+  background-size: 200% 100%;
+  width: 0%;
+  border-radius: 2.5px;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px var(--color-primary);
+  animation: progress-shimmer 2.5s infinite linear;
+}
+
+@keyframes progress-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.thinking-stages {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.stage-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  opacity: 0.35;
+  transition: var(--transition-smooth);
+}
+
+.stage-item i {
+  width: 28px;
+  height: 28px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.4s ease,
+              background 0.4s ease,
+              border-color 0.4s ease,
+              color 0.4s ease;
+}
+
+.stage-item span {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+/* Active Stage */
+.stage-item.active {
+  opacity: 1;
+}
+
+.stage-item.active i {
+  border-color: var(--color-primary);
+  background: var(--color-primary-dim);
+  color: var(--text-bright);
+  box-shadow: 0 0 14px rgba(79, 70, 229, 0.45);
+  transform: scale(1.15);
+  animation: stage-pulse 2s infinite ease-in-out;
+}
+
+.stage-item.active span {
+  color: var(--text-bright);
+}
+
+/* Completed Stage */
+.stage-item.completed {
+  opacity: 0.85;
+}
+
+.stage-item.completed i {
+  border-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--color-success);
+  transform: scale(1);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
+
+.stage-item.completed span {
+  color: var(--text-muted);
+}
+
+.thinking-subtext {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  min-height: 22px;
+}
+
+/* Text Fade & Slide-up Transition */
+.text-fade {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.text-fade.text-hidden {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@keyframes stage-pulse {
+  0%, 100% {
+    transform: scale(1.15);
+    box-shadow: 0 0 14px rgba(79, 70, 229, 0.45);
+  }
+  50% {
+    transform: scale(1.22);
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.7);
+  }
+}
+
+/* =====================================================================
+   🏁 Sidebar Accordion Navigation
+   ===================================================================== */
+.nav-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 6px;
+  transition: background-color 0.2s, color 0.2s;
+  user-select: none;
+  margin-top: 10px;
+}
+
+.nav-section-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-bright);
+}
+
+.nav-section-header .nav-section-title {
+  padding: 0;
+  margin: 0;
+}
+
+.nav-section-header .toggle-icon {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  transition: transform 0.25s ease;
+}
+
+.nav-section-content {
+  overflow: hidden;
+  transition: max-height 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+  max-height: 200px;
+  opacity: 1;
+}
+
+.nav-section-content.collapsed {
+  display: none !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.nav-section-header.collapsed .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+/* Card Action Buttons Group */
+.sidebar-card-item {
+  position: relative;
+  padding-right: 40px !important;
+}
+
+.sidebar-card-item .card-action-buttons {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(-2px);
+}
+
+.sidebar-card-item:hover .card-action-buttons {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* 归档请求可能涉及远程卷和可选 LLM，离开 hover 后仍需明确显示进行态。 */
+.sidebar-card-item.archiving .card-action-buttons {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.sidebar-card-item .card-action-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-card-item .card-action-btn i,
+.sidebar-card-item .card-action-btn svg {
+  font-size: 0.65rem;
+  width: 11px;
+  height: 11px;
+  transition: transform 0.2s ease;
+}
+
+/* Light mode specific styling overrides */
+html.light-mode .sidebar-card-item .card-action-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+/* Button specific hovers */
+.sidebar-card-item .card-action-btn.btn-rerender:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-dim);
+  border-color: rgba(124, 108, 255, 0.3);
+  transform: scale(1.08);
+}
+.sidebar-card-item .card-action-btn.btn-rerender:hover i.fa-arrow-rotate-right,
+.sidebar-card-item .card-action-btn.btn-rerender:hover svg {
+  transform: rotate(45deg);
+}
+
+.sidebar-card-item .card-action-btn.btn-archive:hover {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  transform: scale(1.08);
+}
+
+.sidebar-card-item .card-action-btn.btn-archive.is-archiving,
+.sidebar-card-item .card-action-btn.btn-archive.is-archiving:hover {
+  color: #818cf8;
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(129, 140, 248, 0.42);
+  cursor: progress;
+  opacity: 1;
+  transform: none;
+}
+
+html.light-mode .sidebar-card-item .card-action-btn.btn-archive.is-archiving,
+html.light-mode .sidebar-card-item .card-action-btn.btn-archive.is-archiving:hover {
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.10);
+  border-color: rgba(79, 70, 229, 0.30);
+}
+
+.archive-spinner {
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1.5px solid rgba(129, 140, 248, 0.28);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: archive-button-spin 0.75s linear infinite;
+}
+
+@keyframes archive-button-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-spinner {
+    animation: none;
+    border-color: currentColor;
+    border-right-color: transparent;
+  }
+}
+
+.archive-status-announcer {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sidebar-card-item .card-action-btn.btn-delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: scale(1.08);
+}
+
+/* Queue Cancel Button (Hover on Far Right Zone) */
+.queue-runtime-detail {
+  position: relative;
+}
+
+.queue-runtime-detail .queue-runtime-content {
+  padding-right: 40px !important;
+}
+
+.queue-runtime-detail .queue-cancel-btn {
+  position: absolute;
+  right: 7px;
+  top: 8px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  padding: 0;
+  margin: 0;
+  z-index: 5;
+  transition: var(--transition-smooth);
+}
+
+.queue-runtime-detail .queue-cancel-btn i {
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: var(--transition-smooth);
+  font-size: 0.76rem;
+}
+
+.queue-runtime-detail:hover .queue-cancel-btn i,
+.queue-runtime-detail .queue-cancel-btn:hover i {
+  opacity: 1;
+}
+
+.queue-runtime-detail .queue-cancel-btn:hover {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.10);
+}
+
+.queue-runtime-detail .queue-cancel-btn:hover i {
+  color: var(--color-danger);
+  transform: scale(1.02);
+}
+
+/* Elegant Animated Progress Bar */
+.render-progress-wrapper {
+  margin-top: 10px;
+}
+
+.render-progress-bar-bg {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+html.light-mode .render-progress-bar-bg {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.render-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), #a855f7, var(--color-primary));
+  background-size: 200% 100%;
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 6px rgba(79, 70, 229, 0.3);
+  opacity: 0.85;
+  animation: progress-slide 2.5s linear infinite;
+}
+
+@keyframes progress-slide {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* Card Delete Inline Confirmation Overlay */
+.card-delete-confirm-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(18, 21, 29, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+}
+
+html.light-mode .card-delete-confirm-overlay {
+  background: rgba(255, 255, 255, 0.90);
+}
+
+.card-delete-confirm-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.card-delete-confirm-overlay span {
+  font-size: 0.72rem;
+  color: var(--text-bright);
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.card-delete-confirm-overlay button {
+  border: 1px solid transparent;
+  padding: 5px 11px;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 650;
+  transition: var(--transition-smooth);
+  font-family: var(--font-sans);
+}
+
+.card-delete-confirm-overlay button.confirm-yes {
+  background: rgba(239, 68, 68, 0.92);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.18);
+}
+
+.card-delete-confirm-overlay button.confirm-yes:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.card-delete-confirm-overlay button.confirm-no {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+html.light-mode .card-delete-confirm-overlay button.confirm-no {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.card-delete-confirm-overlay button.confirm-no:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-bright);
+}
+
+html.light-mode .card-delete-confirm-overlay button.confirm-no:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Queue Cancel Inline Confirmation Overlay */
+.queue-cancel-confirm-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(18, 21, 29, 0.90);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+}
+
+html.light-mode .queue-cancel-confirm-overlay {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.queue-cancel-confirm-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.queue-cancel-confirm-overlay span {
+  font-size: 0.72rem;
+  color: var(--text-bright);
+  font-weight: 600;
+  text-align: center;
+}
+
+.queue-cancel-confirm-overlay .confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.queue-cancel-confirm-overlay button {
+  border: 1px solid transparent;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 650;
+  transition: var(--transition-smooth);
+  font-family: var(--font-sans);
+}
+
+.queue-cancel-confirm-overlay button.confirm-yes {
+  background: rgba(239, 68, 68, 0.92);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.18);
+}
+
+.queue-cancel-confirm-overlay button.confirm-yes:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.queue-cancel-confirm-overlay button.confirm-no {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+html.light-mode .queue-cancel-confirm-overlay button.confirm-no {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.queue-cancel-confirm-overlay button.confirm-no:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-bright);
+}
+
+html.light-mode .queue-cancel-confirm-overlay button.confirm-no:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* =====================================================================
+   ⚡ Direct Toggle Switch and Right Param Panel Tabs Styling
+   ===================================================================== */
+
+/* 1. 直投模式切换按钮 */
+.btn-direct-toggle {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-muted);
+  width: 48px;
+  height: 48px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-right: 0;
+}
+
+.btn-direct-toggle i {
+  font-size: 1.05rem;
+}
+
+.btn-direct-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-bright);
+  border-color: var(--text-muted);
+}
+
+.btn-direct-toggle.active {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+  animation: boltPulse 2s infinite ease-in-out;
+}
+
+@keyframes boltPulse {
+  0% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.3); }
+  50% { box-shadow: 0 0 16px rgba(245, 158, 11, 0.65); }
+  100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.3); }
+}
+
+/* 2. 右侧面板 Tabs 导航 */
+.panel-tabs {
+  display: flex;
+  background: var(--bg-input);
+  border-radius: 999px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  width: 100%;
+}
+
+.panel-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.25s ease;
+}
+
+.panel-tab-btn:hover {
+  color: var(--text-bright);
+}
+
+.panel-tab-btn.active {
+  background: var(--bg-secondary);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-subtle);
+}
+
+html.light-mode .panel-tab-btn.active {
+  background: #ffffff;
+}
+
+/* 3. 大图展示视图样式 */
+.gallery-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 5px;
+  gap: 15px;
+  width: 100%;
+}
+
+.gallery-image-wrapper {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  background: rgba(0,0,0,0.15);
+  aspect-ratio: 3/4;
+}
+
+.gallery-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s ease, opacity 0.15s ease-in-out;
+  cursor: zoom-in;
+  opacity: 0;
+}
+
+.gallery-img.loaded {
+  opacity: 1;
+}
+
+.gallery-image-wrapper:hover .gallery-img {
+  transform: scale(1.02);
+}
+
+.gallery-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  gap: 12px;
+  color: var(--text-muted);
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  min-height: 250px;
+}
+
+.gallery-placeholder i {
+  font-size: 2.2rem;
+  color: var(--border-color);
+}
+
+.gallery-placeholder.rendering i {
+  color: var(--color-primary);
+  animation: spin 2s infinite linear;
+}
+
+.gallery-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: stretch;
+}
+
+.gallery-actions .btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+}
+
+.gallery-meta-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  width: 100%;
+  font-size: 0.72rem;
+}
+
+.gallery-meta-card h4 {
+  font-size: 0.75rem;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gallery-meta-card p {
+  color: var(--text-main);
+  line-height: 1.45;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.1);
+  border-radius: 4px;
+  margin: 0;
+}
+
+/* =====================================================================
+   ↕️ Sidebar Resizable Handles
+   ===================================================================== */
+/* 命中区保持 5px 便于抓取，但只显示居中的 1px 细线，避免整条高饱和色块过于抢眼 */
+.resize-handle {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 99;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+/* 分割线本体：由手柄绘制而非相邻面板的 border，保证线正好落在拖拽区中轴 */
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: var(--border-color);
+  transition: background-color 0.15s ease;
+}
+
+.resize-handle:hover::after,
+.resize-handle.active::after {
+  background: var(--border-focus);
+}
+
+/* 右侧看板收起后宽度为 0，此时不该在窗口边缘留一条孤线 */
+.resize-handle.is-hidden {
+  display: none;
+}
+
+.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+.resizing .sidebar-left,
+.resizing .param-panel-right {
+  transition: none !important;
+}
+
+/* =====================================================================
+   🎬 Snappy Lightbox Modal Zoom Effect
+   ===================================================================== */
+#lightbox-modal {
+  transition: opacity 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#lightbox-modal .lightbox-content {
+  transform: scale(0.96);
+  transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#lightbox-modal.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#lightbox-modal.open .lightbox-content {
+  transform: scale(1);
+}
+
+/* =====================================================================
+   📸 Chat Image Bubble Snappy Fade-In
+   ===================================================================== */
+.chat-image-bubble img {
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+  cursor: zoom-in;
+}
+
+.chat-image-bubble img.loaded {
+  opacity: 1;
+}
+
+/* =====================================================================
+   ✨ Glowing Thinking Bubble Animation Effects
+   ===================================================================== */
+.thinking-glow-bubble {
+  animation: none;
+}
+
+@keyframes bubble-glow-pulse {
+  0% {
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15), 0 0 0 1px rgba(139, 92, 246, 0.1);
+  }
+  100% {
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.35), 0 0 12px 3px rgba(139, 92, 246, 0.25);
+  }
+}
+
+.thinking-spinner-ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--color-primary);
+  border-right-color: #ec4899;
+  border-bottom-color: #3b82f6;
+  animation: spin-ring-rotate 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin-ring-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.thinking-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  height: 8px;
+}
+
+.thinking-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  display: inline-block;
+  animation: thinking-dot-pulse 1.4s infinite cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.thinking-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes thinking-dot-pulse {
+  0%, 80%, 100% {
+    transform: scale(0.55);
+    opacity: 0.35;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.thinking-glow-shimmer {
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 150%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  animation: thinking-shimmer-sweep 3s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes thinking-shimmer-sweep {
+  0% {
+    left: -150%;
+  }
+  50%, 100% {
+    left: 150%;
+  }
+}
+
+/* 可折叠队列详情面板 */
+.queue-detail-list-panel {
+  max-height: 150px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.queue-detail-list-panel.collapsed {
+  max-height: 0;
+  border-top: none;
+  overflow: hidden;
+}
+.queue-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.72rem;
+  color: var(--text-main);
+  position: relative;
+}
+.queue-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 80%;
+}
+.queue-item-title {
+  font-weight: 500;
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-item-meta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+.queue-item-del-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+.queue-item-del-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+#queue-collapse-arrow {
+  transition: transform 0.3s ease;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+#queue-collapse-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+/* 简约长条音波/脉冲波形动画（不含发光与渐变色） */
+.thinking-wave-loader {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 12px;
+}
+
+.thinking-wave-loader span {
+  display: inline-block;
+  width: 2px;
+  height: 100%;
+  background-color: var(--text-muted);
+  border-radius: 1px;
+  animation: thinking-wave-pulse 1.2s infinite cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.thinking-wave-loader span:nth-child(1) { animation-delay: -1.2s; }
+.thinking-wave-loader span:nth-child(2) { animation-delay: -1.05s; }
+.thinking-wave-loader span:nth-child(3) { animation-delay: -0.9s; }
+.thinking-wave-loader span:nth-child(4) { animation-delay: -0.75s; }
+.thinking-wave-loader span:nth-child(5) { animation-delay: -0.6s; }
+
+@keyframes thinking-wave-pulse {
+  0%, 100% {
+    transform: scaleY(0.35);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Queue Clear Inline Confirmation Overlay */
+.queue-clear-confirm-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(18, 21, 29, 0.95);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 20;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+}
+
+html.light-mode .queue-clear-confirm-overlay {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.queue-clear-confirm-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.queue-clear-confirm-overlay span {
+  font-size: 0.75rem;
+  color: var(--text-bright);
+  font-weight: 600;
+  text-align: center;
+}
+
+.queue-clear-confirm-overlay .confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.queue-clear-confirm-overlay button {
+  border: 1px solid transparent;
+  padding: 5px 14px;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 650;
+  transition: var(--transition-smooth);
+  font-family: var(--font-sans);
+}
+
+.queue-clear-confirm-overlay button.confirm-yes {
+  background: rgba(239, 68, 68, 0.92);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(239, 68, 68, 0.18);
+}
+
+.queue-clear-confirm-overlay button.confirm-yes:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.queue-clear-confirm-overlay button.confirm-no {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+html.light-mode .queue-clear-confirm-overlay button.confirm-no {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.queue-clear-confirm-overlay button.confirm-no:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-bright);
+}
+
+html.light-mode .queue-clear-confirm-overlay button.confirm-no:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Queue Item Row Delete Confirmation Overlay */
+.queue-item-confirm-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(18, 21, 29, 0.95);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+}
+
+html.light-mode .queue-item-confirm-overlay {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.queue-item-confirm-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.queue-item-confirm-overlay span {
+  font-size: 0.7rem;
+  color: var(--text-bright);
+  font-weight: 500;
+}
+
+.queue-item-confirm-overlay .confirm-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.queue-item-confirm-overlay button {
+  border: 1px solid transparent;
+  padding: 3px 10px;
+  font-size: 0.65rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition-smooth);
+  font-family: var(--font-sans);
+}
+
+.queue-item-confirm-overlay button.confirm-yes {
+  background: rgba(239, 68, 68, 0.92);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.18);
+}
+
+.queue-item-confirm-overlay button.confirm-yes:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.queue-item-confirm-overlay button.confirm-no {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+html.light-mode .queue-item-confirm-overlay button.confirm-no {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.queue-item-confirm-overlay button.confirm-no:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-bright);
+}
+
+html.light-mode .queue-item-confirm-overlay button.confirm-no:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* =====================================================================
+   💭 Collapsible Thinking Process Box (Accordion)
+   ===================================================================== */
+.ai-thinking-box {
+  margin: 10px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-soft);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: var(--transition-smooth);
+}
+
+.ai-thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.015);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  transition: var(--transition-smooth);
+}
+
+.ai-thinking-header:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.ai-thinking-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  width: 16px;
+  height: 16px;
+}
+
+.ai-thinking-status-icon .fa-spinner {
+  color: var(--color-primary);
+}
+
+.ai-thinking-status-icon .fa-circle-check {
+  color: var(--color-success);
+}
+
+.ai-thinking-title {
+  flex: 1;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.ai-thinking-arrow {
+  display: flex;
+  align-items: center;
+  font-size: 0.72rem;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ai-thinking-content {
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-soft);
+  background: rgba(0, 0, 0, 0.12);
+  transition: var(--transition-smooth);
+  opacity: 1;
+  max-height: 2000px;
+}
+
+html.light-mode .ai-thinking-content {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* Collapsed State */
+.ai-thinking-box.collapsed .ai-thinking-arrow {
+  transform: rotate(-90deg);
+}
+
+.ai-thinking-box.collapsed .ai-thinking-content {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-color: transparent;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* =====================================================================
+   🛠️ Collapsible AI Tool Steps Milestone Box (Accordion & Timeline)
+   ===================================================================== */
+.ai-tools-box {
+  margin: 12px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-soft);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: var(--transition-smooth);
+}
+
+.ai-tools-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.015);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  transition: var(--transition-smooth);
+}
+
+.ai-tools-header:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.ai-tools-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+
+.ai-tools-title {
+  flex: 1;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.ai-tools-arrow {
+  display: flex;
+  align-items: center;
+  font-size: 0.72rem;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ai-tools-box.collapsed .ai-tools-arrow {
+  transform: rotate(-90deg);
+}
+
+.ai-tools-content {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-soft);
+  background: rgba(0, 0, 0, 0.12);
+  transition: var(--transition-smooth);
+  opacity: 1;
+  max-height: 2000px;
+}
+
+html.light-mode .ai-tools-content {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.ai-tools-box.collapsed .ai-tools-content {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-color: transparent;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 垂直时间线布局 (Vertical Steps Timeline) */
+.tools-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-left: 10px;
+}
+
+.tools-timeline::before {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--border-soft);
+  z-index: 1;
+}
+
+.timeline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 28px;
+  z-index: 2;
+}
+
+.timeline-node {
+  position: absolute;
+  left: 10px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  z-index: 3;
+  transition: all 0.2s ease;
+}
+
+/* 状态对应色值与动画 */
+.timeline-item.running .timeline-node {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(124, 108, 255, 0.15);
+  box-shadow: 0 0 8px var(--color-primary);
+}
+
+.timeline-item.success .timeline-node {
+  border-color: var(--color-success);
+  color: var(--color-success);
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.timeline-item.error .timeline-node {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timeline-title {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-bright);
+}
+
+.timeline-title code {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+.timeline-status-text {
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.timeline-item.running .timeline-status-text { color: var(--color-primary); }
+.timeline-item.success .timeline-status-text { color: var(--color-success); }
+.timeline-item.error .timeline-status-text { color: var(--color-danger); }
+
+/* 时间线卡片详情 */
+.timeline-body {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 500px;
+  overflow-y: auto;
+  transition: var(--transition-smooth);
+}
+
+html.light-mode .timeline-body {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.timeline-body pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.timeline-body .input-section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+html.light-mode .timeline-body .input-section {
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+/* =====================================================================
+   🎬 Smooth Switch Card Transition Animation
+   ===================================================================== */
+.chat-messages-body.fade-in-transition {
+  animation: chatBodyFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes chatBodyFadeIn {
+  from {
+    opacity: 0.3;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =====================================================================
+   🎛 Right mode rail (卡片/抽卡/配置/文档)
+   顶栏 68px 与 .chat-header 同高；左右无水平 padding，保证：
+   - border-left 从顶通到底
+   - 顶部分割线与中栏 header 底边对齐、横向通满
+   ===================================================================== */
+.chat-mode-sidebar {
+  position: relative;
+  width: 72px;
+  min-height: 100%;
+  align-self: stretch;
+  box-sizing: border-box;
+  /* 纵线通顶通底（含顶栏 68px 区域） */
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-shrink: 0;
+  padding: 0;
+  z-index: 2;
+}
+
+.chat-mode-sidebar-top {
+  height: 68px;
+  min-height: 68px;
+  max-height: 68px;
+  box-sizing: border-box;
+  width: 100%;
+  flex-shrink: 0;
+  margin: 0;
+  border-bottom: none; /* 横线见 .main-workspace::after */
+  background: var(--bg-primary);
+}
+
+.chat-mode-sidebar-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px;
+  box-sizing: border-box;
+}
+
+.chat-mode-indicator {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  width: calc(100% - 12px);
+  height: 0;
+  background: var(--color-primary);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.chat-mode-btn {
+  position: relative;
+  z-index: 1;
+  border: none;
+  width: 100%;
+  padding: 8px 0;
+  font-size: 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  transition: color 0.2s ease, transform 0.1s ease, background-color 0.2s ease !important;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.chat-mode-btn i {
+  font-size: 0.95rem;
+}
+
+.chat-mode-btn-sub {
+  font-size: 0.55rem;
+  opacity: 0.72;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.chat-mode-divider {
+  width: 55%;
+  height: 0;
+  border-top: 1px dashed var(--border-color);
+  margin: 6px 0;
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+
+.chat-mode-btn:hover:not(.active) {
+  color: var(--text-bright) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+html.light-mode .chat-mode-btn:hover:not(.active) {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.chat-mode-btn:active {
+  transform: scale(0.95);
+}
+
+/* --- 单条对话删除悬浮按钮样式 --- */
+.msg-bubble-container {
+  position: relative;
+  max-width: 100%;
+}
+
+.btn-delete-msg {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  padding: 8px;
+  font-size: 0.85rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-delete-msg:hover {
+  color: var(--color-danger, #ef4444) !important;
+  transform: translateY(-50%) scale(1.15);
+}
+
+.chat-message:hover .btn-delete-msg {
+  opacity: 0.6;
+}
+
+.chat-message .btn-delete-msg:hover {
+  opacity: 1;
+}
+
+/* AI 气泡: 垃圾桶显示在右侧 */
+.chat-message.ai .btn-delete-msg {
+  left: 100%;
+  margin-left: 8px;
+}
+
+/* User 气泡: 垃圾桶显示在左侧 */
+.chat-message.user .btn-delete-msg {
+  right: 100%;
+  margin-right: 8px;
+}
+
+/* 垂直模式选择器中的系统菜单（配置/文档）处于 active 状态下的高亮配色 */
+
+.chat-mode-btn.active {
+  color: #ffffff !important;
+}
+
+html.light-mode .chat-mode-btn.active {
+  color: #ffffff !important;
+}
+
+/* 诗词挂件交互特效 */
+.poetry-box:hover {
+  border-color: rgba(124, 108, 255, 0.45) !important;
+  background: rgba(124, 108, 255, 0.05) !important;
+  box-shadow: 0 4px 12px rgba(124, 108, 255, 0.04);
+}
+.poetry-box button:hover {
+  color: var(--color-primary) !important;
+}
+.poetry-box #poetry-text:hover {
+  color: var(--color-primary) !important;
+}
+.poetry-box #btn-play-poetry:hover {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  transform: scale(1.1);
+}
+
+@media (max-width: 1280px) {
+  .param-panel-right {
+    width: 400px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .param-panel-right {
+    width: 340px;
+  }
+
+  .chat-mode-sidebar {
+    width: 64px;
+  }
+
+  .chat-mode-btn-sub {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .app-layout {
+    overflow: hidden;
+  }
+
+  .sidebar-left {
+    width: 220px !important;
+  }
+
+  .chat-header {
+    padding: 0 16px;
+  }
+
+  .chat-messages-body,
+  .chat-input-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .chat-message,
+  .chat-input-container-inner {
+    max-width: 100%;
+  }
+
+  .main-workspace {
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .workspace-views-stack {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chat-mode-sidebar {
+    order: 3;
+    width: 100%;
+    min-height: 0;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .chat-mode-sidebar-top {
+    display: none;
+  }
+
+  .chat-mode-sidebar-body {
+    flex: 1;
+    flex-direction: row;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .chat-mode-indicator {
+    left: 0;
+    top: auto;
+    width: 0;
+    height: 2px;
+  }
+
+  .chat-mode-btn {
+    width: auto;
+    min-width: 72px;
+    padding: 8px 10px;
+  }
+
+  .chat-mode-divider {
+    display: none;
+  }
+
+  .param-panel-right {
+    display: none;
+  }
+
+  #resize-handle-right {
+    display: none;
+  }
+
+  .poetry-box {
+    margin: 16px 14px 10px;
+  }
+}
+
+@media (max-width: 720px) {
+  .sidebar-left {
+    width: 190px !important;
+  }
+
+  .chat-input-row {
+    gap: 8px;
+  }
+
+  .chat-input-row .btn-send,
+  .chat-input-row .btn-stop,
+  .btn-direct-toggle {
+    width: 42px;
+    height: 42px;
+  }
+
+  .chat-input-row textarea {
+    height: 42px;
+    min-height: 42px;
+  }
+}
+
+/* 📖 文档专属侧边栏导航按钮样式设计 */
+.doc-sidebar-tab-btn {
+  background: transparent;
+  color: var(--text-muted) !important;
+  transition: all 0.2s ease;
+}
+.doc-sidebar-tab-btn:hover {
+  background: rgba(124, 108, 255, 0.05) !important;
+  color: var(--color-primary) !important;
+}
+.doc-sidebar-tab-btn.active {
+  background: rgba(124, 108, 255, 0.1) !important;
+  color: var(--color-primary) !important;
+  font-weight: 600 !important;
+}
+html.light-mode .doc-sidebar-tab-btn.active {
+  background: rgba(124, 108, 255, 0.08) !important;
+}
+[data-theme="dark"] .doc-sidebar-tab-btn:hover {
+  background: rgba(124, 108, 255, 0.08) !important;
+}
+[data-theme="dark"] .doc-sidebar-tab-btn.active {
+  background: rgba(124, 108, 255, 0.15) !important;
+}

@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#5B4BD8">
+  <title>Amazing Draw</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.0.1">
+  <!-- 立即从 localStorage 读取主题，防止初始页面闪烁 -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem("theme") || "dark";
+      if (savedTheme === "light") {
+        document.documentElement.classList.add("light-mode");
+      }
+      // 首屏默认按卡片模式隐藏 AI 头像，等 settings 再切换 draw
+      const savedMode = (localStorage.getItem("chat_mode") || "cards").toLowerCase();
+      document.documentElement.classList.add(
+        savedMode === "draw" ? "draw-mode-active" : "cards-mode-active"
+      );
+    })();
+  </script>
+  <!-- FontAwesome 图标 + JetBrains Mono（代码）；UI 中文走系统字体栈 -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="fontawesome/css/all.min.css">
+  <!-- 引入 Marked 库渲染 Markdown 文档 -->
+  <script src="marked.min.js"></script>
+  <!-- 自定义样式 -->
+  <!-- 由 app.css 连续切分而来：顺序即层叠顺序，调换会改变样式优先级 -->
+  <link rel="stylesheet" href="css/01-base.css?v=1.9.7">
+  <link rel="stylesheet" href="css/02-layout.css?v=1.10.0">
+  <link rel="stylesheet" href="css/03-chat.css?v=1.9.7">
+  <link rel="stylesheet" href="css/04-panels.css?v=1.9.7">
+  <link rel="stylesheet" href="css/05-settings.css?v=1.9.7">
+  <link rel="stylesheet" href="css/06-components.css?v=1.9.7">
+  <link rel="stylesheet" href="css/07-effects.css?v=1.9.7">
+</head>
+<body>
+  <div id="archive-status-announcer" class="archive-status-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="card-status-announcer" class="archive-status-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- 主应用整体布局 -->
+  <div class="app-layout">
+    
+    <!-- 1. 左侧边栏: 统一导航 + 对话辅助 -->
+    <aside class="sidebar-left">
+      <div class="sidebar-brand">
+        <div class="brand-logo-title inline-flex-center inline-flex-gap-10 full-width">
+          <button class="brand-logo-btn" id="theme-toggle" title="切换深色/浅色" aria-label="切换深色/浅色">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+          </button>
+          <span id="logo-title" class="logo-title">Amazing Draw</span>
+          <!-- ComfyUI 状态指示灯 -->
+          <div class="comfy-status-container" title="ComfyUI 状态未知">
+            <span class="comfy-status-dot connecting" id="comfy-status-dot"></span>
+            <a href="#" target="_blank" id="comfy-status-link" class="comfy-status-text">ComfyUI</a>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 仅在 Chat 视图下显示或统一显示的辅助组件：卡片列表与队列 -->
+      <div class="sidebar-sub-panel" id="sidebar-chat-sub">
+        <!-- 📝 诗词小挂件 -->
+        <div class="poetry-box">
+          <div class="poetry-head">
+            <span class="poetry-head-label"><i class="fa-solid fa-feather"></i> <span id="poetry-info">诗词加载中...</span></span>
+          </div>
+          <div id="poetry-text" title="点击复制">
+            加载中...
+          </div>
+          <!-- 🎙️ 诗词音频播放按钮 -->
+          <button id="btn-play-poetry" title="播放朗读音频" aria-label="播放朗读音频">
+            <i class="fa-solid fa-play"></i>
+          </button>
+        </div>
+
+        <div class="sidebar-actions">
+          <button type="button" class="btn-sidebar-action" id="btn-create-card" title="手动新建卡片骨架">
+            <i class="fa-solid fa-circle-plus"></i> 新建卡片骨架
+          </button>
+        </div>
+
+        <!-- 卡片状态分类过滤器 -->
+        <div class="card-status-filters" id="card-status-filters">
+          <button class="filter-pill active" data-status="all">全部</button>
+          <button class="filter-pill" data-status="draft">草稿</button>
+          <button class="filter-pill" data-status="pending">定稿</button>
+          <button class="filter-pill" data-status="failed">失败</button>
+          <button class="filter-pill" data-status="rendered">完成</button>
+        </div>
+
+        <!-- 月份筛选：静态节点，月份选项在卡片加载后按年分组补齐；不放进列表汇总条，
+             避免每 3 秒的增量轮询重绘时打断正在展开的下拉 -->
+        <div class="card-time-filter-row">
+          <i class="fa-regular fa-calendar"></i>
+          <select id="card-time-filter" aria-label="按月份筛选卡片">
+            <option value="all">全部月份</option>
+          </select>
+        </div>
+
+
+
+        <div class="sidebar-list-info" id="sidebar-list-info"></div>
+
+        <!-- 活跃卡片列表 -->
+        <div class="sidebar-cards-wrapper" id="sidebar-cards-list">
+          <p class="placeholder-text">加载中...</p>
+        </div>
+      </div>
+
+      <!-- View B: Settings Sidebar (配置专属侧边栏) -->
+      <div class="sidebar-sub-panel hidden" id="sidebar-settings-sub">
+        <!-- 精简服务状态条 -->
+        <div class="settings-status-strip">
+          <span class="status-chip">
+            <span class="comfy-status-dot connecting" id="settings-sidebar-comfy-dot"></span>
+            <span id="settings-sidebar-comfy-text">检测中...</span>
+          </span>
+          <span class="status-chip">
+            <span class="status-dot-ok"></span>
+            <span>OpenClaw</span>
+          </span>
+        </div>
+
+        <!-- 分区锚点导航 -->
+        <div class="sidebar-section-label">
+          <i class="fa-solid fa-list-ul"></i>
+          <span>快速跳转</span>
+        </div>
+        <div class="sidebar-anchor-list" id="settings-anchor-nav">
+          <div class="anchor-group-label">环境与服务</div>
+          <button class="sidebar-anchor-btn active" data-anchor="settings-anchor-core">
+            <i class="fa-solid fa-server"></i>
+            <span>核心服务</span>
+          </button>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-server">
+            <i class="fa-solid fa-network-wired"></i>
+            <span>服务参数</span>
+          </button>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-workflow">
+            <i class="fa-solid fa-code-branch"></i>
+            <span>工作流管理</span>
+          </button>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-paths">
+            <i class="fa-solid fa-folder-tree"></i>
+            <span>物理路径</span>
+          </button>
+
+          <div class="anchor-group-label">生图与输出</div>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-delivery">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>分发通知</span>
+          </button>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-resolution">
+            <i class="fa-solid fa-crop"></i>
+            <span>分辨率预设</span>
+          </button>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-algorithm">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>生图算法参数</span>
+          </button>
+          <button class="sidebar-anchor-btn" data-anchor="settings-anchor-scene">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>场景权重</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- View C: Docs Sidebar (文档专属侧边栏) -->
+      <div class="sidebar-sub-panel hidden" id="sidebar-docs-sub">
+        <div class="sidebar-section-label">
+          <i class="fa-regular fa-file-lines"></i>
+          <span>帮助说明书目录</span>
+        </div>
+        <div class="docs-sidebar-menu" id="docs-sidebar-tabs">
+          <button class="doc-sidebar-tab-btn active" data-doc="user_guide">
+            <i class="fa-solid fa-compass"></i>
+            <span>操作指南</span>
+          </button>
+          <button class="doc-sidebar-tab-btn" data-doc="dependencies">
+            <i class="fa-solid fa-screwdriver-wrench"></i>
+            <span>环境与依赖</span>
+          </button>
+          <button class="doc-sidebar-tab-btn" data-doc="skill">
+            <i class="fa-solid fa-book-open"></i>
+            <span>总览 (SKILL)</span>
+          </button>
+          <button class="doc-sidebar-tab-btn" data-doc="config">
+            <i class="fa-solid fa-sliders"></i>
+            <span>配置指南</span>
+          </button>
+          <button class="doc-sidebar-tab-btn" data-doc="commands">
+            <i class="fa-solid fa-terminal"></i>
+            <span>命令速查</span>
+          </button>
+          <button class="doc-sidebar-tab-btn" data-doc="sponsor">
+            <i class="fa-solid fa-heart"></i>
+            <span>交流与赞助</span>
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- 左侧可拖拽手柄 -->
+    <div class="resize-handle" id="resize-handle-left"></div>
+
+    <!-- 2. 主体工作区：常驻左中右三栏骨架，四个视图共用同一右侧选择器/参数看板 -->
+    <div class="main-workspace">
+
+      <!-- 中栏：四个视图内容区（切换显示，右侧选择器/参数看板保持常驻不消失） -->
+      <div class="workspace-views-stack">
+
+      <!-- View A: Chat Workspace (对话) -->
+      <div class="workspace-view active" id="view-chat">
+        <div class="chat-workspace-layout">
+          <!-- 聊天区域 -->
+          <main class="chat-container-main">
+            <header class="chat-header">
+              <div class="chat-active-card-info" id="chat-active-card-title"></div>
+            </header>
+
+            <div class="chat-main-row">
+              <div class="chat-messages-and-input">
+                <div class="chat-messages-body" id="chat-body">
+                  <!-- 初始引导消息将在 JS 中通过 marked 渲染加载 -->
+                </div>
+
+                <footer class="chat-input-footer">
+                  <div class="chat-input-container-inner">
+                    <div class="chat-input-row">
+                      <textarea id="chat-input" placeholder="" autocomplete="off" rows="1"></textarea>
+                      <button id="btn-chat-featured" class="btn-direct-toggle" title="精选模式：随机灵感库笔记建卡并入队渲染" aria-label="精选模式：随机灵感库笔记建卡并入队渲染"><i class="fa-solid fa-dice"></i></button>
+                      <button id="btn-chat-direct-toggle" class="btn-direct-toggle" title="直投：输入完整英文 prompt 建卡并提交渲染" aria-label="直投：输入完整英文 prompt 建卡并提交渲染"><i class="fa-solid fa-bolt"></i></button>
+                      <button id="btn-chat-stop" class="btn-stop is-hidden" title="停止响应" aria-label="停止响应"><i class="fa-solid fa-stop"></i></button>
+                      <button id="btn-chat-send" class="btn-send" title="发送" aria-label="发送"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                  </div>
+                </footer>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <!-- View B: Settings Workspace (配置页面) -->
+      <div class="workspace-view" id="view-settings">
+        <header class="chat-header">
+          <div class="chat-active-card-info"><i class="fa-solid fa-sliders"></i> 系统环境配置 · 管理 ComfyUI 绘图服务与物理文件存放目录</div>
+        </header>
+        <div class="settings-page-container">
+          <div class="page-body">
+            <form id="form-settings-page">
+              <!-- 顶部粘性悬浮保存面板 (Glassmorphic Sticky Card) -->
+              <div class="settings-sticky-bar">
+                <div class="settings-sticky-copy">
+                  <i class="fa-solid fa-circle-info"></i>
+                  <span>修改配置参数后，请点击右侧保存以使之生效</span>
+                </div>
+                <button type="button" class="btn btn-primary-minimal btn-settings-save" id="btn-save-settings">
+                  <i class="fa-regular fa-floppy-disk"></i> 保存配置
+                </button>
+              </div>
+              <!-- 客户端未安装警告 -->
+              <div class="alert-box warning is-hidden" id="settings-agent-warning">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>未检测到本地安装的 OpenClaw 客户端。请确保已在终端中完成配置（如运行 <code>agy install</code> 且网关服务已正常启动）。</span>
+              </div>
+
+              <!-- 双栏网格布局 -->
+              <div class="settings-grid-layout">
+                
+                <!-- 左列「环境与服务」: 核心服务 / 物理路径 / 服务参数 / 工作流 -->
+                <div class="settings-column">
+                  <div class="settings-card-section" id="settings-anchor-core">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-server"></i> 核心执行与大模型配置
+                    </h3>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>AI 对话模型 (LLM Model)</label>
+                        <select name="llm_model" id="settings-llm-model">
+                          <option value="cli-proxy/ds-flash">加载中 (DeepSeek Flash)...</option>
+                        </select>
+                        <span class="help-text">对话式导演助理底层的 AI 大语言模型。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>独立调用 AI 模型 (Independent LLM)</label>
+                        <select name="independent_llm_model" id="settings-independent-llm-model">
+                          <option value="">跟随主对话模型 (Default)</option>
+                        </select>
+                        <span class="help-text">检索、合规判定等独立逻辑调用的 AI 模型。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>备用模型 (fallback_model)</label>
+                        <select name="llm_fallback_models" id="settings-llm-fallback-model">
+                          <option value="">不启用备用模型</option>
+                        </select>
+                        <span class="help-text">对话模型与独立调用模型故障时，自动降级到该备用模型重试。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>单模型重试次数 (llm_retry_limit)</label>
+                        <input type="number" name="llm_retry_limit" min="1" max="5" placeholder="1">
+                        <span class="help-text">每个模型最多尝试几次（含首次，1 = 不重试，上限 5）。仅超时/限流/5xx/空响应等瞬时故障会重试；密钥缺失等确定性错误直接降级到备用模型。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>ComfyUI 服务地址</label>
+                        <input type="text" name="comfyui_host" required placeholder="如 http://127.0.0.1:8188">
+                        <span class="help-text">绘图引擎后台连接的本地或局域网 ComfyUI 接口。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>ComfyUI 本地根目录 (comfyui_dir)</label>
+                        <input type="text" name="comfyui_dir" placeholder="如 ~/ComfyUI">
+                        <span class="help-text">ComfyUI 本地绝对安装根目录。</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="settings-card-section" id="settings-anchor-server">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-network-wired"></i> WebUI 本地服务运行参数
+                    </h3>
+                    
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>WebUI 监听主机 IP</label>
+                        <input type="text" name="webui_host" placeholder="0.0.0.0">
+                        <span class="help-text">本 WebUI 服务的监听绑定 IP（默认 0.0.0.0）。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>WebUI 监听端口</label>
+                        <input type="number" name="webui_port" min="1" max="65535" placeholder="8318">
+                        <span class="help-text">本 WebUI 服务端口号，默认 8318。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>单轮对话总时限（秒）</label>
+                        <input type="number" name="openclaw_ws_timeout_seconds" min="60" max="7200" placeholder="600">
+                        <span class="help-text">一轮对话最长允许跑多久，超时即中断本轮。agent 跑长工具链时中途长时间不出字属正常，不要设得太紧。默认 600，可填 60–7200。</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="settings-card-section" id="settings-anchor-workflow">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-code-branch"></i> 工作流配置与管理 (Workflow Manager)
+                    </h3>
+                    <div class="form-row">
+                      <label>默认工作流 (default_workflow)</label>
+                      <select name="default_workflow" id="settings-default-workflow">
+                        <!-- Will be populated dynamically by JS -->
+                      </select>
+                      <span class="help-text">抽卡或常规模式下，默认选用的 ComfyUI 渲染工作流配置。</span>
+                    </div>
+                  </div>
+
+                  <div class="settings-card-section" id="settings-anchor-paths">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-folder-tree"></i> 物理路径与存储管理 (Path & Storage)
+                    </h3>
+                    
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>Comfy 本地输出 (output_dir)</label>
+                        <input type="text" name="output_dir" placeholder="~/ComfyUI/output 或 C:\ComfyUI\output">
+                        <span class="help-text">ComfyUI 实时落盘目录（本地盘）。归档超时未拷走时图仍留在这里；WebUI /images 会同时挂载。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>外置归档目录 (output_dir_archive)</label>
+                        <input type="text" name="output_dir_archive" placeholder="~/Downloads/card-engine-out 或 D:\amazing_draw">
+                        <span class="help-text">交付优先拷贝到此目录；WebUI /images 优先从此取图。外置盘卡死时会超时回落本地命名。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>历史记录目录 (recording_dir)</label>
+                        <input type="text" name="recording_dir" placeholder="~/.card-engine/draw_history 或 D:\draw_history">
+                        <span class="help-text">抽卡生图结果与渲染历史的物理存档目录。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>自定义预设目录 (custom_presets_dir)</label>
+                        <input type="text" name="custom_presets_dir" placeholder="如 ~/.openclaw/draw-cards/custom_presets">
+                        <span class="help-text">用户自定义预设 JSON 物理存储路径。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>Obsidian保管箱 (obsidian_vault_dir)</label>
+                        <input type="text" name="obsidian_vault_dir" placeholder="如 ~/Documents/ObsidianVault">
+                        <span class="help-text">Obsidian Vault 保管箱的物理绝对路径。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>工作区目录 (openclaw_workspace)</label>
+                        <input type="text" name="openclaw_workspace_dir" placeholder="如 ~/openclaw-workspace">
+                        <span class="help-text">OpenClaw 本地工作区物理根目录。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>卡片物理目录 (cards_dir)</label>
+                        <input type="text" name="cards_dir" placeholder="如 ~/.openclaw/draw-cards/cards">
+                        <span class="help-text">已存卡片 JSON 物理保存目录；空则用代码默认。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>临时卡片目录 (tmp_dir)</label>
+                        <input type="text" name="tmp_dir" placeholder="如 /tmp/cu-card">
+                        <span class="help-text">队列锁 / DONE / meta 等临时目录；空则默认 /tmp/cu-card。</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  
+                  <!-- 基础服务配置 -->
+                  <!-- 物理路径与存储管理 -->
+                  <!-- 工作流管理配置 -->
+                  <!-- 场景库随机抽样权重 -->
+                </div>
+                
+                <!-- 右列「生图与输出」: 场景权重 / 分辨率 / 算法参数 / 分发通知 -->
+                <div class="settings-column">
+                  <div class="settings-card-section" id="settings-anchor-delivery">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-paper-plane"></i> 自动分发与通知配置
+                    </h3>
+                    <div class="form-row">
+                      <label>图片投递位置 (Delivery Channels)</label>
+                      <div class="checkbox-row-group">
+                        <label class="checkbox-inline">
+                          <input type="checkbox" name="delivery_telegram" checked>
+                          <span>Telegram (发图到 TG)</span>
+                        </label>
+                        <label class="checkbox-inline">
+                          <input type="checkbox" name="delivery_webui" checked>
+                          <span>WebUI (发图到 WebUI)</span>
+                        </label>
+                      </div>
+                      <span class="help-text">设置渲染成功后的输出图片会被投递到哪些渠道，默认均开启。</span>
+                    </div>
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>Telegram Chat ID</label>
+                        <input type="text" name="telegram_chat_id" placeholder="例如: 1234567890" class="input-mono">
+                        <span class="help-text">发送图片的 Chat ID（可填用户或群组 ID）。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>Telegram Bot Token</label>
+                        <input type="password" name="telegram_bot_token" placeholder="留空使用系统环境默认 Token" class="input-mono">
+                        <span class="help-text">机器人的 Bot Access Token，留空使用环境默认。</span>
+                      </div>
+                    </div>
+                  </div>
+
+
+
+
+                  <div class="settings-card-section" id="settings-anchor-resolution">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-crop"></i> 分辨率规格预设 (Resolution Presets)
+                    </h3>
+                    <div class="settings-inline-control">
+                      <label class="checkbox-inline settings-inline-checkbox">
+                        <input type="checkbox" name="lock_size_to_workflow" checked>
+                        <span>锁定工作流内置尺寸 (关闭后完全采用下方自定义分辨率)</span>
+                      </label>
+                    </div>
+                    <div class="resolution-presets-container">
+                      
+                      <!-- 竖版 -->
+                      <div class="resolution-preset-item">
+                        <div class="res-label">竖版 (3:4 / 7:9)</div>
+                        <div class="res-controls">
+                          <select name="res_vertical_preset" class="res-preset-select" id="settings-res-vertical-preset">
+                            <option value="custom">自定义尺寸</option>
+                            <option value="1024x1360">1024 x 1360</option>
+                            <option value="896x1152">896 x 1152</option>
+                            <option value="768x1024">768 x 1024</option>
+                            <option value="512x768">512 x 768</option>
+                            <option value="720x1280">720 x 1280</option>
+                          </select>
+                          <div class="res-inputs">
+                            <input type="number" name="res_vertical_w" id="settings-res-vertical-w" placeholder="宽" min="64" max="4096" step="64">
+                            <span>x</span>
+                            <input type="number" name="res_vertical_h" id="settings-res-vertical-h" placeholder="高" min="64" max="4096" step="64">
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 横版 -->
+                      <div class="resolution-preset-item">
+                        <div class="res-label">横版 (4:3 / 9:7)</div>
+                        <div class="res-controls">
+                          <select name="res_horizontal_preset" class="res-preset-select" id="settings-res-horizontal-preset">
+                            <option value="custom">自定义尺寸</option>
+                            <option value="1360x1024">1360 x 1024</option>
+                            <option value="1152x896">1152 x 896</option>
+                            <option value="1024x768">1024 x 768</option>
+                            <option value="768x512">768 x 512</option>
+                            <option value="1280x720">1280 x 720</option>
+                          </select>
+                          <div class="res-inputs">
+                            <input type="number" name="res_horizontal_w" id="settings-res-horizontal-w" placeholder="宽" min="64" max="4096" step="64">
+                            <span>x</span>
+                            <input type="number" name="res_horizontal_h" id="settings-res-horizontal-h" placeholder="高" min="64" max="4096" step="64">
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 方图 -->
+                      <div class="resolution-preset-item">
+                        <div class="res-label">方图 (1:1)</div>
+                        <div class="res-controls">
+                          <select name="res_square_preset" class="res-preset-select" id="settings-res-square-preset">
+                            <option value="custom">自定义尺寸</option>
+                            <option value="1280x1280">1280 x 1280</option>
+                            <option value="1024x1024">1024 x 1024</option>
+                            <option value="640x640">640 x 640</option>
+                            <option value="512x512">512 x 512</option>
+                          </select>
+                          <div class="res-inputs">
+                            <input type="number" name="res_square_w" id="settings-res-square-w" placeholder="宽" min="64" max="4096" step="64">
+                            <span>x</span>
+                            <input type="number" name="res_square_h" id="settings-res-square-h" placeholder="高" min="64" max="4096" step="64" readonly tabindex="-1" title="方图为 1:1，高度自动等于宽度">
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 电影宽屏 -->
+                      <div class="resolution-preset-item">
+                        <div class="res-label">电影宽屏 (2.35:1)</div>
+                        <div class="res-controls">
+                          <select name="res_widescreen_preset" class="res-preset-select" id="settings-res-widescreen-preset">
+                            <option value="custom">自定义尺寸</option>
+                            <option value="1792x768">1792 x 768</option>
+                            <option value="1504x640">1504 x 640</option>
+                            <option value="1280x544">1280 x 544</option>
+                            <option value="1088x464">1088 x 464</option>
+                          </select>
+                          <div class="res-inputs">
+                            <input type="number" name="res_widescreen_w" id="settings-res-widescreen-w" placeholder="宽" min="64" max="4096" step="64">
+                            <span>x</span>
+                            <input type="number" name="res_widescreen_h" id="settings-res-widescreen-h" placeholder="高" min="64" max="4096" step="64">
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                    <span class="help-text help-text-block">分别代表竖版肖像、横版风景、正方形、以及2.35:1电影宽屏构图在生图时的物理分辨率。选择预设将自动填充，手动输入将切回自定义。</span>
+                  </div>
+                  <div class="settings-card-section" id="settings-anchor-algorithm">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-wand-magic-sparkles"></i> 智能生图算法参数
+                    </h3>
+                    
+
+
+                    <div class="form-row">
+                      <label>画面裸露范围限制 (exposure)</label>
+                      <div id="settings-exposure-chips" class="chip-row"></div>
+                      <span class="help-text">勾选允许的裸露级别（可多选，至少保留一项）；未勾选的级别不会被抽中。</span>
+                    </div>
+
+
+                    <div class="form-row">
+                      <label class="checkbox-inline">
+                        <input type="checkbox" name="restrict_roles" id="settings-restrict-roles" checked>
+                        <span>限制角色</span>
+                      </label>
+                      <span class="help-text">打开后限制角色不进入角色库。关掉则恢复。</span>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>防重复冷却 (scene_cooldown_window)</label>
+                        <input type="number" name="scene_cooldown_window" min="1" max="100">
+                        <span class="help-text">防止最近抽到的场景重复出现的历史过滤条数。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>多人同框自动横屏</label>
+                        <div class="settings-inline-control">
+                          <label class="checkbox-inline">
+                            <input type="checkbox" name="auto_horizontal_for_multi">
+                            <span>自动强制横屏</span>
+                          </label>
+                        </div>
+                        <span class="help-text">出现多人同框描述时，系统自动切换为横版。</span>
+                      </div>
+                    </div>
+
+                  </div>
+                  <div class="settings-card-section" id="settings-anchor-scene">
+                    <h3 class="section-title">
+                      <i class="fa-solid fa-layer-group"></i> 兜底混合随机场景权重 (Scene Weights)
+                    </h3>
+                    <div id="scene-weights-container" class="form-grid-2">
+                      <!-- Will be populated dynamically by JS -->
+                    </div>
+                    <span class="help-text help-text-block">控制在随机抽卡时，各个场景库所占的相对抽样比重。</span>
+                  </div>
+
+                  <!-- 图片投递与通知 -->
+                  <!-- WebUI 服务运行参数 -->
+                  <!-- 分辨率规格预设 -->
+                  
+                  <!-- 绘图算法参数 -->
+                </div>
+
+              </div>
+
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- View C: Docs Workspace (帮助说明书) -->
+      <div class="workspace-view" id="view-docs">
+        <header class="chat-header">
+          <div class="chat-active-card-info"><i class="fa-regular fa-file-lines"></i> 帮助文档 · 操作指南 / SKILL / 安装 README</div>
+        </header>
+        <div class="docs-page-container">
+          <div class="docs-body-full">
+            <div class="docs-reader-content markdown-body" id="docs-reader-content-page">
+              加载中...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      </div>
+      <!-- /workspace-views-stack -->
+
+      <!-- 右栏：垂直模式选择器（常驻，四视图共用；顶栏分割线与中栏 chat-header 同高对齐、纵向线通顶） -->
+      <div class="chat-mode-sidebar" id="chat-mode-selector">
+        <div class="chat-mode-sidebar-top" aria-hidden="true"></div>
+        <div class="chat-mode-sidebar-body">
+          <div class="chat-mode-indicator" id="chat-mode-indicator"></div>
+          <button class="chat-mode-btn" data-mode="cards" title="Cards · 卡片：列表/预览/参数展示；发送会跳转 Draw 并携带当前卡">
+            <i class="fa-solid fa-id-card"></i>
+            <span>卡片</span>
+            <span class="chat-mode-btn-sub">Cards</span>
+          </button>
+          <button class="chat-mode-btn" data-mode="draw" title="Draw · 抽卡：AI 对话（极简人设 + CLI help），快捷钮进入常规/连抽/直投">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>抽卡</span>
+            <span class="chat-mode-btn-sub">Draw</span>
+          </button>
+          <div class="chat-mode-divider" aria-hidden="true"></div>
+          <button class="chat-mode-btn nav-view-trigger" data-view="settings" title="环境配置：管理 ComfyUI 服务与物理目录">
+            <i class="fa-solid fa-sliders"></i>
+            <span>配置</span>
+          </button>
+          <button class="chat-mode-btn nav-view-trigger" data-view="docs" title="帮助文档：查阅设计配方与操作指南">
+            <i class="fa-regular fa-file-lines"></i>
+            <span>文档</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 右侧可拖拽手柄 -->
+      <div class="resize-handle" id="resize-handle-right"></div>
+
+      <!-- 看板收起后的展开浮标（面板宽度归零时唯一的复原入口） -->
+      <button class="param-panel-expand" id="btn-expand-param-panel" title="展开参数看板" aria-label="展开右侧参数看板">
+        <i class="fa-solid fa-angles-left"></i>
+      </button>
+
+      <!-- 右侧参数看板（常驻；卡片/抽卡视图展示参数+队列，配置/文档视图下折叠收起） -->
+      <aside class="param-panel-right" id="param-panel">
+        <div class="panel-header">
+          <button class="btn-panel-toggle" id="btn-toggle-param-panel" title="收起参数看板" aria-label="收起或展开右侧参数看板">
+            <i class="fa-solid fa-angles-right"></i>
+          </button>
+        </div>
+        <div class="panel-scroll-body" id="param-panel-body">
+          <p class="placeholder-text">选择卡片后将在此显示配置参数。</p>
+        </div>
+
+        <div class="sidebar-queue-panel">
+          <div class="queue-header" id="queue-header-trigger">
+            <span>渲染队列</span>
+            <div class="inline-flex-center inline-flex-gap-6">
+              <span class="badge-text info" id="queue-count-badge">Idle</span>
+              <i class="fa-solid fa-chevron-down" id="queue-collapse-arrow"></i>
+            </div>
+          </div>
+          <div class="queue-runtime-detail" id="queue-runtime-detail">
+            <p class="status-empty">无正在渲染的任务</p>
+          </div>
+          <!-- 可折叠队列详情面板 -->
+          <div class="queue-detail-list-panel collapsed" id="queue-detail-list-panel"></div>
+          <div class="queue-quick-actions">
+            <button id="btn-quick-terminate" title="终止队列与绘图服务"><i class="fa-solid fa-stop"></i> 终止队列</button>
+            <button id="btn-quick-clear" title="清空队列"><i class="fa-solid fa-trash-can"></i> 清空队列</button>
+          </div>
+
+          <!-- 清空队列确认浮层 -->
+          <div class="queue-clear-confirm-overlay" id="queue-clear-confirm-overlay">
+            <span>确认清空所有排队任务？</span>
+            <div class="confirm-buttons">
+              <button class="confirm-yes" id="btn-clear-confirm-yes">确定</button>
+              <button class="confirm-no" id="btn-clear-confirm-no">取消</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+
+  </div>
+
+  <!-- 3. 新建卡片骨架快捷弹窗 (Create Modal) - 保持极简悬浮 -->
+  <div class="modal-overlay" id="create-modal">
+    <div class="modal-card quick-create-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-circle-plus"></i> 新建卡片骨架</h3>
+        <button class="btn-close-modal" id="btn-close-create"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-create">
+          <div class="form-row">
+            <label>抽卡模式</label>
+            <select name="mode" id="create-mode">
+              <option value="amateur">素人/角色预设 (Amateur)</option>
+              <option value="celebrity">明星 Lora 预设 (Celebrity)</option>
+            </select>
+          </div>
+          
+          <div class="form-row autocomplete-container">
+            <label>指定人物 (Person)</label>
+            <input type="text" name="person" id="create-person" placeholder="输入或选择角色预设/明星..." autocomplete="off">
+            <div class="autocomplete-list" id="person-suggestions"></div>
+          </div>
+
+          <div class="form-row autocomplete-container">
+            <label>指定场景 (Scene)</label>
+            <input type="text" name="scene" id="create-scene" placeholder="留空则随机，或选择场景预设..." autocomplete="off">
+            <div class="autocomplete-list" id="scene-suggestions"></div>
+          </div>
+
+          <div class="form-group-row">
+            <div class="form-row">
+              <label>画幅预设</label>
+              <select name="aspect" id="create-aspect">
+                <option value="portrait">竖版 (Portrait)</option>
+                <option value="landscape">横版 (Landscape)</option>
+                <option value="square">方图 (Square)</option>
+                <option value="widescreen">电影宽屏 (Widescreen)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>体型配置 (Profile)</label>
+              <select name="profile" id="create-profile">
+                <option value="default">默认关联 (Default)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label>创作诉求 (user_input)</label>
+            <textarea name="user_input" id="create-user-input" rows="3" required
+              placeholder="用中文描述这张卡想要什么，例如：护士在值班室偷偷自慰，露下，低角度偷拍感"></textarea>
+            <span class="help-text">引擎用它解析人物 / 场景 / 裸露 / 视角 / 风格等锁定项，留空会导致整张卡没有任何用户约束。</span>
+          </div>
+
+          <div class="form-row">
+            <label class="checkbox-inline">
+              <input type="checkbox" name="bundle" id="create-bundle">
+              <span>注入词库参考 (--bundle)</span>
+            </label>
+            <span class="help-text">开启后自动挑选词库章节，供 fill 阶段填 tattoo / props / pet / accessories 时取词。</span>
+          </div>
+
+          <div class="alert-box warning create-handoff-note">
+            <i class="fa-solid fa-robot"></i>
+            <span>建好后会自动切到<strong>抽卡会话</strong>并交给 AI 按常规流程接手（fill → options → render → present），停在选项菜单等你下指令，不会自动出图。</span>
+          </div>
+
+          <button type="submit" class="btn btn-primary-minimal">生成骨架并交给 AI</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用危险操作确认弹窗 (Danger Confirm Modal) -->
+  <div class="modal-overlay danger-confirm-modal" id="danger-confirm-modal">
+    <div class="modal-card danger-confirm-card">
+      <div class="modal-header">
+        <h3>
+          <i class="fa-solid fa-triangle-exclamation danger-confirm-icon"></i>
+          <span id="danger-confirm-title">确认操作</span>
+        </h3>
+        <button class="btn-close-modal" id="btn-close-danger-confirm" aria-label="关闭弹窗"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body danger-confirm-body">
+        <p id="danger-confirm-message" class="danger-confirm-message"></p>
+        <p id="danger-confirm-count-line" class="danger-confirm-count-line is-hidden">预计清理 <span id="danger-confirm-count">0</span> 张</p>
+        <p id="danger-confirm-hint" class="danger-confirm-hint"></p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary-minimal btn-sm" id="btn-danger-cancel">取消</button>
+          <button class="btn btn-danger-minimal btn-sm" id="btn-danger-confirm-ok">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox Overlay for Image Zoom -->
+  <div class="modal-overlay lightbox-overlay" id="lightbox-modal">
+    <div class="lightbox-content">
+      <img id="lightbox-img" alt="渲染图预览" decoding="async">
+      <button class="btn-close-modal lightbox-close" id="btn-close-lightbox" aria-label="关闭大图预览"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+  </div>
+
+  <!-- 消息全局提示框 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- JavaScript 引导 -->
+  <!-- 由 app.js 拆分而来：core.js 定义 state 与共享常量，必须最先加载 -->
+  <script src="js/core.js?v=1.9.7"></script>
+  <script src="js/shell.js?v=1.9.12"></script>
+  <script src="js/settings.js?v=1.9.10"></script>
+  <script src="js/cards.js?v=1.10.3"></script>
+  <script src="js/queue.js?v=1.9.7"></script>
+  <script src="js/chat.js?v=1.9.8"></script>
+  <script src="js/widgets.js?v=1.9.7"></script>
+</body>
+</html>

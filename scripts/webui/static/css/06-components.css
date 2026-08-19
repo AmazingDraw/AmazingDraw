@@ -1,0 +1,601 @@
+/* 06-components.css — 按钮、弹窗、补全、Toast
+   由 app.css 连续切分而来；<link> 顺序即层叠顺序，不可调换。 */
+/* =====================================================================
+   🔘 Minimalist Buttons
+   ===================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.btn-primary-minimal {
+  background: var(--color-primary);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.btn-primary-minimal:hover {
+  background: var(--color-primary-dark);
+}
+
+html.light-mode .btn-primary-minimal {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+html.light-mode .btn-primary-minimal:hover {
+  background: var(--color-primary-dark);
+}
+
+.btn-secondary-minimal {
+  background: var(--bg-elevated);
+  border-color: var(--border-color);
+  color: var(--text-main);
+  box-shadow: var(--shadow-subtle);
+}
+
+.btn-secondary-minimal:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+  color: var(--text-bright);
+}
+
+html.light-mode .btn-secondary-minimal:hover {
+  background: var(--bg-hover);
+}
+
+.btn-sm {
+  padding: 7px 11px;
+  font-size: 0.76rem;
+  border-radius: 7px;
+}
+
+.btn-load-more {
+  width: 100%;
+  font-size: 0.72rem;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  transition: var(--transition-smooth);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* =====================================================================
+   🗳️ Quick Create Modal Overlay (Keep floating modal)
+   ===================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 440px;
+  max-width: 90%;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(10px);
+  transition: transform 0.2s ease;
+}
+
+.modal-overlay.open .modal-card {
+  transform: translateY(0);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-header h3 i {
+  color: var(--color-primary);
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  transition: var(--transition-smooth);
+}
+
+.btn-close-modal:hover {
+  color: var(--text-bright);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 80vh;
+}
+
+/* 建卡进度态：随机路由要等 10~20 秒，需明确告知在做什么、已等多久 */
+.create-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 108, 255, 0.28);
+  background: rgba(124, 108, 255, 0.06);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.create-progress > i {
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.create-progress-phase {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+.create-progress-phase b {
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.create-progress-hint {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin-top: 3px;
+}
+
+/* Shared danger confirm modal */
+.danger-confirm-modal {
+  z-index: 9999;
+}
+
+.danger-confirm-card {
+  width: 380px;
+}
+
+.danger-confirm-card .modal-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.danger-confirm-card .modal-header h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.danger-confirm-icon {
+  color: var(--color-danger);
+}
+
+.danger-confirm-body {
+  padding: 16px 20px;
+  font-size: 0.78rem;
+  color: var(--text-main);
+  line-height: 1.5;
+  font-family: var(--font-sans);
+}
+
+.danger-confirm-message {
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.danger-confirm-count-line {
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.danger-confirm-count-line.is-hidden {
+  display: none;
+}
+
+.danger-confirm-hint {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/* Lightbox */
+.lightbox-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 10000;
+}
+
+.lightbox-overlay .lightbox-content {
+  position: relative;
+  max-width: 90%;
+  max-height: 90%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-overlay #lightbox-img {
+  max-width: 100%;
+  max-height: 90vh;
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  object-fit: contain;
+  cursor: zoom-out;
+  display: none;
+}
+
+.lightbox-overlay .lightbox-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  color: #fff;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+/* =====================================================================
+   🏢 Autocomplete Suggestions
+   ===================================================================== */
+.autocomplete-container {
+  position: relative;
+}
+
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-top: 4px;
+  /* 明星有百余位，160px 只能露两三条，翻起来很痛苦 */
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 1100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  display: none;
+}
+
+/* 首字母组头：滚动时吸顶，翻长列表时始终知道自己在哪一段 */
+.autocomplete-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 12px;
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.autocomplete-hint {
+  margin-left: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.autocomplete-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: var(--transition-smooth);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.autocomplete-item:hover {
+  background: var(--color-active-row);
+  color: var(--color-primary);
+}
+
+.autocomplete-item .badge-src {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.autocomplete-item .badge-src.builtin { background: rgba(37, 99, 235, 0.1); color: #3b82f6; }
+.autocomplete-item .badge-src.third-party { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.autocomplete-item .badge-src.celebrity { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+
+/* =====================================================================
+   🔔 Toast Notifications Container
+   ===================================================================== */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2000;
+}
+
+.toast {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 16px;
+  color: var(--text-bright);
+  font-size: 0.82rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideUpToast 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  min-width: 200px;
+  max-width: 380px;
+}
+
+.toast.success {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(16, 185, 129, 0.12);
+}
+.toast.error {
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(239, 68, 68, 0.12);
+}
+.toast.info {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(99, 102, 241, 0.12);
+}
+
+@keyframes slideUpToast {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.placeholder-text {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 24px 0;
+  font-style: italic;
+}
+
+/* Draw mode right panel — actionable empty / guide state */
+.draw-guide-panel {
+  padding: 14px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--text-main);
+}
+
+.draw-guide-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draw-guide-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-primary-soft);
+}
+
+.draw-guide-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: 0.01em;
+}
+
+.draw-guide-header p {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.draw-guide-session {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  border: 1px solid var(--border-soft);
+}
+
+.draw-guide-session .label {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.draw-guide-session .value {
+  font-size: 0.8rem;
+  color: var(--text-bright);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.draw-guide-session .meta {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.draw-guide-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.draw-guide-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-elevated);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+  transition: background-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.draw-guide-action:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+  transform: translateY(-1px);
+}
+
+.draw-guide-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.draw-guide-action i {
+  color: var(--color-primary-soft);
+  font-size: 0.9rem;
+}
+
+.draw-guide-action .title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.draw-guide-action .desc {
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.draw-guide-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.draw-guide-tips .tip-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.draw-guide-tips ul {
+  margin: 0;
+  padding-left: 1.05rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draw-guide-tips li {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.draw-guide-tips code {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-soft);
+  color: var(--color-primary-soft);
+}
+
+html.light-mode .draw-guide-tips code {
+  background: rgba(20, 24, 35, 0.05);
+  color: var(--color-primary-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draw-guide-action {
+    transition: none;
+  }
+  .draw-guide-action:hover {
+    transform: none;
+  }
+}
+

@@ -1,0 +1,174 @@
+/* 04-panels.css — 右侧参数看板
+   由 app.css 连续切分而来；<link> 顺序即层叠顺序，不可调换。 */
+/* =====================================================================
+   🏢 Right Side collapsible parameters panel
+   ===================================================================== */
+.param-panel-right {
+  width: 440px;
+  background: var(--bg-secondary);
+  /* 分割线交给 .resize-handle 绘制，才能落在拖拽区正中 */
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s, background-color 0.2s;
+  opacity: 1;
+}
+
+.param-panel-right.collapsed {
+  width: 0 !important;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.param-panel-right .panel-header {
+  height: 68px;
+  min-height: 68px;
+  max-height: 68px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border-bottom: none; /* 横线见 .main-workspace::after */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.param-panel-right h3 {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.param-panel-right h3 i {
+  color: var(--color-primary);
+}
+
+.param-panel-expand {
+  position: absolute;
+  top: 20px;
+  right: 12px;
+  z-index: 30;
+  display: none;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.param-panel-expand.visible {
+  display: flex;
+}
+
+.param-panel-expand:hover {
+  color: var(--text-bright);
+  border-color: var(--border-focus);
+  background: var(--bg-hover);
+}
+
+.btn-panel-toggle {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  transition: var(--transition-smooth);
+}
+
+.btn-panel-toggle:hover {
+  color: var(--text-bright);
+  border-color: var(--border-focus);
+  background: var(--bg-hover);
+}
+
+.panel-scroll-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.param-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 18px 0 10px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.param-section-title:first-child {
+  margin-top: 0;
+}
+
+.param-item {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.param-item .param-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.param-item .param-val {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-word;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+/* Param change highlight flashing */
+.param-item.updated-flash .param-val {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.profile-ref-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-top: 8px;
+}
+.profile-ref-content table th,
+.profile-ref-content table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+.profile-ref-content table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  width: 70px;
+}
+.profile-ref-content table td {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+}
+

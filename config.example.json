@@ -1,0 +1,137 @@
+{
+  "comfyui_host": "http://127.0.0.1:8188",
+  "output_dir": "~/Downloads/card-engine-out",
+  "tmp_dir": "/tmp/cu-card",
+  "cards_dir": "~/.openclaw/draw-cards/cards",
+  "comfyui_dir": "~/ComfyUI",
+  "obsidian_vault_dir": "",
+  "openclaw_workspace_dir": "",
+  "agent_backend": "custom",
+  "custom_presets_dir": "~/.openclaw/draw-cards/custom_presets",
+  "default_workflow": "moody_zib_zit",
+  "scene_cooldown_window": 9,
+  "scene_library_weights": {
+    "school_scenes": 5,
+    "general_scenes": 5,
+    "medical_scenes": 3,
+    "workplace_scenes": 3,
+    "sm_scenes": 5,
+    "special_scenes": 5,
+    "perspective_scenes": 0
+  },
+  "scene_registry": {
+    "libraries": {
+      "school_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "校园场景",
+        "file": "school_scenes.json"
+      },
+      "general_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "通用场景",
+        "file": "general_scenes.json"
+      },
+      "medical_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "医疗场景",
+        "file": "medical_scenes.json"
+      },
+      "workplace_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "职场场景",
+        "file": "workplace_scenes.json"
+      },
+      "sm_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "SM场景",
+        "file": "sm_scenes.json"
+      },
+      "special_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "特殊场景",
+        "file": "special_scenes.json"
+      },
+      "perspective_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "视角场景",
+        "file": "perspective_scenes.json"
+      }
+    }
+  },
+  "exposure_limit": [
+    "half_covered",
+    "half_nude"
+  ],
+  "workflows_aliases": {
+    "moody": "moody_zib_zit"
+  },
+  "workflows": {
+    "moody_zib_zit": {
+      "name": "Moody ZIB+ZIT",
+      "workflow_path": "workflows/Moody_ZIB_ZIT_20步_CFG3_512x768.json",
+      "filename_prefix": "Moody",
+      "prompt_nodes": [
+        "620",
+        "627",
+        "660"
+      ],
+      "negative_nodes": [
+        "674"
+      ],
+      "negative_text": "low quality, worst quality, blurry, jpeg artifacts, watermark, deformed, bad anatomy, bad mouth, bad teeth, weird tongue, distorted lips, extra limbs, extra fingers, mutated hands, bad proportions, ugly, disfigured, cropped, out of frame, semen on chin, cum on chin, fluid on chin",
+      "lora_nodes": [
+        "632",
+        "671"
+      ],
+      "seed_nodes": [
+        "654",
+        "649",
+        "688"
+      ],
+      "size_nodes": [
+        "606"
+      ],
+      "seed_type": "rgthree",
+      "deforum_fix": true,
+      "link_key": "links",
+      "node_key": "nodes",
+      "prompt_style": "photorealistic_portrait",
+      "description": "Moody ZIB+ZIT 双阶段素人/明星写真，20有效步，512x768初始→768x1152输出，支持 girls_like_zi LoRA",
+      "lora_subdir": "girls_like_zi",
+      "lora_input_key": "LORA_1",
+      "node_input_overrides": {},
+      "default_steps": 20,
+      "default_width": 512,
+      "default_height": 768
+    }
+  },
+  "lock_size_to_workflow": true,
+  "resolution_presets": {
+    "vertical": {
+      "width": 512,
+      "height": 768
+    },
+    "horizontal": {
+      "width": 768,
+      "height": 512
+    },
+    "square": {
+      "width": 640,
+      "height": 640
+    },
+    "widescreen": {
+      "width": 1088,
+      "height": 464
+    }
+  },
+  "llm_temperature": 0.7,
+  "llm_retry_limit": 3,
+  "auto_horizontal_for_multi": true
+}

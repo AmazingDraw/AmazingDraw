@@ -1,0 +1,341 @@
+/* 01-base.css — 设计变量、共享原语、基础重置
+   由 app.css 连续切分而来；<link> 顺序即层叠顺序，不可调换。 */
+/* =====================================================================
+   🎨 Minimalist & Elegant Style Guide (Vercel / Notion / Apple Vibe)
+   ===================================================================== */
+:root {
+  /* Dark Mode Defaults — neutral slate + single indigo accent */
+  --bg-primary: #0b0d12;
+  --bg-secondary: #12151d;
+  --bg-panel: #151923;
+  --bg-input: #0f1219;
+  --bg-elevated: #181d28;
+  --bg-hover: rgba(255, 255, 255, 0.045);
+  --bg-soft: rgba(255, 255, 255, 0.026);
+  --border-color: #252b39;
+  --border-soft: rgba(255, 255, 255, 0.07);
+  --border-focus: #586179;
+  
+  --text-main: #d9deea;
+  --text-muted: #9098ad;
+  --text-bright: #f7f8fb;
+  
+  --color-primary: #7c6cff;
+  --color-primary-dark: #6557dd;
+  --color-primary-soft: #a79cff;
+  --color-primary-dim: rgba(124, 108, 255, 0.16);
+  --color-active-row: rgba(124, 108, 255, 0.10);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #38bdf8;
+  
+  /* Magazine / Editorial Custom Tokens */
+  --color-gold: #c5a880;
+  --color-gold-soft: rgba(197, 168, 128, 0.12);
+
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.22);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  
+  /* CJK-first product stack: system fonts keep Chinese/Latin metric-aligned */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC",
+    "PingFang SC", Georgia, serif;
+  --font-read: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --transition-smooth: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  --sidebar-width: 260px;
+  --surface-focus-ring: 0 0 0 3px rgba(124, 108, 255, 0.18);
+}
+
+/* 主题切换期间冻结所有过渡：否则 0.15s~0.3s 不等的 transition 会让各处配色
+   以不同速度追赶新变量，分割线与相邻面板在交界处出现色差闪烁 */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
+
+/* =====================================================================
+   🧩 Shared UI primitives for polish pass
+   ===================================================================== */
+.section-title {
+  font-size: 0.82rem;
+  color: var(--text-bright);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.section-title i {
+  color: var(--color-primary);
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-grid-2 + .form-grid-2 {
+  margin-top: 10px;
+}
+
+.settings-card-section .form-grid-2 + .form-grid-2 {
+  margin-top: 10px;
+}
+
+.queue-header {
+  cursor: pointer;
+}
+
+.queue-quick-actions {
+  position: relative;
+}
+
+/* Shared layout helpers */
+.chat-main-row {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.chat-messages-and-input {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.settings-inline-control {
+  display: flex;
+  align-items: center;
+  margin-top: -8px;
+  margin-bottom: 16px;
+}
+
+.settings-inline-checkbox {
+  font-size: 0.75rem;
+}
+
+.inline-flex-center {
+  display: flex;
+  align-items: center;
+}
+
+.inline-flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.inline-flex-gap-4 { gap: 4px; }
+.inline-flex-gap-6 { gap: 6px; }
+.inline-flex-gap-8 { gap: 8px; }
+.inline-flex-gap-10 { gap: 10px; }
+
+.full-width {
+  width: 100%;
+}
+
+.logo-title {
+  cursor: pointer;
+}
+
+.alert-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-main);
+}
+
+.alert-box.warning {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.08);
+}
+
+.create-handoff-note {
+  margin: 4px 0 14px;
+}
+
+.alert-box.warning i {
+  color: var(--color-warning);
+  font-size: 0.9rem;
+  margin-top: 2px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-danger-minimal {
+  background: var(--color-danger);
+  color: #ffffff;
+  border: none;
+  box-shadow: none;
+}
+
+.btn-danger-minimal:hover {
+  background: #dc2626;
+}
+
+.status-badge,
+.badge-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.status-badge.draft,
+.badge-text.info {
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  border-color: var(--border-soft);
+}
+
+.status-badge.validated,
+.badge-text.success,
+.status-badge.success {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--color-success);
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+.status-badge.submitted,
+.status-badge.queued,
+.badge-text.warning,
+.status-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-warning);
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.status-badge.rendering,
+.badge-text.failed,
+.status-badge.failed {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.status-badge.rendered,
+.status-badge.successful {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--color-success);
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+.sidebar-card-item:focus-visible,
+.chat-mode-btn:focus-visible,
+.filter-pill:focus-visible,
+.btn-copy-prompt:focus-visible,
+.btn-direct-toggle:focus-visible,
+.btn-send:focus-visible,
+.btn-stop:focus-visible,
+.btn-close-modal:focus-visible,
+.draw-guide-action:focus-visible {
+  outline: none;
+  box-shadow: var(--surface-focus-ring);
+}
+
+html.light-mode {
+  /* Light Mode Overrides — same structure, warmer surface */
+  --bg-primary: #f6f4ef;
+  --bg-secondary: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-input: #fbfaf7;
+  --bg-elevated: #ffffff;
+  --bg-hover: rgba(20, 24, 35, 0.045);
+  --bg-soft: rgba(20, 24, 35, 0.026);
+  --border-color: #e2dfd8;
+  --border-soft: rgba(20, 24, 35, 0.08);
+  --border-focus: #b8b2a6;
+  
+  --text-main: #2b2d33;
+  --text-muted: #747782;
+  --text-bright: #111217;
+  
+  --color-primary: #6557dd;
+  --color-primary-dark: #5145b8;
+  --color-primary-soft: #7c6cff;
+  --color-primary-dim: rgba(101, 87, 221, 0.12);
+  --color-active-row: rgba(101, 87, 221, 0.075);
+  --color-info: #0284c7;
+
+  --shadow-soft: 0 10px 28px rgba(22, 24, 32, 0.08);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+/* =====================================================================
+   🧱 Base Reset & Scrollbar
+   ===================================================================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* Minimalist Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-focus);
+}
+
