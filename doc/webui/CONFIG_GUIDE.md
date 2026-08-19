@@ -20,7 +20,7 @@
 | `output_dir` | ComfyUI 本地实时落盘 | macOS `~/ComfyUI/output` · Windows `C:\ComfyUI\output` |
 | `output_dir_archive` | 外置归档，交付优先拷到这里；WebUI `/images` 优先扫这里 | macOS `~/Downloads/card-engine-out` · Windows `D:\amazing_draw` |
 
-归档拷贝超时会回落到 `output_dir` 做本地 rename。旧键 `output_dir_fallback` 已删除。
+归档拷贝超时会回落到 `output_dir` 做本地 rename。
 
 | 键 | 作用 |
 | :--- | :--- |
@@ -40,7 +40,6 @@
 | :--- | :--- | :--- |
 | `comfyui_host` | `http://127.0.0.1:8188` | ComfyUI HTTP API |
 | `webui_host` / `webui_port` | `0.0.0.0` / `8318` | WebUI 绑定 |
-| `open_webui_url` / `open_webui_api_key` | 可空 | 可选 LLM 控制端。密钥不要提交 git |
 
 ---
 
@@ -54,9 +53,8 @@
 | `llm_temperature` | 默认 `0.7` |
 | `llm_retry_limit` | 失败重试。代码默认 `1` |
 | `agent_backend` | 发行默认 `custom`；本地 skill 常用 `openclaw`。旧值 `claudecode` / `hermes` 会归一成 `openclaw` |
-| `agent_api_key` / `agent_webhook_url` | 自定义 Agent，可空。密钥不要提交 git |
 | `openclaw_ws_timeout_seconds` | OpenClaw 等待秒数，默认 `600` |
-| `chat_mode` | WebUI 会话：只认 `cards`（卡片列表）和 `draw`（抽卡对话）。旧 `single` / `raw_llm` / `chain` / `direct` 不再当模式名 |
+| `chat_mode` | WebUI 会话：`cards`（卡片列表）和 `draw`（抽卡对话） |
 
 ---
 
@@ -66,8 +64,6 @@
 | :--- | :--- |
 | `exposure_allowed_modes` | 允许的裸露档集合，优先。例 `["upper","lower","half_nude"]`。WebUI chips 写入，至少一项 |
 | `exposure_limit` | 兼容区间 `[min, max]`。没有 `exposure_allowed_modes` 时用。WebUI 保存 chips 时会派生写入 |
-| `perspective_exposure_bindings` | 视角 → 允许档。可省略，走代码默认：`颜射视角` → upper/half_covered；`后入视角` → lower/half_nude；`丝袜视角` → half_nude/half_covered。只认完整「X视角」四字 |
-| `perspective_draw_prob` | 随机场景抽到视角库的概率。不写则走代码默认 |
 | `restrict_roles` | 默认 `true`。WebUI「限制角色」：打开后限制角色不进角色库 |
 | `scene_cooldown_window` | 连续 N 张内避免同一具体场景，默认 `9` |
 | `auto_horizontal_for_multi` | 检测到多人时是否自动切横版，默认 `true` |
@@ -88,7 +84,7 @@
 | `workflows` | id → 元数据（路径、节点、默认宽高） |
 | `lock_size_to_workflow` | 卡片尺寸是否跟工作流走，默认 `true` |
 
-发行包工作流在仓根 `workflows/*.json`（扁平，没有 `稳定版本/` 子目录）。
+发行包工作流在仓根 `workflows/*.json`。
 
 ---
 
