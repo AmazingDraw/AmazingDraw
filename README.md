@@ -39,7 +39,7 @@ python3 card_cli.py create
 python3 card_cli.py create --person "OL" --scene "停车场"
 ```
 
-出图走本机 ComfyUI（http://127.0.0.1:8188）。需要时：
+出图走本机 ComfyUI（<http://127.0.0.1:8188>）。需要时：
 
 ```bash
 bash scripts/gpu-pipeline/comfyui-start.sh start
