@@ -14,7 +14,7 @@
 - **操作系统**：macOS (Apple Silicon / Intel)、Windows 10/11
 - **终端 Shell**：`bash` 终端
 - **基础工具链**：
-  - [`python3`](https://www.python.org/downloads/)（需与 zip 标签一致的 Python（`cp39`→3.9，`cp312`→3.12）。Releases 提供两套包。Apple 自带 python3（3.9）请下 cp39；本机 3.12 请下 cp312。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。不要把 `.so` 和 `.pyd` 混放，也不要混 3.9/3.12 native）
+  - [`python3`](https://www.python.org/downloads/)（引擎只认两套 Python：**3.9**（zip 标 `cp39`）和 **3.12**（zip 标 `cp312`）。必须和压缩包文件名一致，不要用 3.10 / 3.11。Apple 自带 `/usr/bin/python3` 是 3.9，请下 cp39。ComfyUI 用它自己的 venv，可以和引擎不是同一个。不要把 `.so` 和 `.pyd` 混放，也不要混 3.9/3.12 native）
   - [`pip`](https://pip.pypa.io/en/stable/installation/)（Python 包管理器）
   - [`git`](https://git-scm.com/)（版本控制与插件同步）
   - [`curl`](https://curl.se/)（网络请求与后端通信）
