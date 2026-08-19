@@ -27,6 +27,8 @@ Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bas
 
 ## 使用
 
+解压后的目录可以直接当 skill 给 agent 用（根目录 `SKILL.md`）。WebUI 和 CLI 也可以单独跑：
+
 ```bash
 # WebUI  →  http://127.0.0.1:8318
 bash scripts/webui/webui-start.sh start
