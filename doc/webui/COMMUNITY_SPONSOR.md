@@ -10,6 +10,7 @@
 欢迎加入我们的交流群与 Telegram 频道，分享您的抽卡作品、提示词灵感或提出功能建议：
 
 - **Telegram 群聊**：[https://t.me/AmazingDraw](https://t.me/AmazingDraw)
+- **GitHub 讨论**：[https://github.com/orgs/AmazingDraw/discussions](https://github.com/orgs/AmazingDraw/discussions)
 - **GitHub 开源仓库**：[https://github.com/AmazingDraw/AmazingDraw](https://github.com/AmazingDraw/AmazingDraw)
 - **问题反馈 (Issues)**：[https://github.com/AmazingDraw/AmazingDraw/issues](https://github.com/AmazingDraw/AmazingDraw/issues)
 
