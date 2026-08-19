@@ -7,22 +7,16 @@
 ## 1. 创建 `create`
 
 ```bash
-python3 card_cli.py create
-python3 card_cli.py create --person "OL" --scene "停车场"
-python3 card_cli.py create --person "JK" --scene "校园" --user-input "校园连抽"
-python3 card_cli.py create --aspect portrait    # 512x768（默认）
-python3 card_cli.py create --aspect landscape   # 768x512
-python3 card_cli.py create --aspect square      # 640x640
-python3 card_cli.py create --aspect widescreen  # 1088x464
-python3 card_cli.py create --size 768x1024
-python3 card_cli.py create --person "JK" --profile jk-pink
-python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle
+python3 card_cli.py create --user-input "可爱风格"
+python3 card_cli.py create --person "OL" --scene "停车场" --user-input "高冷风格"
+python3 card_cli.py create --person "JK" --scene "校园" --user-input "加入宠物元素"
 ```
 
-库外自定义场景（未命中库且非纯主题词）加 `--user-input`，fill 时再写 `scene.keywords`。
+`--user-input` 必填。库外自定义场景 fill 时再写 `scene.keywords`。
 
 | 参数 | 说明 |
 |------|------|
+| `--user-input` | **必填**。风格/元素补充（如：可爱风格、高冷风格、加入宠物元素） |
 | `--mode` | `amateur`（默认）/ `celebrity` |
 | `--bundle` | 加载词库参考。不带值：常用章节；带值：按章节名加载 |
 
@@ -103,8 +97,8 @@ python3 card_cli.py submit --card <id> --confirm --dry-run
 ## 8. 连抽 `chain`
 
 ```bash
-python3 card_cli.py chain --count 3 --person "JC"
-python3 card_cli.py chain --count 3 --person "JK" --scene "教室"
+python3 card_cli.py chain --count 3 --person "JC" --user-input "可爱风格"
+python3 card_cli.py chain --count 3 --person "JK" --scene "教室" --user-input "高冷风格"
 python3 card_cli.py chain --resume <card_id>
 python3 card_cli.py chain --resume <card_id> --dry-run
 ```

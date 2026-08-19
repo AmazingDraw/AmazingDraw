@@ -7,40 +7,22 @@
 ## 1. 创建 `create`
 
 ```bash
-# 随机
-python3 card_cli.py create
+# 随机（--user-input 必填）
+python3 card_cli.py create --user-input "可爱风格"
 
 # 指定场景/人物
-python3 card_cli.py create --person "OL" --scene "停车场"
-python3 card_cli.py create --person "张嘉倪" --scene "办公室"
+python3 card_cli.py create --person "OL" --scene "停车场" --user-input "高冷风格"
+python3 card_cli.py create --person "JK" --scene "校园" --user-input "加入宠物元素"
 
-# 库外自定义场景（未命中库且非纯主题词 → manual-custom；fill 须写 scene.keywords）
-python3 card_cli.py create --person "女秘书" --scene "赛博竹林夜宴" --user-input "赛博竹林夜宴"
-
-# 纯主题词仍进主题池（如校园/办公室/SM）
-python3 card_cli.py create --person "JK" --scene "校园" --user-input "校园连抽"
-
-# 视角路由（场景名含关键词自动命中对应视角场景）
-python3 card_cli.py create --person "JC" --scene "颜射视角"
-python3 card_cli.py create --person "JK" --scene "后入视角"
-
-# 比例
-python3 card_cli.py create --aspect portrait    # 512x768（默认）
-python3 card_cli.py create --aspect landscape   # 768x512
-python3 card_cli.py create --aspect square      # 640x640
-python3 card_cli.py create --aspect widescreen  # 1088x464
-python3 card_cli.py create --size 768x1024      # 手动指定
-
-# 体型 profile（用户指定优先）
-python3 card_cli.py create --person "JK" --profile jk-pink
-python3 card_cli.py create --person "JC" --profile jc-sporty
-
-# 其他
-python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle
+# 比例 / 体型 / 其他
+python3 card_cli.py create --aspect portrait --user-input "可爱风格"    # 512x768（默认）
+python3 card_cli.py create --person "JK" --profile jk-pink --user-input "高冷风格"
+python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle --user-input "加入宠物元素"
 ```
 
 | 参数 | 说明 |
 |------|------|
+| `--user-input` | **必填**。风格/元素等用户补充（如：可爱风格、高冷风格、加入宠物元素） |
 | `--mode` | `amateur`(默认) / `celebrity` |
 | `--bundle` | 启用结构化 JSON 词库参考（默认关闭）。不带值：智能加载四类词库常用章节；带值：`--bundle "tattoo:图案速查|皮肤融合,props:振动棒"` 按指定章节加载 |
 
@@ -176,9 +158,9 @@ python3 card_cli.py submit --card <id> --confirm --dry-run  # 模拟预览
 ## 8. 连抽 `chain`
 
 ```bash
-# 创建骨架
-python3 card_cli.py chain --count 3 --person "JC"
-python3 card_cli.py chain --count 3 --person "JK" --scene "教室"
+# 创建骨架（--user-input 必填）
+python3 card_cli.py chain --count 3 --person "JC" --user-input "可爱风格"
+python3 card_cli.py chain --count 3 --person "JK" --scene "教室" --user-input "高冷风格"
 
 # resume 提交（自动 render → check → autofix → submit）
 python3 card_cli.py chain --resume <card_id>
