@@ -33,10 +33,11 @@ Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bas
 # WebUI  →  http://127.0.0.1:8318
 bash scripts/webui/webui-start.sh start
 
-# CLI
+# CLI —— 直接跑 help 看参数即可，关键看这三条
 cd scripts/card-engine
-python3 card_cli.py create
-python3 card_cli.py create --person "OL" --scene "停车场"
+python3 card_cli.py -h          # 总 help：全部子命令一览
+python3 card_cli.py create -h   # 单卡建卡（常规模式）
+python3 card_cli.py chain -h    # 连抽（批量模式）
 ```
 
 出图走本机 ComfyUI（<http://127.0.0.1:8188>）。需要时：
