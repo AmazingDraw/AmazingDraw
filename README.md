@@ -45,8 +45,6 @@ Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bas
 
 ### WebUI / CLI
 
-也可以不经过 Agent，自己跑：
-
 ```bash
 # WebUI  →  http://127.0.0.1:8318
 bash scripts/webui/webui-start.sh start
