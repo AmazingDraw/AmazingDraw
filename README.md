@@ -31,7 +31,7 @@ Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bas
 
 ### Skill
 
-解压目录根有 `SKILL.md`，整棵交给 Cursor / Claude Code / OpenClaw 加载，不要拆散。对人说一句就抽卡，例如 `随机抽三张`、`护士 可爱风格`、`连抽 5 张，办公室`。没指定的按库内命中或随机补全。
+解压目录根有 `SKILL.md`，整棵交给 Cursor / Claude Code / OpenClaw 加载，不要拆散。简单指令即可抽卡，例如 `随机抽三张`、`jk 高冷风格 抽三张`。
 
 ### WebUI / CLI
 
