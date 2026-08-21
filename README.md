@@ -27,39 +27,22 @@ Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bas
 
 ## 使用
 
-三种入口，装完就能用。出图走本机 ComfyUI（<http://127.0.0.1:8188>）。
+出图走本机 ComfyUI（<http://127.0.0.1:8188>）。
 
-### 给 Agent 当 Skill
+### Skill
 
-解压后的**整棵目录**就是一个 skill：根目录有 `SKILL.md`。把这个目录交给 Cursor / Claude Code / OpenClaw 等 Agent 加载即可，不要拆散文件。
-
-之后不用记命令。对人说一句，Agent 就会自己走抽卡流程。例如：
-
-```text
-随机抽三张
-护士 可爱风格
-连抽 5 张，办公室
-```
-
-人物、风格、张数随口指定；没说的部分按库内命中或随机补全。
+解压目录根有 `SKILL.md`，整棵交给 Cursor / Claude Code / OpenClaw 加载，不要拆散。对人说一句就抽卡，例如 `随机抽三张`、`护士 可爱风格`、`连抽 5 张，办公室`。没指定的按库内命中或随机补全。
 
 ### WebUI / CLI
 
 ```bash
-# WebUI  →  http://127.0.0.1:8318
-bash scripts/webui/webui-start.sh start
-
-# CLI —— 直接跑 help 看参数即可，关键看这三条
-cd scripts/card-engine
-python3 card_cli.py -h          # 总 help：全部子命令一览
-python3 card_cli.py create -h   # 单卡建卡（常规模式）
-python3 card_cli.py chain -h    # 连抽（批量模式）
-```
-
-需要时启动 ComfyUI：
-
-```bash
+bash scripts/webui/webui-start.sh start          # http://127.0.0.1:8318
 bash scripts/gpu-pipeline/comfyui-start.sh start
+
+cd scripts/card-engine
+python3 card_cli.py -h          # 总 help
+python3 card_cli.py create -h   # 单卡
+python3 card_cli.py chain -h    # 连抽
 ```
 
 `install.sh` 会把工作流拷到 `~/ComfyUI/workflows/`，并把 `ComfyUI-Card-Engine/` 装进 ComfyUI 的 custom_nodes。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
