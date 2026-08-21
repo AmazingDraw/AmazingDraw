@@ -7,6 +7,16 @@ from typing import Dict, Any, Optional
 SCRIPT_DIR = Path(__file__).parent.resolve()
 SKILL_DIR = SCRIPT_DIR.parent.parent
 
+try:
+    import sys
+    engine = str(SCRIPT_DIR.parent / "card-engine")
+    if engine not in sys.path:
+        sys.path.insert(0, engine)
+    from card_config import TMP_DIR
+except Exception:
+    import tempfile
+    TMP_DIR = Path(tempfile.gettempdir()) / "cu-card"
+
 RULE_SESSION_PATH = Path(str(TMP_DIR) + "/webui-rule-session.json")
 RULE_SESSION_KEY = "v1"
 

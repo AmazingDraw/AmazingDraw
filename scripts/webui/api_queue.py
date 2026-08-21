@@ -811,11 +811,15 @@ def get_doc(doc_name: str):
     # 其余工程文档仍在 doc/，不默认挂 WebUI
     skill_root = SCRIPT_DIR.parent.parent
     webui_doc_dir = skill_root / "doc" / "webui"
+    config_path = skill_root / "doc" / "CONFIG_GUIDE.md"
+    if not config_path.exists():
+        config_path = webui_doc_dir / "CONFIG_GUIDE.md"
+
     allowed_docs = {
         "user_guide": webui_doc_dir / "USER_GUIDE.md",
         "dependencies": webui_doc_dir / "DEPENDENCIES_GUIDE.md",
         "skill": skill_root / "SKILL.md",
-        "config": webui_doc_dir / "CONFIG_GUIDE.md",
+        "config": config_path,
         "sponsor": webui_doc_dir / "COMMUNITY_SPONSOR.md",
         "commands": webui_doc_dir / "CARD_ENGINE_COMMANDS.md",
     }
