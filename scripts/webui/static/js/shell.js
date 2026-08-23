@@ -729,6 +729,10 @@ function updateSidebarViewMode() {
     localStorage.setItem("chat_mode", isDraw ? "draw" : "cards");
   } catch (_) {}
 
+  if (typeof _timeFilterMonths !== "undefined") {
+    _timeFilterMonths = "";
+  }
+
   if (isDraw) {
     document.documentElement.classList.remove("cards-mode-active");
     document.documentElement.classList.add("draw-mode-active");

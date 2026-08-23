@@ -486,7 +486,25 @@ html.light-mode .btn-secondary-minimal:hover {
   font-size: 0.8rem;
   color: var(--text-bright);
   font-weight: 500;
-  word-break: break-all;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.draw-guide-session .value p {
+  margin: 0;
+}
+
+.draw-guide-session .value code {
+  font-family: var(--font-mono);
+  font-size: 0.74em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .draw-guide-session .meta {

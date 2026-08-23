@@ -18,6 +18,8 @@ let state = {
   activeFilter: "all",
   timeFilter: "all",     // all / today / 7d / 30d / YYYY-MM
   cardsLimit: 100,
+  sessionsLimit: 100,
+  sessionTotal: 0,
   // 抽卡会话
   sessions: [],
   activeSessionId: null,
@@ -248,11 +250,25 @@ function filterCardsByStatus(cards, filterKey) {
   return cards.filter(c => group.statuses.includes(c.status));
 }
 
-/** 按月份筛选，key 为 "all" 或 "YYYY-MM"；无 mtime 的卡片仅在「全部月份」下出现。 */
+/** 卡片用 mtime，会话用 updated_at，都是 unix 秒。 */
+function itemUnixTime(item) {
+  const raw = item && (item.mtime || item.updated_at);
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/** 按月份筛选，key 为 "all" 或 "YYYY-MM"；无时间戳的条目仅在「全部月份」下出现。 */
+function filterItemsByTime(items, key) {
+  if (!key || key === "all") return items;
+  if (!/^\d{4}-\d{2}$/.test(key)) return items;
+  return items.filter(item => {
+    const ts = itemUnixTime(item);
+    return ts && monthKeyOf(ts) === key;
+  });
+}
+
 function filterCardsByTime(cards, key) {
-  if (!key || key === "all") return cards;
-  if (!/^\d{4}-\d{2}$/.test(key)) return cards;
-  return cards.filter(c => c.mtime && monthKeyOf(c.mtime) === key);
+  return filterItemsByTime(cards, key);
 }
 
 function monthKeyOf(mtime) {

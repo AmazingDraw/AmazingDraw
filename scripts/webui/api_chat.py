@@ -165,7 +165,7 @@ def get_chat_sessions():
 
 
     sessions.sort(key=lambda x: x["updated_at"], reverse=True)
-    return {"sessions": sessions[:30]}
+    return {"sessions": sessions, "total": len(sessions)}
 
 
 @router.get("/api/chat/history")

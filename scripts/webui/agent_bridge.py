@@ -45,6 +45,16 @@ def _is_reply_init_conflict(err: BaseException) -> bool:
     return _is_reply_init_conflict_text(str(err or ""))
 
 
+def _operation_cancel_requested(operation_id: Optional[str]) -> bool:
+    """True only when WebUI itself asked to abort this run."""
+    if not operation_id:
+        return False
+    try:
+        return bool(operation_registry.get(operation_id).cancel_requested)
+    except Exception:
+        return False
+
+
 # OpenClaw 的静默哨兵：agent 回这个词表示「本轮故意不出声」，原生端会识别并吞掉。
 # WebUI 是对话界面，既不能把哨兵原样显示，也不能把它造成的空正文当成失败报红。
 _SILENT_TOKEN = "NO_REPLY"
@@ -547,8 +557,40 @@ async def _call_openclaw_gateway_ws_once(
                     # 绝不能先 yield，否则上层会当成已开流而跳过重试
                     err_msg = payload.get("errorMessage") or ""
                     if state in ("aborted", "cancelled", "canceled"):
-                        raise OperationCancelledError(
-                            err_msg or f"OpenClaw run cancelled: {operation_id}"
+                        # 网关把非 done 的收尾一律标成 aborted。429 故障转移
+                        # 成功后还会对同一 runId 补一帧 aborted：不是用户点停止。
+                        # 这帧经常还是节流后的半句；真正的尾巴在随后的 final 里。
+                        silent_state = _silent_reply_state(full_text)
+                        extra = ""
+                        if (
+                            silent_state == "text"
+                            and full_text.startswith(sent_text)
+                            and len(full_text) > len(sent_text)
+                        ):
+                            extra = full_text[len(sent_text):]
+                            yield {"type": "text", "chunk": extra}
+                            sent_text = full_text
+                        if _operation_cancel_requested(operation_id):
+                            raise OperationCancelledError(
+                                err_msg or f"OpenClaw run cancelled: {operation_id}"
+                            )
+                        if sent_text or silent_state == "text":
+                            print(
+                                "⚠️ OpenClaw 在已有正文后标 aborted，"
+                                "忽略并继续等 final "
+                                f"session={session_id} run={operation_id[:8]}… "
+                                f"reason={err_msg or payload.get('stopReason') or state}",
+                                flush=True,
+                            )
+                            # 有增量才可能这就是唯一收尾；没增量则必须等真正的 final。
+                            if extra:
+                                final_received = True
+                                if ack_received:
+                                    break
+                            timeout_limit = min(timeout_limit, time.time() + 8.0)
+                            continue
+                        raise ValueError(
+                            err_msg or f"OpenClaw run aborted: {operation_id}"
                         )
                     if state == "error" or _is_reply_init_conflict_text(full_text) or _is_reply_init_conflict_text(err_msg):
                         detail = err_msg or full_text or "unknown chat error"
@@ -613,6 +655,12 @@ async def _call_openclaw_gateway_ws_once(
                     break
         else:
             # while 因 timeout_limit 自然结束（未 break）
+            if sent_text and ack_received and not _operation_cancel_requested(
+                operation_id
+            ):
+                # stale aborted 把等待窗口收到 8s 后仍无 final：保住已吐正文，
+                # 不要把成功重试误报成超时/未知远端。
+                return
             waiting_for = (
                 "chat.send ACK"
                 if final_received and not ack_received

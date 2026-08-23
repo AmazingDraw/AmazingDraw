@@ -129,18 +129,15 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 ### 4.3 角色 LoRA（`girls_like_zi`）
 
-常规素人与明星写真依赖 GirlsLike 人物 LoRA：
+常规素人与明星写真依赖 GirlsLike 人物 LoRA（**本机 129 个 zi，与 HF `girlslike-zimage` 对齐**）：
 
-- **画廊（浏览 / 下载）**：[GirlsLike LoRA Gallery](https://huggingface.co/spaces/ifmylove2011/girlslike_lora_gallery)
-- **物理存放路径**：`~/ComfyUI/models/loras/girls_like_zi/`
-- **本机清单**：`~/ComfyUI/models/loras/README.md`
+- **包**：[ifmylove2011/girlslike-zimage](https://huggingface.co/ifmylove2011/girlslike-zimage)
+- **画廊**：[GirlsLike LoRA Gallery](https://huggingface.co/spaces/ifmylove2011/girlslike_lora_gallery)
+- **物理存放**：`~/ComfyUI/models/loras/girls_like_zi/`
+- **本机全表**：`~/ComfyUI/models/loras/README.md`
+- **抽卡键名**：`scripts/card-engine/config/celebrities.json` 的 `z`
 
-示例文件（文件名不要改，触发词跟文件名绑定）：
-
-- `girlslike_zi_zjn.safetensors`（张嘉倪）
-- `girlslike_zi_qsz.safetensors`（邱淑贞）
-- `girlslike_zi_glnz.safetensors`（古力娜扎）
-- `girlslike_zi_lq.safetensors`（李沁）
+文件名不要改。触发词跟文件名绑定，并写进 `celebrities.json` 才能抽到。
 
 ---
 

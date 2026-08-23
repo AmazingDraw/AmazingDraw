@@ -744,6 +744,16 @@ function renderUserMessage(text) {
   return inlined.replace(/\n/g, "<br>");
 }
 
+/** 工作台「当前会话」标题：行内 markdown（代码/加粗），不含块级标题。 */
+function renderSessionTitleHtml(text) {
+  const raw = String(text || "");
+  const md = markdownForChat();
+  if (md && typeof md.parseInline === "function") {
+    return md.parseInline(raw);
+  }
+  return renderUserMessage(raw);
+}
+
 function isCardsChatMode() {
   const mode = normalizeChatMode(state.settings && state.settings.chat_mode);
   return mode === "cards" || document.documentElement.classList.contains("cards-mode-active");
@@ -1152,6 +1162,9 @@ async function loadSessions(opts = {}) {
     const res = await fetch("/api/chat/sessions");
     const data = await res.json();
     state.sessions = data.sessions || [];
+    state.sessionTotal = Number.isFinite(Number(data.total))
+      ? Number(data.total)
+      : state.sessions.length;
 
     window.lastSessionIds = state.sessions.map(s => s.session_id);
     window.lastSessionMtimes = {};
@@ -1218,25 +1231,33 @@ async function loadSessions(opts = {}) {
 function renderSessionsList(sessions) {
   const container = document.getElementById("sidebar-cards-list");
   if (!container) return;
-  
+
   container.innerHTML = "";
-  
+
+  const list = Array.isArray(sessions) ? sessions.slice() : [];
+  list.sort((a, b) => itemUnixTime(b) - itemUnixTime(a));
+  syncTimeFilterOptions(list, "条");
+  const filtered = filterItemsByTime(list, state.timeFilter);
+  const totalCount = filtered.length;
+  const limit = state.sessionsLimit || 100;
+  const itemsToRender = filtered.slice(0, limit);
+
   const infoContainer = document.getElementById("sidebar-list-info");
   if (infoContainer) {
     infoContainer.innerHTML = `
       <div class="list-summary">
         <span class="summary-label">历史对话</span>
-        <span class="summary-count">共 ${sessions.length} 个</span>
+        <span class="summary-count">共 ${totalCount} 条</span>
       </div>
     `;
   }
-  
-  if (sessions.length === 0) {
-    container.innerHTML = `<p class="placeholder-text">暂无历史对话</p>`;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<p class="placeholder-text">${list.length === 0 ? "暂无历史对话" : "当前月份暂无历史对话"}</p>`;
     return;
   }
-  
-  sessions.forEach((sess) => {
+
+  itemsToRender.forEach((sess) => {
     const div = document.createElement("div");
     const isActive = sess.session_id === state.activeSessionId;
     div.className = `sidebar-card-item ${isActive ? 'active' : ''}`;
@@ -1291,6 +1312,26 @@ function renderSessionsList(sessions) {
     
     container.appendChild(div);
   });
+
+  if (totalCount > limit) {
+    const loadMoreDiv = document.createElement("div");
+    loadMoreDiv.className = "load-more-container";
+    loadMoreDiv.innerHTML = `
+      <button id="btn-load-more-sessions" class="btn btn-secondary-minimal btn-load-more">
+        <i class="fa-solid fa-arrow-down-long"></i> 加载更多 (已显示 ${itemsToRender.length}/${totalCount})
+      </button>
+    `;
+    container.appendChild(loadMoreDiv);
+    const btnLoadMore = loadMoreDiv.querySelector("#btn-load-more-sessions");
+    if (btnLoadMore) {
+      btnLoadMore.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.sessionsLimit = (state.sessionsLimit || 100) + 100;
+        renderSessionsList(state.sessions);
+      });
+    }
+  }
 }
 
 async function deleteSession(sessionId, cancelActive = false) {
@@ -1316,7 +1357,12 @@ async function deleteSession(sessionId, cancelActive = false) {
         state.activeSessionId = null;
         localStorage.removeItem("active_session_id");
       }
-      await loadSessions();
+      state.sessions = (state.sessions || []).filter(s => s.session_id !== sessionId);
+      if (Number.isFinite(Number(state.sessionTotal))) {
+        state.sessionTotal = Math.max(0, Number(state.sessionTotal) - 1);
+      }
+      renderSessionsList(state.sessions);
+      await loadSessions({ skipAutoSelect: true });
     } else {
       const detail = data.detail?.message || data.detail?.code || data.detail;
       showToast(`删除对话失败${detail ? `：${detail}` : ""}`, "error");
@@ -1400,7 +1446,9 @@ function renderDrawGuidePanel(sessionId) {
   const sessionMeta = sessionId
     ? `${escapeHtml(sessionId.substring(0, 16))}…`
     : "左侧新建或点选会话";
-  const sessionCount = Array.isArray(state.sessions) ? state.sessions.length : 0;
+  const sessionCount = Number.isFinite(Number(state.sessionTotal))
+    ? Number(state.sessionTotal)
+    : (Array.isArray(state.sessions) ? state.sessions.length : 0);
 
   panelBody.innerHTML = `
     <div class="draw-guide-panel">
@@ -1412,7 +1460,7 @@ function renderDrawGuidePanel(sessionId) {
 
       <div class="draw-guide-session">
         <span class="label">当前会话</span>
-        <span class="value">${escapeHtml(sessionTitle)}</span>
+        <span class="value">${renderSessionTitleHtml(sessionTitle)}</span>
         <span class="meta">${sessionMeta}${sessionCount ? ` · 共 ${sessionCount} 条` : ""}</span>
       </div>
 

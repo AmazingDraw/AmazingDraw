@@ -570,6 +570,22 @@ def chat_history_file(card_id: Optional[str]) -> Path:
 
 
 
+_SKELETON_CARD_ID_IN_TITLE = re.compile(
+    r"骨架卡\s*[`'\"]?([0-9]{8}_[0-9]{6}_[0-9A-Za-z_]+)[`'\"]?\s*",
+)
+
+
+def display_session_title(raw: str, limit: int = 160) -> str:
+    """列表/页头用的会话标题：去掉用户看不懂的骨架卡 card_id，正文仍保留给 Agent。"""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    text = _SKELETON_CARD_ID_IN_TITLE.sub("骨架卡", text, count=1)
+    text = re.sub(r"骨架卡\s+已建好", "骨架卡已建好", text, count=1)
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    return text[:limit].strip()
+
+
 def first_user_line(history_path: Path) -> str:
     """取会话首句用户提问，用作列表标题。
 
@@ -707,7 +723,7 @@ def get_cached_session_title(path: Path) -> str:
     if cached and cached[0] == mtime and cached[1] == size:
         return cached[2]
 
-    title = first_user_line(path)[:80].strip()
+    title = display_session_title(first_user_line(path))
     SESSION_TITLE_CACHE[path_str] = (mtime, size, title)
     return title
 

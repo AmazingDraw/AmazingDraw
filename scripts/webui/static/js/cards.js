@@ -108,6 +108,9 @@ function initIncrementalPolling() {
         if (!res.ok) return;
         const data = await res.json();
         const sessions = data.sessions || [];
+        state.sessionTotal = Number.isFinite(Number(data.total))
+          ? Number(data.total)
+          : sessions.length;
         
         const currentIds = sessions.map(s => s.session_id);
         const isChanged = !window.lastSessionIds || 
@@ -214,18 +217,19 @@ function initCardStatusFilters() {
  * 否则会把主人正展开的下拉重置掉。
  */
 let _timeFilterMonths = "";
-function syncTimeFilterOptions(cards) {
+function syncTimeFilterOptions(items, unit = "张") {
   const sel = document.getElementById("card-time-filter");
   if (!sel) return;
 
   const counts = new Map();
-  for (const c of cards) {
-    if (!c.mtime) continue;
-    const k = monthKeyOf(c.mtime);
+  for (const item of items || []) {
+    const ts = itemUnixTime(item);
+    if (!ts) continue;
+    const k = monthKeyOf(ts);
     counts.set(k, (counts.get(k) || 0) + 1);
   }
   const months = [...counts.keys()].sort().reverse();
-  const signature = months.map(m => `${m}:${counts.get(m)}`).join(",");
+  const signature = `${unit}|${months.map(m => `${m}:${counts.get(m)}`).join(",")}`;
   if (signature === _timeFilterMonths) return;
   _timeFilterMonths = signature;
 
@@ -244,10 +248,10 @@ function syncTimeFilterOptions(cards) {
     }
     const o = document.createElement("option");
     o.value = m;
-    o.textContent = `${Number(mon)} 月 · ${counts.get(m)} 张`;
+    o.textContent = `${Number(mon)} 月 · ${counts.get(m)} ${unit}`;
     group.appendChild(o);
   }
-  // 选中的月份可能因卡片被删而消失，退回全部时间
+  // 选中的月份可能因条目被删而消失，退回全部时间
   if (state.timeFilter !== "all" && !sel.querySelector(`option[value="${state.timeFilter}"]`)) {
     state.timeFilter = "all";
   }
@@ -259,6 +263,13 @@ function initTimeFilter() {
   if (!sel) return;
   sel.addEventListener("change", () => {
     state.timeFilter = sel.value || "all";
+    const isDraw = typeof normalizeChatMode === "function"
+      && normalizeChatMode(state.settings && state.settings.chat_mode) === "draw";
+    if (isDraw) {
+      state.sessionsLimit = 100;
+      renderSessionsList(state.sessions || []);
+      return;
+    }
     state.cardsLimit = 100;
     renderCardsList(state.cards);
     const first = filterCardsByTime(
