@@ -6,11 +6,13 @@
 
 解压目录根有 `SKILL.md`。把**目录**交给 Cursor / Claude Code / OpenClaw 等 AI Agent，一句话就能抽卡，例如 `随机抽三张`、`jk 高冷风格 抽三张`。也可以自定义场景库和角色库。
 
+版本与更新说明见 GitHub **[Releases](https://github.com/AmazingDraw/AmazingDraw/releases)**；压缩包根目录有 `VERSION` 和 `CHANGELOG.md`。
+
 ![总架构](doc/architecture.svg)
 
 ## 安装
 
-到 GitHub **[Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载对应压缩包，解压到一个固定目录（例如 macOS `~/AmazingDraw`，Windows `C:\\AmazingDraw`）。这个目录就是运行时（WebUI / CLI / skill），可以放在任意位置；不要拆散文件，不要解压进 ComfyUI。然后在解压后的根目录执行 `bash install.sh`。文件名里的 `cp39` / `cp312` 就是 Python 主版本。
+到 GitHub **[Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载对应压缩包，解压到一个固定目录（例如 macOS `~/AmazingDraw`，Windows `C:\AmazingDraw`）。这个目录就是运行时（WebUI / CLI / skill），可以放在任意位置；不要拆散文件，不要解压进 ComfyUI。然后在解压后的根目录执行 `bash install.sh`。文件名里的 `cp39` / `cp312` 就是 Python 主版本。
 
 | 包 | 系统 | Python |
 | --- | --- | --- |
