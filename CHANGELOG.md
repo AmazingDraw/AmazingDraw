@@ -2,6 +2,12 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.2 — 2026-08-30
+
+- CARD_ENGINE_COMMANDS 精简工作目录说明，并只保留 doc/ 一份
+- 同步精简后的 DRAW_GUIDE、PROMPT_TEMPLATE
+- WebUI 文档接口改为读 doc/CARD_ENGINE_COMMANDS.md
+
 ## 0.1.1 — 2026-08-26
 
 - 多人场景改为广义编号：合影、闺蜜等也编号，日常合影不强迫接吻

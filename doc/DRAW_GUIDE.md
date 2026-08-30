@@ -1,12 +1,10 @@
 # DRAW_GUIDE.md
 
-> **核心规范:常规模式流程、提示词输出格式、优化方向库**
+> **核心规范:常规模式流程、提示词输出格式、回复示例**
 
 ---
 
-### 🎴 常规模式交互流 (Looping Workflow)
-
-> 💡 **核心逻辑**：常规模式的修改是一个**循环迭代过程**。只要主人没有发送「画/1/61」进行最终出图提交，AI 就必须保持修改状态，**在每一次交互回复中都输出包含下方选项菜单的 `text_template`**，供主人继续微调。只有当主人发送「画/1/61」正式提交生图时，才只展示上半段的 `compact_template`（不带选项）。
+### 🎴 常规模式 (Looping Workflow)
 
 
 | 阶段                   | 步骤 / 指令   | 用户动作                                                                                                | AI 对应响应 & 指令执行                                                                                                                                                                                                                            | 输出模板选择                                           |
@@ -17,49 +15,16 @@
 | **终结出图**           | 4. 确认提交   | 说「画」或「1」或「61」                                                                                 | **正式提交生图队列**：① 执行 check 门禁校验 → 校验通过后执行 submit 提交 GPU 队列。② **先发送一句极度下流的中文骚话**。                                                                                                                        | 统一使用`compact_template`*(仅展示画作信息，不带选项)* |
 | **重抽**               | 5. 换全新场景 | 说「换」或「0」                                                                                         | 彻底废弃当前卡片，重新生成全新场景骨架卡。                                                                                                                                                                                                        | 统一使用`text_template`                                |
 
-> **数字裸露 patch 契约**：当动态方向为「裸露」时，`targets-json` 必须同时给出新的 `slots.clothing` 与 `director.exposure_mode`；引擎会用本次数字选择替换旧裸露 directive，并原子作废旧 render/validation。常规 single 的 `lower` 允许保留明确掀起、拨开或褪下的衣物，但私处必须清晰可见；连抽 chain 仍要求零遮挡。
+## ⚠️ 输出格式铁律
 
-## ⚠️ 输出格式与模板选择铁律
-
-**每次向主人回复生成内容时，必须严格遵守以下规则：**
-
-1. **模板选择规则 (Looping Selector)**:
-
-   * **精修交互中 (未出图)**: AI 必须使用 `text_template`。该模板由 `present` 自动生成，包含上部卡面信息以及下部 `2-9` 优化选项。**只要主人没有说「画/1/61」，就必须一直用 `text_template` 输出选项列表，严禁截断！**
-   * **确认出图时 (发送「画/1/61」)**: AI 必须使用 `compact_template`。该模板仅包含骚话、🎬 摘要与 `/draw` 代码块，**不带任何选项列表**。
-2. **输出拼装方式**:
-
-   * AI **必须且只需**在 JSON 中读取指定的 `text_template` 或 `compact_template`。
-   * **仅将其中的 `__dirtytalk__` 占位符替换为自己生成的一句简短下流的中文骚话**，然后直接输出给主人。这可以 100% 避免格式拼接错误、选项遗漏或引用块按钮排错。
+1. 未出图（没说「画/1/61」）：始终用 `present` 的 `text_template`，选项列表禁止截断。
+2. 出图（「画/1/61」）：用 `compact_template`（骚话 + 🎬 + `/draw`），不带选项。
+3. 只从 JSON 取对应模板，禁止自排版。
+4. 只把 `__dirtytalk__` 换成一句短骚话，其余原样输出。
 
 ---
 
-主人说:"来个张嘉倪户外温泉的"
-
-你应该这样回复:
-
-温泉里的张嘉倪，湿漉漉的样子比水还烫人 ♨️💦 蒸汽裹着她的裸体，枫叶落在乳尖上都不敢久留
-
-🎬 自然裸感 · 野温泉+枫林 · 夕阳暖光+冷阴对撞 · 坐池边全裸+蒸汽 · 素颜湿脸+潮红 · 闭眼享受+唇微张 · 蒸汽中乳房轮廓+枫叶落水
-
-```
-/draw outdoor natural hot spring, mountain forest, autumn maple trees with red and orange leaves, steam rising from geothermal pool, smooth river rocks forming natural pool edge, scattered fallen maple leaves floating on water surface, bamboo grove in background, warm golden sunset backlight through steam creating hazy glow, cold blue forest shadow contrast, 张嘉倪, natural features, wet hair slicked back with loose strands clinging to neck, sitting on rock edge at pool side, completely naked, body submerged to waist in milky turquoise water, bare breasts above waterline, steam veiling and revealing breasts alternately, nipples pink slightly erect from cool air, areolae with visible pores, water droplets on collarbone and chest catching sunset light, small rosebud tattoo on right shoulder blade partially visible, gentle smile with eyes closed feeling the warmth, lips slightly parted, flushed cheeks from heat, bare wet skin glowing golden in sunset light through trees, phone camera from slightly below, soft natural grain, slightly overexposed steam areas | 深秋山里的野温泉,温暖的矿泉水带着硫磺味呈乳白色,蒸汽在夕阳下变成金色的光幕,张嘉倪赤裸坐在池边浅色的岩石上半身浸在水里,湿发向后披散几缕贴在颈侧,乳房在蒸汽中若隐若现乳头因凉风微挺,右肩背有一朵小玫瑰粉色纹身被温泉水浸得色泽更加鲜亮,她闭着眼微笑嘴唇微张享受温泉的温度,枫叶从树上旋转飘落在她赤裸的肩膀上滑入水中,夕阳穿过树林在蒸汽中形成朦胧的金色光柱
-```
-
----
-
-> 说「画」或「1」直接生成 ✨
-
-> 2. 🧘 姿势 - 从坐池边改成背靠岩石半仰,双臂展开搭在石头上,乳房浮出水面,双腿在水中伸直,全身舒展
-> 3. 💄 妆造 - 从素颜湿脸改成微微花妆,温泉热气蒸出的晕红脸颊+唇釉被水汽化开微糊+睫毛上凝着水珠
-> 4. 🏠 场景 - 从野温泉改成山林溪流,她蹲在浅水满到膝盖,溪水冰凉透明,背对镜头回头看
-> 5. 😳 表情 - 从闭眼享受改成微醺迷离,泡太久的恍惚感,半睁着眼看镜头像喝醉了一样笑
-> 6. 🔍 合理性 - 脚本预检→AI二次检查+合格评定
-> 7. 💍 饰品 - 胸前披一条细链项链,吊垂一颗小绿松石在乳沟上方,夕阳下透出朦胧的绿光
-> 8. 💧 液体 - 一只翠绿蜘蛛停在她锁骨上,细长腿身上挂着温泉水珠,翅膀在夕阳下透明发光
-> 9. ⛓️ 纹身 - 右肩背小玫瑰粉红色纹身(粉墨×可爱系),温泉水浸润后色泽更鲜亮,花瓣边缘染开像水彩画
-
-> 说「换」或「0」随机抽卡 🎲
+## 💬 回复示例
 
 主人说:"来个温馨卧室清晨的"
 
@@ -89,29 +54,3 @@
 > 说「换」或「0」随机抽卡 🎲
 
 ---
-
-## 🎯 优化方向库(16个方向)
-
-**从以下方向随机选 8 个(9 固定为纹身),跨维度均衡搭配:**
-
-
-| 方向     | Emoji                      | 关键词                                            |
-| ---------- | ---------------------------- | --------------------------------------------------- |
-| **裸露** | 🍆 🍑 💦                   | 半裸/全裸/露乳/露臀/解衣/液体/特写                |
-| **姿势** | 🧘‍♀️ 🤸‍♀️ 🧎‍♀️ | 跪姿/躺姿/坐姿/站姿/弯腰/蜷缩/伸展/扭转           |
-| **场景** | 🏠 🏢 🌃                   | 卧室/浴室/职场/户外/交通工具/公共场所/危险场所    |
-| **光影** | ✨ 🕯️ 🌅                 | 侧光/逆光/顶光/底光/伦勃朗光/剪影/丁达尔          |
-| **服装** | 👘 👙 👠                   | 制服/内衣/睡衣/泳装/丝袜/高跟鞋/破损/湿透         |
-| **液体** | 💧 💦 🌊                   | 汗水/口水/爱液/精液/水渍/泡沫/湿身                |
-| **互动** | 👥 🤝 💋                   | 偷窥/自拍/多人/主仆/摄影师/被围观/被迫            |
-| **风格** | 📸 🎬 🎞️                 | 手机偷拍/监控/胶片/电影感/复古/写真/AV封面        |
-| **构图** | 📐 🖼️ 🎯                 | 居中/三分法/对角线/框架构图/留白/对称/引导线      |
-| **表情** | 😳 😈 🥺                   | 羞耻/享受/痛苦/空洞/高潮/媚态/无辜/欲望           |
-| **瑕疵** | 🩹 🦋 ✨                   | 美人痣/雀斑/汗珠/潮红/勒痕/淤青/伤疤              |
-| **镜头** | 📷 🔭 🎥                   | 景别/视角/35mm/85mm/135mm/广角/微距/鱼眼/长焦     |
-| **妆造** | 💄 💇 🌸                   | 清纯素颜/花妆/高潮潮红/黑长直/丸子头/湿发/发色    |
-| **动物** | 🐱 🐶 🐾                   | 猫咪/狗狗/小动物/猫耳/尾巴/鱼缸/宠物互动          |
-| **道具** | 🕯️ 🔗 🍷                 | 按场景搭配:酒杯/蜡烛/课本/手机/花瓣/假阳具/跳蛋等 |
-| **饰品** | 💍 👑 📿                   | 戴在身上的:项链/耳环/乳环/脐环/项圈/戒指/手链     |
-
-*更新日期：2026-05-04 · 同步v7.0：8维/14槽位/光影前移/画质精简*

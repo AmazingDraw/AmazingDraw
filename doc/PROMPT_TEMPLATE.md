@@ -10,13 +10,13 @@
 
 ### 三阶段标准编译管线 (3-Phase Pipeline)
 
-卡片引擎采用严格的“导演决策 -> 槽位填充 -> 叙事升华”编译管线，彻底消除提示词生硬拼接感：
+顺序：导演决策 → 槽位填充 → 叙事升华。消拼接感。
 
-1. **8 维 AI 决策 (director)**：涵盖 `intent`、`exposure_mode`（必填）、`style_recipe`、`lighting_palette`、`pose_direction`、`makeup_direction`、`expression_gaze`、`focus_detail`。完成时自动对 `body_shape` 进行裸露安全预过滤。
-2. **12 槽位填充 (slots)**：全部选填（宁缺毋滥）。场景英文真相源是 **`scene.keywords`**（库内场景创卡已写，fill 通常不必改，且已**去姿势化**只含环境/机位词）。**例外**：`manual-custom` / keywords 为空时，fill **必须**写入 `scene.keywords`（对齐锁定的中文场景名）。**`slots.body_shape`**：create 由身份注入；fill JSON **显式提供则覆盖**（多人卡常用）。**特别注意：`style_quality`（风格画质，含注入设备词）、`liquids`（颜射流体）、`tattoo`（调教纹身）槽位是"按需存在/注入"的**。其中 `style_quality` 在匹配到特殊设备（鱼眼、监控等）时会自动注入初始设备词。若这三个槽位有值，AI 填槽时必须继承并融入画面；若无值，则由 AI 自由规划常规风格。**姿势（`slots.pose`）由 AI 参考场景 `pose_hint` 自由发挥**（2026-08-16 起不再有 dedup_slots 剔除，scene_theme 与 pose 天然不重复）。**例外（后入/颜射特殊视角）**：scene_theme 姿势段为 `{pose}` 占位符，渲染时用 `slots.pose`（create 注入的 pose_hint）填充——AI 可改写 pose 槽位实现姿势变更，scene_theme 不再自带姿势。
-3. **叙事升华 (elevation)**：作为最后一步独立运行。整合前两步细节，由 AI 编译出富含电影感与故事张力的英文核心长句 (`story_elevation`) 作为画面灵魂。
+1. **8 维决策 (director)**：`intent`、`exposure_mode`（必填）、`style_recipe`、`lighting_palette`、`pose_direction`、`makeup_direction`、`expression_gaze`、`focus_detail`。完成后预过滤 `body_shape`。
+2. **12 槽位 (slots)**：全部选填。英文场景真相源是 **`scene.keywords`**。**例外**：`manual-custom` / keywords 为空时必须写入。**`slots.body_shape`**：create 按身份注入；fill JSON 显式提供则覆盖（多人常用）。`style_quality` / `liquids` / `tattoo` 按需注入：有值必须继承，无值由 AI 规划；鱼眼/监控等命中时 `style_quality` 会注入设备词。**`slots.pose`** 参考 `pose_hint` 自由写。
+3. **叙事升华 (elevation)**：独立最后一步。把前两步收成一句有电影感的英文 `story_elevation`。
 
-> 三个阶段严格顺序执行，每阶段有硬性必填字段校验。重新填充 director 会级联重置 slots 和 elevation。
+> 三阶段顺序硬校验。重填 director 会级联清空 slots 与 elevation。
 
 ### 8 维导演决策与叙事升华表
 
@@ -39,7 +39,7 @@
 
 ### 裸露状态（由 `exposure_mode` 控制）
 
-`exposure_mode` 是 director 层的裸露决策，决定 body_shape 和 clothing 的过滤边界：
+`exposure_mode` 决定 `body_shape` / `clothing` 的过滤边界：
 
 
 | `exposure_mode` 值 | 含义           | body_shape 过滤 | clothing 过滤  |
@@ -50,15 +50,6 @@
 | `half_nude`        | 半裸，保留服装 | 按服装推断过滤  | 按服装推断过滤 |
 | `half_covered`     | 半遮，擦边     | 按遮挡物推断    | 按遮挡物推断   |
 | `none`             | 无裸露         | 全部移除        | 全部移除       |
-
-> fill director 完成后系统立即预过滤 body_shape 并打印结果，fill slots 完成后预过滤 clothing。AI 当场看到哪些词被移除/保留，当场修正。**render 阶段跟 `director.exposure_mode` 做体型分类/过滤，不再用 clothing 推断焦点去改写**（与 check 同口径）。
-
-`lower` 的 clothing 过滤按工作流分层：常规 `workflow_mode=single` 使用 balanced，保留 `skirt hiked up`、`panties pulled aside/down/at ankles` 等明确移开私处的服装状态，并保证私处可见；`workflow_mode=chain` 继续使用 strict，要求零遮挡。两者都继续过滤上身裸露和完整遮挡私处的衣物。
-
-> ⚠️ **lower 必须明确实体上装**（fill 预检硬性拦截）：只露下身时，`slots.clothing` 必须写出**具体上身衣物**（如 `sailor uniform top buttoned up` / `white blouse buttoned up` / `oversized sweater still on` / `silk dress` 等实体词）。禁止用 `upper body covered` / `chest covered` / `top still on` 这类模糊状态词代替——它们会被识别为「安全上装」跳过兜底，导致最终 prompt 无上身衣物、模型自由发挥露奶。
-
-常规数字「裸露」选项必须把 `director.exposure_mode` 与 `slots.clothing` 一起写入 `targets-json`；否则引擎只在能从明确裸露词可靠推断时兼容旧卡，无法确定时拒绝保存。
-
 
 ---
 
