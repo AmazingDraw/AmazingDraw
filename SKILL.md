@@ -19,7 +19,7 @@ triggers:
 
 > **参数与步骤以 CLI `--help` 为准**；本文只保留 Agent 契约、入口路径与文档索引。
 >
-> **路径约定**：下文路径均相对本文件所在目录（zip / 仓库根）。正斜杠 `/` 在 macOS 与 Windows 通用。解释器必须和发行包文件名里的 Python 标签一致：`cp39` → Python 3.9，`cp312` → Python 3.12。Apple 自带 `/usr/bin/python3` 是 3.9，请下 cp39；本机 3.12 请下 cp312。不要把 `.so` 和 `.pyd` 混放，也不要混 3.9/3.12 native。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。启动脚本：`bash scripts/...`（Windows 请用 Git Bash）。
+> **路径约定**：下文路径均相对本文件所在目录（zip / 仓库根）。正斜杠 `/` 在 macOS 与 Windows 通用。解释器必须和发行包文件名里的 Python 标签一致：`cp39` → Python 3.9，`cp312` → Python 3.12。Apple 自带 `/usr/bin/python3` 是 3.9，请下 cp39；本机 3.12 请下 cp312。不要把 `.so` 和 `.pyd` 混放，也不要混 3.9/3.12 native。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。启动脚本：`bash scripts/...`（Windows 请用 Git Bash）。先 `cd` 到 skill 根再执行。
 
 ---
 
@@ -53,7 +53,6 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 >
 > ```bash
 > python3 scripts/card-engine/card_cli.py <命令> --help
-> # Windows: python scripts/card-engine/card_cli.py <命令> --help
 > ```
 
 > **真相源**：`card.json` 唯一；`slots.body_shape` 为体型真相源。改核心字段后须作废 render 缓存。
@@ -95,14 +94,14 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 
 ## 3. ⚙️ 配置与维护
 
-* **归档**：命名 `人物·场景·主题`（`·` 分隔）；`card_cli.py archive --card <id>`
-* **常用命令**（在 zip/仓库根执行；Python 必须和 zip 标签一致：`cp39`→3.9，`cp312`→3.12；macOS：`python3`/`python3.12`；Windows：`python`）。发行包不含 `tests/`，那些自测仅 skill 开发树提供：
+* **归档**：命名 `人物·场景·主题`（`·` 分隔）；`python3 scripts/card-engine/card_cli.py archive --card <id>`
+* **常用命令**（在 zip/仓库根目录执行）：
 
 ```bash
 
-card_cli.py queue status
-card_cli.py queue remove --position N
-card_cli.py queue clear --force           # 谨慎
+python3 scripts/card-engine/card_cli.py queue status
+python3 scripts/card-engine/card_cli.py queue remove --position N
+python3 scripts/card-engine/card_cli.py queue clear --force           # 谨慎
 rm -f /tmp/cu-card/cu-gpu.lock            # Windows：%TEMP%\cu-card\cu-gpu.lock
 ```
 
@@ -120,7 +119,7 @@ rm -f /tmp/cu-card/cu-gpu.lock            # Windows：%TEMP%\cu-card\cu-gpu.lock
 | **前端应用**        | [static/](scripts/webui/static/)             | `index.html` + 拆分 JS（core / shell / settings / chat） |
 
 ```bash
-# 日常启停（推荐）
+# 日常启停（skill 根目录）
 bash scripts/webui/webui-start.sh start|stop|status|restart
 
 # 开发自检（在 zip/仓库根目录执行后 cd；macOS / Linux：python3；Windows：python）

@@ -288,6 +288,7 @@ class OperationRegistry:
                         os.replace(journal_path, quarantine)
                     self._operations.clear()
                     self._tombstones.clear()
+            self._lift_orphaned_tombstones_locked()
             self._commit_locked()
 
     def _load_journal_locked(self) -> None:
@@ -391,6 +392,23 @@ class OperationRegistry:
             for session_id in tombstones
             if str(session_id).strip()
         }
+
+    def _lift_orphaned_tombstones_locked(self) -> None:
+        """Drop tombstones whose history file is still on disk.
+
+        Delete used to stamp the tombstone before Gateway/file removal. A later
+        500 left the chat visible but permanently 409 on send.
+        """
+        if self._journal_path is None:
+            return
+        hist_dir = self._journal_path.parent
+        stale = {
+            session_id
+            for session_id in self._tombstones
+            if (hist_dir / f"{session_id}.jsonl").exists()
+        }
+        if stale:
+            self._tombstones -= stale
 
     def _journal_document_locked(self) -> Dict[str, Any]:
         operations = {}
@@ -769,6 +787,14 @@ class OperationRegistry:
     def tombstone_session(self, session_id: str) -> None:
         with self._lock:
             self._tombstones.add(session_id)
+            self._commit_locked()
+
+    def restore_session(self, session_id: str) -> None:
+        """Undo a tombstone when delete did not actually remove the session."""
+        with self._lock:
+            if session_id not in self._tombstones:
+                return
+            self._tombstones.discard(session_id)
             self._commit_locked()
 
     @contextlib.contextmanager

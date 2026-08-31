@@ -149,11 +149,11 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 - **安装方式**：npm 全局包（`/opt/homebrew/lib/node_modules/openclaw`）
 - **运行时**：[Node.js](https://nodejs.org/)（本机 v24）
-- **当前版本**：`2026.7.1`，用 `openclaw --version` 查
+- **当前版本**：以本机 `openclaw --version` 为准（桥接按 **2026.8.1** Gateway protocol v4 握手）
 - **主配置**：`~/.openclaw/openclaw.json`
 - **网关端口**：`18789`（见下方端口表）
 
-WebUI 通过 WebSocket 连本机网关，握手用 `~/.openclaw/identity/device.json` 里的设备私钥签名，所以 Python 侧需要 `websockets` 与 `cryptography` 两个库。
+WebUI 通过 WebSocket 连本机网关，握手用设备私钥签名。2026.8.1 起真源是 `~/.openclaw/state/openclaw.sqlite` 的 `device_identities`（`identity_key=primary`）；`identity/device.json` 只是升级前的遗留文件，Doctor 迁完就会删。Python 侧需要 `websockets` 与 `cryptography`。
 
 ### 5.2 模型来源
 
@@ -202,8 +202,8 @@ openclaw --version
 # 各 provider 的超时配置一览（未列出的即吃 120 秒默认值）
 python3 -c "import json,os;p=json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))['models']['providers'];[print(f'{k}: {v.get(\"timeoutSeconds\",\"未配置\")}') for k,v in p.items()]"
 
-# 翻会话存档确认超时的原始报错
-grep -l 'idle timeout' ~/.openclaw/agents/main/sessions/*.jsonl
+# 翻网关日志确认超时的原始报错（8.1 会话正文在 sqlite，不再翻 sessions/*.jsonl）
+openclaw logs --limit 80 --plain | grep -E 'idle timeout|LLM idle'
 ```
 
 ---

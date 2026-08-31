@@ -69,6 +69,54 @@ def _session_key(session_id: str) -> str:
     return f"agent:main:explicit:{session_id}"
 
 
+def _connect_challenge_signed_at_ms(challenge: dict) -> int:
+    """OpenClaw 2026.8.1：device.signedAt 必须等于 connect.challenge.payload.ts。
+
+    官方 gateway-client 在有 deviceIdentity 时，challenge ts 缺失/非整型直接拒连。
+    不能再用本机 Date.now() 去签，否则会 DEVICE_AUTH_SIGNATURE_*。
+    """
+    payload = challenge.get("payload") if isinstance(challenge, dict) else None
+    if not isinstance(payload, dict):
+        raise ValueError("connect.challenge payload missing")
+    ts = payload.get("ts")
+    if isinstance(ts, bool) or not isinstance(ts, (int, float)):
+        raise ValueError("connect.challenge timestamp invalid")
+    ts_int = int(ts)
+    if ts_int != ts or ts_int < 0:
+        raise ValueError("connect.challenge timestamp invalid")
+    return ts_int
+
+
+def _visible_text_from_message(message_obj: Any) -> str:
+    """Assistant-visible text only. Thinking blocks are not streamed as reply tokens."""
+    if not isinstance(message_obj, dict):
+        return ""
+    content_list = message_obj.get("content", [])
+    if isinstance(content_list, list):
+        parts = []
+        for item in content_list:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "text":
+                parts.append(item.get("text") or "")
+        return "".join(parts)
+    return message_obj.get("text") or ""
+
+
+def _merge_visible_stream_text(payload: Dict[str, Any], sent_text: str) -> str:
+    """Protocol v4: prefer cumulative ``message`` text, else ``deltaText`` / ``replace``."""
+    message_obj = payload.get("message") if isinstance(payload.get("message"), dict) else {}
+    snapshot = _visible_text_from_message(message_obj)
+    delta = payload.get("deltaText") if isinstance(payload.get("deltaText"), str) else ""
+    if payload.get("replace") is True and delta:
+        return delta
+    if snapshot:
+        return snapshot
+    if delta:
+        return f"{sent_text}{delta}"
+    return snapshot or ""
+
+
 def _silent_reply_state(text: str) -> str:
     """判断累积文本与静默哨兵的关系：silent / pending / text。
 
@@ -161,14 +209,54 @@ def get_gateway_info():
         return 18789, ""
 
 def get_device_info():
+    """Load the Gateway device keypair for connect signatures.
+
+    OpenClaw 2026.8.1 stores the canonical identity in sqlite
+    ``device_identities`` (key ``primary``). ``identity/device.json`` is only a
+    retired Doctor-import leftover and is often already gone.
+    """
     device_path = Path.home() / ".openclaw" / "identity" / "device.json"
-    if not device_path.exists():
+    if device_path.exists():
+        try:
+            with open(device_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if data.get("deviceId") and data.get("privateKeyPem") and data.get("publicKeyPem"):
+                return data
+        except Exception:
+            pass
+    return _device_info_from_sqlite()
+
+
+def _device_info_from_sqlite():
+    db_path = Path.home() / ".openclaw" / "state" / "openclaw.sqlite"
+    if not db_path.exists():
         return None
     try:
-        with open(device_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        import sqlite3
+
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT device_id, public_key_pem, private_key_pem "
+                "FROM device_identities WHERE identity_key = ? LIMIT 1",
+                ("primary",),
+            ).fetchone()
+            if not row:
+                row = conn.execute(
+                    "SELECT device_id, public_key_pem, private_key_pem "
+                    "FROM device_identities ORDER BY updated_at_ms DESC LIMIT 1"
+                ).fetchone()
+        finally:
+            conn.close()
     except Exception:
         return None
+    if not row or not row[0] or not row[1] or not row[2]:
+        return None
+    return {
+        "deviceId": row[0],
+        "publicKeyPem": row[1],
+        "privateKeyPem": row[2],
+    }
 
 
 async def _notify_status(
@@ -214,7 +302,7 @@ async def _open_authenticated_gateway():
         if not nonce:
             raise ValueError("nonce missing in challenge")
 
-        signed_at_ms = int(time.time() * 1000)
+        signed_at_ms = _connect_challenge_signed_at_ms(challenge)
         scopes_list = ["operator.admin", "operator.read", "operator.write"]
         scopes_str = ",".join(scopes_list)
         client_id = "cli"
@@ -259,7 +347,7 @@ async def _open_authenticated_gateway():
                         "client": {
                             "id": client_id,
                             "displayName": "Antigravity WebUI",
-                            "version": "2026.7.1",
+                            "version": "2026.8.1",
                             "platform": platform,
                             "deviceFamily": device_family,
                             "mode": client_mode,
@@ -384,10 +472,16 @@ async def abort_openclaw_operation(
 
 async def delete_openclaw_session(session_id: str) -> Dict[str, Any]:
     """Delete the exact OpenClaw session after local active-work checks."""
-    response = await _gateway_control_request(
-        "sessions.delete",
-        {"key": _session_key(session_id)},
-    )
+    try:
+        response = await _gateway_control_request(
+            "sessions.delete",
+            {"key": _session_key(session_id)},
+        )
+    except Exception as err:
+        return {
+            "status": "rejected",
+            "detail": str(err) or "sessions.delete failed",
+        }
     if response.get("ok") or _is_not_found_response(response):
         return {
             "status": "deleted",
@@ -530,28 +624,7 @@ async def _call_openclaw_gateway_ws_once(
                         )
 
                     state = payload.get("state")
-                    message_obj = payload.get("message", {})
-                    content_list = message_obj.get("content", [])
-
-                    if isinstance(content_list, list):
-                        text_parts = []
-                        for idx, item in enumerate(content_list):
-                            if not isinstance(item, dict):
-                                continue
-                            item_type = item.get("type")
-                            if item_type == "text":
-                                text_parts.append(item.get("text", ""))
-                            elif item_type == "thinking":
-                                thinking_val = item.get("thinking", item.get("text", ""))
-                                is_last = (idx == len(content_list) - 1)
-                                is_thinking_done = not is_last or (state in ("final", "error"))
-                                if is_thinking_done:
-                                    text_parts.append(f"<think>{thinking_val}</think>")
-                                else:
-                                    text_parts.append(f"<think>{thinking_val}")
-                        full_text = "".join(text_parts)
-                    else:
-                        full_text = message_obj.get("text", "") or ""
+                    full_text = _merge_visible_stream_text(payload, sent_text)
 
                     # 冲突常以 assistant text 先到达，再标 state=error；
                     # 绝不能先 yield，否则上层会当成已开流而跳过重试

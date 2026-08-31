@@ -339,6 +339,21 @@ function initChat() {
     let unknownRemote = false;
     let recoveredTerminal = false;
 
+    const streamViewVisible = () => item.chat_mode !== "draw"
+      || !item.session_id
+      || state.activeSessionId === item.session_id;
+    const thinkingId = streamViewVisible() ? appendChatThinking() : null;
+    const turn = { userText: text, replyText: "", msgId };
+    const paintShown = (shown) => {
+      if (!streamViewVisible() || !visibleChatText(shown)) return;
+      if (!aiBubbleCreated) {
+        if (thinkingId) removeChatThinking(thinkingId);
+        aiBubbleCreated = true;
+      }
+      appendChatMessage("ai", shown, { msgId, persist: false });
+    };
+    const smoother = createReplyStreamSmoother(paintShown);
+
     const showUnknownRemote = (detail = "") => {
       if (unknownRemote) return;
       unknownRemote = true;
@@ -346,20 +361,9 @@ function initChat() {
       replyText = replyText ? `${replyText}\n\n${warning}` : warning;
       if (detail) replyText += `\n\n${detail}`;
       turn.replyText = replyText;
-      if (streamViewVisible()) {
-        if (!aiBubbleCreated) {
-          if (thinkingId) removeChatThinking(thinkingId);
-          aiBubbleCreated = true;
-        }
-        appendChatMessage("ai", replyText, { msgId, persist: false });
-      }
+      smoother.setTarget(replyText);
+      smoother.flush();
     };
-
-    const streamViewVisible = () => item.chat_mode !== "draw"
-      || !item.session_id
-      || state.activeSessionId === item.session_id;
-    const thinkingId = streamViewVisible() ? appendChatThinking() : null;
-    const turn = { userText: text, replyText: "", msgId };
     if (item.session_id) state.streamingTurns.set(item.session_id, turn);
     activeChatOperations.set(queueKey, { item, controller });
     syncChatLoadingState();
@@ -406,37 +410,21 @@ function initChat() {
               if (data.type === "text") {
                 replyText += data.chunk;
                 turn.replyText = replyText;
-                if (streamViewVisible()) {
-                  if (!aiBubbleCreated) {
-                    if (thinkingId) removeChatThinking(thinkingId);
-                    aiBubbleCreated = true;
-                  }
-                  appendChatMessage("ai", replyText, { msgId, persist: false });
-                }
+                smoother.setTarget(replyText);
               } else if (data.type === "meta") {
                 metaData = data;
               } else if (data.type === "error") {
                 replyText += `\n\n⚠️ **系统错误**:\n${data.error}`;
                 turn.replyText = replyText;
-                if (streamViewVisible()) {
-                  if (!aiBubbleCreated) {
-                    if (thinkingId) removeChatThinking(thinkingId);
-                    aiBubbleCreated = true;
-                  }
-                  appendChatMessage("ai", replyText, { msgId, persist: false });
-                }
+                smoother.setTarget(replyText);
+                smoother.flush();
               } else if (data.type === "cancelled") {
                 cancelledByServer = true;
                 const cancelText = "⏹️ 操作已取消。";
                 replyText = replyText ? `${replyText}\n\n${cancelText}` : cancelText;
                 turn.replyText = replyText;
-                if (streamViewVisible()) {
-                  if (!aiBubbleCreated) {
-                    if (thinkingId) removeChatThinking(thinkingId);
-                    aiBubbleCreated = true;
-                  }
-                  appendChatMessage("ai", replyText, { msgId, persist: false });
-                }
+                smoother.setTarget(replyText);
+                smoother.flush();
               } else if (data.type === "unknown_remote") {
                 showUnknownRemote(data.error || "");
               } else if (data.type === "operation") {
@@ -454,6 +442,8 @@ function initChat() {
           }
         }
       }
+
+      smoother.flush();
 
       if (!aiBubbleCreated && streamViewVisible()) {
         if (thinkingId) removeChatThinking(thinkingId);
@@ -511,12 +501,14 @@ function initChat() {
         : `❌ 对话异常: ${err.message || err}。请确认 WebUI 后端服务正常。`;
       if (aiBubbleCreated) replyText += tail;
       turn.replyText = replyText;
-      if (streamViewVisible()) {
+      smoother.setTarget(replyText);
+      smoother.flush();
+      if (streamViewVisible() && !aiBubbleCreated) {
         if (thinkingId) removeChatThinking(thinkingId);
-        appendChatMessage("ai", aiBubbleCreated ? replyText : solo,
-          aiBubbleCreated ? { msgId, persist: false } : { persist: false });
+        appendChatMessage("ai", solo, { persist: false });
       }
     } finally {
+      smoother.flush();
       activeChatOperations.delete(queueKey);
       if (item.session_id) state.streamingTurns.delete(item.session_id);
       syncChatLoadingState();
@@ -627,6 +619,61 @@ function initChat() {
 function applyEditorialStyles(html) {
   // 已取消杂志风首字放大；保留函数以免调用方改动
   return html;
+}
+
+function visibleChatText(text) {
+  let clean = String(text || "");
+  clean = clean.replace(/<(think|thinking)>[\s\S]*?<\/\1>/g, "");
+  clean = clean.replace(/<(think|thinking)>[\s\S]*?$/g, "");
+  return clean.trim();
+}
+
+/** 把网关/TCP 攒来的整段字，按帧匀开，避免一段一段弹出来。 */
+function createReplyStreamSmoother(apply) {
+  let shown = "";
+  let target = "";
+  let raf = 0;
+  let lastTs = 0;
+
+  const tick = (ts) => {
+    raf = 0;
+    if (!target.startsWith(shown)) {
+      shown = target;
+      lastTs = ts;
+      apply(shown);
+      return;
+    }
+    if (shown === target) {
+      lastTs = 0;
+      return;
+    }
+    const pending = target.length - shown.length;
+    const dt = lastTs ? Math.min(48, ts - lastTs) : 16;
+    lastTs = ts;
+    const want = Math.ceil(pending * (dt / 140));
+    const n = Math.min(pending, Math.max(1, want), 12);
+    shown = target.slice(0, shown.length + n);
+    apply(shown);
+    if (shown !== target) raf = requestAnimationFrame(tick);
+  };
+
+  return {
+    setTarget(text) {
+      target = String(text || "");
+      if (!raf) raf = requestAnimationFrame(tick);
+    },
+    flush() {
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      lastTs = 0;
+      if (shown !== target) {
+        shown = target;
+        apply(shown);
+      }
+    },
+  };
 }
 
 function renderAiMessage(text) {

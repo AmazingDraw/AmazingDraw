@@ -253,8 +253,20 @@ async def delete_chat_session(session_id: str, cancel_active: bool = False):
             },
         )
 
-    # The registry checked active work and applied this tombstone under one
-    # lock, so no enqueue can slip between the two steps.
+    # Tombstone is already applied so no enqueue can slip in. Any later
+    # failure must restore it, or the chat stays listed but 409s forever.
+    try:
+        return await _finish_session_delete(
+            session_id,
+            backend=backend,
+            active=active,
+        )
+    except Exception:
+        operation_registry.restore_session(session_id)
+        raise
+
+
+async def _finish_session_delete(session_id: str, *, backend: str, active):
     cancel_results = []
     if active:
         for operation in active:
@@ -402,15 +414,6 @@ def get_gateway_info():
     except Exception:
         return 18789, ""
 
-def get_device_info():
-    device_path = Path.home() / ".openclaw" / "identity" / "device.json"
-    if not device_path.exists():
-        return None
-    try:
-        with open(device_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
 
 @contextlib.contextmanager
 def clear_env_proxies():

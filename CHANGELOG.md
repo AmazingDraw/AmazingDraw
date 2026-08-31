@@ -2,6 +2,13 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.3 — 2026-08-31
+
+- 路径：CLI 入口 as_posix 正斜杠；文档改回 skill 根相对命令
+- OpenClaw 8.1：握手、deltaText 流式；删除会话不再误标 tombstone
+- WebUI 流式按帧匀开
+- 保健室病床场景库调整
+
 ## 0.1.2 — 2026-08-30
 
 - CARD_ENGINE_COMMANDS 精简工作目录说明，并只保留 doc/ 一份

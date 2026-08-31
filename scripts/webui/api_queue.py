@@ -821,7 +821,7 @@ def get_doc(doc_name: str):
         "skill": skill_root / "SKILL.md",
         "config": config_path,
         "sponsor": webui_doc_dir / "COMMUNITY_SPONSOR.md",
-        "commands": webui_doc_dir / "CARD_ENGINE_COMMANDS.md",
+        "commands": skill_root / "doc" / "CARD_ENGINE_COMMANDS.md",
     }
     
     doc_path = allowed_docs.get(doc_name)

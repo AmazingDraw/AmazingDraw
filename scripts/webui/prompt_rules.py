@@ -1,5 +1,6 @@
 import re
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -8,7 +9,6 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 SKILL_DIR = SCRIPT_DIR.parent.parent
 
 try:
-    import sys
     engine = str(SCRIPT_DIR.parent / "card-engine")
     if engine not in sys.path:
         sys.path.insert(0, engine)
@@ -23,7 +23,9 @@ RULE_SESSION_KEY = "v1"
 _RULE_PACKS_CACHE = {}
 
 # 卡片页 (cards) 不注入长规则；真正对话在抽卡页 (draw)。
-_CARD_CLI = SCRIPT_DIR.parent / "card-engine" / "card_cli.py"
+# 启动时在本机解析绝对路径；解释器用当前进程。as_posix 给 Git Bash / cmd 都能抄的 C:/... 形态。
+_CARD_CLI = (SCRIPT_DIR.parent / "card-engine" / "card_cli.py").resolve()
+_CARD_CLI_CMD = f'"{Path(sys.executable).resolve().as_posix()}" "{_CARD_CLI.as_posix()}"'
 
 
 def _resolve_cards_dir() -> str:
@@ -33,14 +35,13 @@ def _resolve_cards_dir() -> str:
     不告诉 AI 的话它只能靠猜（实测会猜成 "scratch 或独立存储区"）。
     """
     try:
-        import sys
         engine = str(SCRIPT_DIR.parent / "card-engine")
         if engine not in sys.path:
             sys.path.insert(0, engine)
         from card_config import CARDS_DIR
-        return str(CARDS_DIR)
+        return str(Path(CARDS_DIR).expanduser().resolve())
     except Exception:
-        return "~/.openclaw/draw-cards/cards"
+        return str(CARDS_DIR)
 
 
 _CARDS_DIR = _resolve_cards_dir()
@@ -50,9 +51,10 @@ DRAW_ASSISTANT_RULES = f"""[Draw Assistant Rules]
 0. 先理解用户意图，再决定是否动卡/出图：未明确要求时只回应；明确要改/建/出图再操作。附带卡片信息仅作背景参考。
    这里是对话窗口，每一轮都必须出声回复，禁止输出 NO_REPLY 等静默标记。
 1. 规则与参数以 CLI --help 为准，不要背文档、不要复述长规则。
-   主帮助：python3 {_CARD_CLI} --help
-   子命令：python3 {_CARD_CLI} <子命令> --help
+   主帮助：{_CARD_CLI_CMD} --help
+   子命令：{_CARD_CLI_CMD} <子命令> --help
    四模式入口：create / chain / direct / featured（细节一律查 help）。
+   上面两条是本机解析出的入口，换电脑会变；不要改写、不要换成相对路径或 $HOME。
 2. 需要操作时先 help 再执行；字段长度、英文槽位、门禁等以 CLI 与引擎输出为准。
 3. 卡片存放目录：{_CARDS_DIR}，单卡文件为 <card_id>.json。
    要看某张卡已填了什么，直接读该 JSON；读单个字段用 mend --card <id> --get <字段>。
