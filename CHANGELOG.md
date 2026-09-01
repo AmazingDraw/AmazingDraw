@@ -2,6 +2,13 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.4 — 2026-09-01
+
+- 无 OpenClaw 时设置页提示安装网关，推荐 DeepSeek V4 Flash；下拉不再写死模型 id
+- WebUI 增加 AI check 开关（默认关）；物理互斥正则收紧
+- 聊天 Markdown 兼容中文加粗侧翼与内侧空格
+- 依赖文档去掉 Gateway protocol / LoRA HF 括注
+
 ## 0.1.3 — 2026-08-31
 
 - 路径：CLI 入口 as_posix 正斜杠；文档改回 skill 根相对命令

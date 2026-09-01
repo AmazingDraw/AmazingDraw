@@ -264,7 +264,7 @@
               <!-- 客户端未安装警告 -->
               <div class="alert-box warning is-hidden" id="settings-agent-warning">
                 <i class="fa-solid fa-triangle-exclamation"></i>
-                <span>未检测到本地安装的 OpenClaw 客户端。请确保已在终端中完成配置（如运行 <code>agy install</code> 且网关服务已正常启动）。</span>
+                <span>未检测到 OpenClaw，请先安装并启动网关。推荐 DeepSeek V4 Flash</span>
               </div>
 
               <!-- 双栏网格布局 -->
@@ -281,7 +281,7 @@
                       <div class="form-row">
                         <label>AI 对话模型 (LLM Model)</label>
                         <select name="llm_model" id="settings-llm-model">
-                          <option value="cli-proxy/ds-flash">加载中 (DeepSeek Flash)...</option>
+                          <option value="">请先安装 OpenClaw</option>
                         </select>
                         <span class="help-text">对话式导演助理底层的 AI 大语言模型。</span>
                       </div>
@@ -346,6 +346,13 @@
                         <label>单轮对话总时限（秒）</label>
                         <input type="number" name="openclaw_ws_timeout_seconds" min="60" max="7200" placeholder="600">
                         <span class="help-text">一轮对话最长允许跑多久，超时即中断本轮。agent 跑长工具链时中途长时间不出字属正常，不要设得太紧。默认 600，可填 60–7200。</span>
+                      </div>
+                      <div class="form-row">
+                        <label class="checkbox-inline">
+                          <input type="checkbox" name="enable_ai_check" id="settings-enable-ai-check">
+                          <span>check 时跑 AI 语义检查</span>
+                        </label>
+                        <span class="help-text">默认关闭。打开后 check_prompt 会在物理脚本之外再调 LLM 审语义矛盾（多肢、衣长等）。高置信互斥词已由物理脚本拦。</span>
                       </div>
                     </div>
                   </div>

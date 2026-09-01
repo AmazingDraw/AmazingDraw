@@ -129,9 +129,8 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 ### 4.3 角色 LoRA（`girls_like_zi`）
 
-常规素人与明星写真依赖 GirlsLike 人物 LoRA（**本机 129 个 zi，与 HF `girlslike-zimage` 对齐**）：
+常规素人与明星写真依赖 GirlsLike 人物 LoRA：
 
-- **包**：[ifmylove2011/girlslike-zimage](https://huggingface.co/ifmylove2011/girlslike-zimage)
 - **画廊**：[GirlsLike LoRA Gallery](https://huggingface.co/spaces/ifmylove2011/girlslike_lora_gallery)
 - **物理存放**：`~/ComfyUI/models/loras/girls_like_zi/`
 - **本机全表**：`~/ComfyUI/models/loras/README.md`
@@ -149,11 +148,11 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 - **安装方式**：npm 全局包（`/opt/homebrew/lib/node_modules/openclaw`）
 - **运行时**：[Node.js](https://nodejs.org/)（本机 v24）
-- **当前版本**：以本机 `openclaw --version` 为准（桥接按 **2026.8.1** Gateway protocol v4 握手）
+- **当前版本**：以本机 `openclaw --version` 为准
 - **主配置**：`~/.openclaw/openclaw.json`
 - **网关端口**：`18789`（见下方端口表）
 
-WebUI 通过 WebSocket 连本机网关，握手用设备私钥签名。2026.8.1 起真源是 `~/.openclaw/state/openclaw.sqlite` 的 `device_identities`（`identity_key=primary`）；`identity/device.json` 只是升级前的遗留文件，Doctor 迁完就会删。Python 侧需要 `websockets` 与 `cryptography`。
+WebUI 通过 WebSocket 连本机网关，握手用设备私钥签名。Python 侧需要 `websockets` 与 `cryptography`。
 
 ### 5.2 模型来源
 

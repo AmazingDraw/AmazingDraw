@@ -639,11 +639,7 @@ def get_logs(lines: int = 80):
 
 _MODELS_CACHE = {
     "scanned": True,
-    "openclaw_models": [
-        "cli-proxy/ds-flash",
-        "opencode-go/deepseek-v4-flash",
-        "opencode-go/deepseek-v4-pro"
-    ],
+    "openclaw_models": [],
     "cliproxy_models": []
 }
 _MODELS_SCANNING = False
@@ -740,7 +736,7 @@ def _bg_scan_models():
 
     _MODELS_CACHE = {
         "scanned": True,
-        "openclaw_models": openclaw_models if openclaw_models else _MODELS_CACHE["openclaw_models"],
+        "openclaw_models": openclaw_models,
         "cliproxy_models": []
     }
     _LAST_SCAN_TIME = time.time()
@@ -790,10 +786,9 @@ def list_available_models():
         except Exception:
             pass
             
-        # 2. 更新缓存
-        if quick_openclaw:
-            _MODELS_CACHE["openclaw_models"] = quick_openclaw
-            
+        # 2. 更新缓存（空列表也写入，禁止回落到打包机写死的模型 id）
+        _MODELS_CACHE["openclaw_models"] = quick_openclaw
+
         _LAST_CONFIG_MTIMES["openclaw"] = current_openclaw_mtime
         
         # 3. 异步启动完整的 CLI 后台扫描确认

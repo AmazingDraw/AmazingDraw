@@ -176,12 +176,12 @@ def load_system_config() -> Dict[str, Any]:
         "output_dir": "~/Downloads/draw_things",
         "custom_presets_dir": str(PRESETS_DIR.resolve()),
         "recording_dir": "~/Downloads/draw_history",
-        "llm_model": "opencode-go/mimo-v2.5",
+        "llm_model": "",
         "agent_backend": "openclaw",
         "delivery_telegram": True,
         "delivery_webui": True,
-        "independent_llm_model": "opencode-go/deepseek-v4-flash",
-        "llm_fallback_models": ["cli-proxy/ds-flash"],
+        "independent_llm_model": "",
+        "llm_fallback_models": [],
         "chat_mode": "cards",
         "comfyui_dir": str(Path.home() / "ComfyUI"),
         "obsidian_vault_dir": "~/Documents/ObsidianVault",
@@ -234,6 +234,7 @@ def load_system_config() -> Dict[str, Any]:
         },
         "exposure_limit": ["half_covered", "half_nude"],
         "restrict_roles": True,
+        "enable_ai_check": False,
         "default_workflow": "moody",
         "workflows_aliases": {
             "moody": "moody_zib_zit"

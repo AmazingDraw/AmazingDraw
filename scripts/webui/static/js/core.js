@@ -174,11 +174,65 @@ function createSafeMarked(options) {
   return inst;
 }
 
+/* 中文对话里模型常写出 CommonMark 不认的加粗：
+   1) `** 【标题】 **` 星号内侧空格
+   2) `带**‘标题’**服务` 汉字贴着 **，内侧又是 Unicode 标点（侧翼规则失败）
+   只改 Markdown 源码的空格，不插入 HTML。代码块/行内代码整段保护。
+   半边 `**` 不配对，保持字面量。 */
+function _mdIsPunct(ch) {
+  return !!ch && /[\p{P}\p{S}]/u.test(ch);
+}
+
+function _mdNeedsOpenPad(prev, innerFirst) {
+  if (!innerFirst || /\s/.test(innerFirst) || !_mdIsPunct(innerFirst)) return false;
+  if (!prev || /\s/.test(prev) || _mdIsPunct(prev)) return false;
+  return true;
+}
+
+function _mdNeedsClosePad(innerLast, next) {
+  if (!innerLast || /\s/.test(innerLast) || !_mdIsPunct(innerLast)) return false;
+  if (!next || /\s/.test(next) || _mdIsPunct(next)) return false;
+  return true;
+}
+
+function normalizeChatMarkdown(src) {
+  const text = String(src ?? "");
+  if (!text || text.indexOf("**") === -1) return text;
+  const slots = [];
+  const stash = (chunk) => {
+    const i = slots.length;
+    slots.push(chunk);
+    return `\uE000MD${i}\uE001`;
+  };
+  let out = text.replace(/```[\s\S]*?(?:```|$)/g, stash);
+  out = out.replace(/`[^`\n]+`/g, stash);
+  out = out.replace(/\*\*[ \t]+([^*\n]+?)[ \t]+\*\*/g, "**$1**");
+  out = out.replace(/\*\*([^*\n]+)\*\*/g, (m, inner, offset) => {
+    if (!String(inner).trim()) return m;
+    const prev = offset > 0 ? out[offset - 1] : " ";
+    const next = out[offset + m.length] || " ";
+    const open = _mdNeedsOpenPad(prev, inner[0]) ? " **" : "**";
+    const close = _mdNeedsClosePad(inner[inner.length - 1], next) ? "** " : "**";
+    return open + inner + close;
+  });
+  return out.replace(/\uE000MD(\d+)\uE001/g, (_, i) => slots[Number(i)] ?? "");
+}
+
+function wrapChatMarked(inst) {
+  if (!inst || inst.__chatNormalized) return inst;
+  const parse = inst.parse.bind(inst);
+  const parseInline = inst.parseInline.bind(inst);
+  inst.parse = (src, opt) => parse(normalizeChatMarkdown(src), opt);
+  inst.parseInline = (src, opt) => parseInline(normalizeChatMarkdown(src), opt);
+  inst.__chatNormalized = true;
+  return inst;
+}
+
 let _mdChat = null;
 let _mdDoc = null;
 /** 聊天用：单换行即换行，符合对话观感 */
 function markdownForChat() {
-  if (!_mdChat) _mdChat = createSafeMarked({ gfm: true, breaks: true });
+  if (!_mdChat) _mdChat = wrapChatMarked(createSafeMarked({ gfm: true, breaks: true }));
   return _mdChat;
 }
 /** 文档用：遵循标准 markdown，单换行不断行 */

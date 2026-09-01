@@ -43,8 +43,6 @@ function updateModelDropdown() {
   const warningBanner = document.getElementById("settings-agent-warning");
   if (!modelSelect) return;
 
-  const backend = "openclaw";
-
   // 控制警告 Banner 显隐
   if (warningBanner) {
     const hasOpenclaw = state.openclawModels && state.openclawModels.length > 0;
@@ -69,7 +67,7 @@ function updateModelDropdown() {
   } else {
     const opt = document.createElement("option");
     opt.value = "";
-    opt.textContent = `⚠️ 未检测到 ${backend} 可用模型`;
+        opt.textContent = "请先安装 OpenClaw";
     modelSelect.appendChild(opt);
   }
 
@@ -157,6 +155,9 @@ async function loadSettings() {
       }
       if (form.elements["openclaw_ws_timeout_seconds"]) {
         form.elements["openclaw_ws_timeout_seconds"].value = state.settings.openclaw_ws_timeout_seconds || 600;
+      }
+      if (form.elements["enable_ai_check"]) {
+        form.elements["enable_ai_check"].checked = !!state.settings.enable_ai_check;
       }
       if (form.elements["auto_horizontal_for_multi"]) {
         form.elements["auto_horizontal_for_multi"].checked = state.settings.auto_horizontal_for_multi !== false;
@@ -441,6 +442,9 @@ async function autoSaveSettings() {
     openclaw_ws_timeout_seconds: form.elements["openclaw_ws_timeout_seconds"]
       ? Math.min(7200, Math.max(60, parseInt(form.elements["openclaw_ws_timeout_seconds"].value, 10) || 600))
       : (state.settings.openclaw_ws_timeout_seconds || 600),
+    enable_ai_check: form.elements["enable_ai_check"]
+      ? !!form.elements["enable_ai_check"].checked
+      : false,
     auto_horizontal_for_multi: form.elements["auto_horizontal_for_multi"] ? form.elements["auto_horizontal_for_multi"].checked : true,
     lock_size_to_workflow: form.elements["lock_size_to_workflow"] ? form.elements["lock_size_to_workflow"].checked : true,
     llm_temperature: form.elements["llm_temperature"] ? parseFloat(form.elements["llm_temperature"].value) : (state.settings.llm_temperature !== undefined ? state.settings.llm_temperature : 0.7),

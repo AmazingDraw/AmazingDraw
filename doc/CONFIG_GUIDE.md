@@ -65,6 +65,7 @@
 | `exposure_allowed_modes` | 允许的裸露档集合，优先。例 `["upper","lower","half_nude"]`。WebUI chips 写入，至少一项 |
 | `exposure_limit` | 兼容区间 `[min, max]`。没有 `exposure_allowed_modes` 时用。WebUI 保存 chips 时会派生写入 |
 | `restrict_roles` | 默认 `true`。WebUI「限制角色」：打开后限制角色不进角色库 |
+| `enable_ai_check` | 默认 `false`。打开后 `check_prompt.sh` 在物理门禁之外再调 LLM 语义检查。WebUI 在「单轮对话总时限」右侧 |
 | `scene_cooldown_window` | 连续 N 张内避免同一具体场景，默认 `9` |
 | `auto_horizontal_for_multi` | 检测到多人时是否自动切横版，默认 `true` |
 | `scene_library_weights` | 子库抽样权重，键名带 `_scenes`：`school_scenes` / `general_scenes` / `medical_scenes` / `workplace_scenes` / `sm_scenes` / `special_scenes` / `perspective_scenes` |
