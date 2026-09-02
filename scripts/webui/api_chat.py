@@ -415,18 +415,6 @@ def get_gateway_info():
         return 18789, ""
 
 
-@contextlib.contextmanager
-def clear_env_proxies():
-    proxies = ["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]
-    saved = {p: os.environ[p] for p in proxies if p in os.environ}
-    for p in saved:
-        del os.environ[p]
-    try:
-        yield
-    finally:
-        for p, v in saved.items():
-            os.environ[p] = v
-
 CHAT_MAP_PATH = Path(str(TMP_DIR) + "/webui-chat/chat_map.json")
 
 def resolve_card_id_by_chat_id(chat_id: str) -> str:

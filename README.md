@@ -1,6 +1,6 @@
 # AmazingDraw
 
-主要解决**不会写提示词的问题**：内置场景库、角色库，你说想抽什么，只需简单一句话，不必自己攒 prompt。**macOS** 为实际使用平台；**Windows（Git Bash）** 有发行包，尚未在实机上测试。
+解决**不会写提示词的问题**：内置场景库、角色库，想抽什么，只需简单一句话，不必自己攒 prompt。**macOS** 为实际使用平台；**Windows（Git Bash）** 尚未在真机上测试。另外上线 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎使用。
 
 ## Skill
 

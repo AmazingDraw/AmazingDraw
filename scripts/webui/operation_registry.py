@@ -525,22 +525,6 @@ class OperationRegistry:
         with self._lock:
             self.get(operation_id).cancel_handler = handler
 
-    def mark_dispatch_started(
-        self,
-        operation_id: str,
-        *,
-        transport: str,
-    ) -> None:
-        """Persist the no-replay barrier before an external dispatch attempt."""
-        with self._lock:
-            operation = self.get(operation_id)
-            if operation.is_terminal:
-                return
-            operation.transport = str(transport)
-            operation.dispatch_started = True
-            operation.updated_at = time.time()
-            self._commit_locked()
-
     def register_cli_process(
         self,
         operation_id: str,
@@ -783,11 +767,6 @@ class OperationRegistry:
             self._tombstones.add(session_id)
             self._commit_locked()
             return active, True
-
-    def tombstone_session(self, session_id: str) -> None:
-        with self._lock:
-            self._tombstones.add(session_id)
-            self._commit_locked()
 
     def restore_session(self, session_id: str) -> None:
         """Undo a tombstone when delete did not actually remove the session."""

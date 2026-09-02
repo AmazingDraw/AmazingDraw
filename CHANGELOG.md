@@ -2,6 +2,12 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.5 — 2026-09-03
+
+- README 加上提示词反推 bot 入口；Windows 改为尚未真机测试
+- autofix 收紧误杀（警服 KEEP、保安服浅蓝）；保留 balanced 掀裙位移
+- 删除确认无调用的死函数；FALLBACK 与渲染兜底对齐
+
 ## 0.1.4 — 2026-09-01
 
 - 无 OpenClaw 时设置页提示安装网关，推荐 DeepSeek V4 Flash；下拉不再写死模型 id
