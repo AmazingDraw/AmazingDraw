@@ -410,6 +410,47 @@ if [ -n "$PY" ] && [ -n "$PY_MM" ] && [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixe
   fi
 fi
 
+# ── 5.0 旧配置迁移：废弃的 agent_backend → openclaw（仅此一项）──
+AGENT_BACKEND_BEFORE=""
+AGENT_BACKEND_AFTER=""
+AGENT_BACKEND_MIGRATED=0
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
+  CFG_PY="$(py_path "$CONFIG_DST")"
+  _mig_out="$($PY - "$CFG_PY" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+cfg = json.loads(p.read_text(encoding="utf-8"))
+old = str(cfg.get("agent_backend") or "").strip().lower()
+legacy = ("custom", "claudecode", "hermes")
+if old in legacy:
+    cfg["agent_backend"] = "openclaw"
+    p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("migrated:%s:openclaw" % old)
+else:
+    print("keep:%s" % (old or "openclaw"))
+PY
+)" || true
+  case "$_mig_out" in
+    migrated:*)
+      AGENT_BACKEND_MIGRATED=1
+      AGENT_BACKEND_BEFORE="${_mig_out#migrated:}"
+      AGENT_BACKEND_BEFORE="${AGENT_BACKEND_BEFORE%%:*}"
+      AGENT_BACKEND_AFTER="openclaw"
+      echo "✓ 已迁移 agent_backend: ${AGENT_BACKEND_BEFORE} → openclaw（旧 custom / claudecode / hermes 已废弃）"
+      if [ -f "$CONFIG_DST" ]; then
+        SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
+        if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
+          cp "$CONFIG_DST" "$CONFIG_SRC"
+        fi
+      fi
+      ;;
+    keep:*)
+      AGENT_BACKEND_AFTER="${_mig_out#keep:}"
+      ;;
+  esac
+fi
+
 # ComfyUI / OpenClaw：本机路径侦测（可选依赖，不阻断安装）
 # 优先调用 tools/detect_local_deps.py；写入规则：仅填充空值或无效路径，不覆盖有效用户配置。
 DETECT_HELPER=""
@@ -503,43 +544,197 @@ fi
 
 
 # 可选：进程内 workplace 抽样（验证 create --scene 办公室 同类路径；失败仅警告）
+SMOKE_WP=""
 if [ "$SMOKE_OK" = 1 ]; then
   if (
     cd "$ROOT"
     PYTHONPATH=card_engine_core/native "$PY" -c "from card_scene_router import sample_library_entries as s; r=s(\"workplace_scenes\", include_tags=[\"workplace\"], count=1); assert r; print((r[0].get(\"label\") or r[0].get(\"id\") or \"\")[:40])"
   ); then
+    SMOKE_WP=1
     echo "  ✓ smoke: workplace 进程内抽样通过"
   else
+    SMOKE_WP=0
     echo "  ⚠ smoke: workplace 进程内抽样未通过（health 已过；若 create 仍失败请升级含抽样修复的版本）"
   fi
 fi
 
+# card_cli 启动自检（致命：证明选定 $PY 下 CLI 能起来）
+SMOKE_CLI=""
+if [ -f "$ROOT/scripts/card-engine/card_cli.py" ] && [ -n "$PY" ]; then
+  if (
+    cd "$ROOT/scripts/card-engine"
+    PYTHONPATH="$ROOT/card_engine_core/native${PYTHONPATH:+:$PYTHONPATH}" "$PY" card_cli.py -h >/dev/null 2>&1
+  ); then
+    SMOKE_CLI=1
+    echo "  ✓ smoke: card_cli.py -h 通过"
+  else
+    SMOKE_CLI=0
+    fatal_add "smoke 失败：card_cli.py -h 无法在选定解释器下启动。请确认 scripts/card-engine 与 native 完整"
+  fi
+else
+  SMOKE_CLI="skip"
+  echo "  ℹ smoke: 未找到 scripts/card-engine/card_cli.py，跳过 CLI 自检"
+fi
+
 fail_if_fatal
 
-# ── 摘要 ──
-echo ""
-echo "== 完成 =="
-echo "  摘要:"
-echo "    解释器: $PY ($PY_MM)"
-if [ "$SHIM_CREATED" = 1 ]; then
-  echo "    python3 别名: 已创建 $SHIM_PATH → $(py_abspath "$PY")"
-  echo "    PATH: 已确保 \$HOME/.local/bin 优先（当前会话 + ~/.bashrc 守卫块）"
-else
-  if command -v python3 >/dev/null 2>&1; then
-    echo "    python3 别名: 未改动（已有 python3=$(py_mm python3)，与本包一致或无需 shim）"
-  else
-    echo "    python3 别名: 未创建"
+# ── 安装报告 ──
+# 读回配置字段供报告（detect / migrate 之后）
+REPORT_AGENT_BACKEND="${AGENT_BACKEND_AFTER:-}"
+REPORT_COMFYUI="未找到"
+REPORT_OC_HOME="未找到"
+REPORT_OC_BIN="未找到"
+REPORT_OC_WS="未找到"
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
+  CFG_PY="$(py_path "$CONFIG_DST")"
+  _rep="$($PY - "$CFG_PY" <<'PY'
+import json, os, sys
+from pathlib import Path
+cfg = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+def exp(v):
+    v = (v or "").strip()
+    return os.path.expanduser(v) if v else ""
+ab = str(cfg.get("agent_backend") or "").strip() or "openclaw"
+cu = exp(cfg.get("comfyui_dir"))
+oh = exp(cfg.get("openclaw_home"))
+ob = exp(cfg.get("openclaw_bin"))
+ow = exp(cfg.get("openclaw_workspace_dir"))
+print(ab)
+print(cu)
+print(oh)
+print(ob)
+print(ow)
+PY
+)" || true
+  if [ -n "$_rep" ]; then
+    REPORT_AGENT_BACKEND="$(printf '%s\n' "$_rep" | sed -n '1p')"
+    _cu="$(printf '%s\n' "$_rep" | sed -n '2p')"
+    _oh="$(printf '%s\n' "$_rep" | sed -n '3p')"
+    _ob="$(printf '%s\n' "$_rep" | sed -n '4p')"
+    _ow="$(printf '%s\n' "$_rep" | sed -n '5p')"
+    if [ -n "$_cu" ]; then
+      _cu_b="$(bash_path "$_cu")"
+      if [ -f "$_cu_b/main.py" ] || [ -f "$_cu/main.py" ]; then
+        REPORT_COMFYUI="${_cu}"
+      else
+        REPORT_COMFYUI="${_cu}（路径无效）"
+      fi
+    fi
+    if [ -n "$_oh" ]; then
+      _oh_b="$(bash_path "$_oh")"
+      if [ -d "$_oh_b" ] || [ -d "$_oh" ]; then
+        REPORT_OC_HOME="${_oh}"
+      else
+        REPORT_OC_HOME="${_oh}（路径无效）"
+      fi
+    fi
+    if [ -n "$_ob" ]; then
+      _ob_b="$(bash_path "$_ob")"
+      if [ -x "$_ob_b" ] || [ -x "$_ob" ] || command -v "$_ob" >/dev/null 2>&1; then
+        REPORT_OC_BIN="${_ob}"
+      else
+        REPORT_OC_BIN="${_ob}（未找到可执行）"
+      fi
+    fi
+    if [ -n "$_ow" ]; then
+      _ow_b="$(bash_path "$_ow")"
+      if [ -d "$_ow_b" ] || [ -d "$_ow" ]; then
+        REPORT_OC_WS="${_ow}"
+      else
+        REPORT_OC_WS="${_ow}（路径无效）"
+      fi
+    elif [ -d "$WORKSPACE_DIR" ]; then
+      REPORT_OC_WS="$WORKSPACE_DIR"
+    fi
   fi
 fi
-echo "    smoke: 通过"
-if [ -f "$ROOT/scripts/webui/webui-start.sh" ]; then
-  echo "  启动 WebUI: bash '$ROOT/scripts/webui/webui-start.sh' start"
-else
-  echo "  启动 WebUI: cd '$ROOT/scripts/webui' && $PY web_server.py"
+# 回退：detect 已写入的 COMFYUI_DIR / 默认 workspace
+if [ "$REPORT_COMFYUI" = "未找到" ] && [ -n "${COMFYUI_DIR:-}" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
+  REPORT_COMFYUI="$COMFYUI_DIR"
 fi
-echo "  启动 ComfyUI: bash '$ROOT/scripts/gpu-pipeline/comfyui-start.sh' start"
-echo "  WebUI  http://127.0.0.1:8318"
-echo "  ComfyUI  http://127.0.0.1:8188"
-if [ "$IS_WIN" = 1 ]; then
-  echo "  （Windows 请始终在 Git Bash 里跑上面两条）"
+if [ "$REPORT_OC_WS" = "未找到" ] && [ -d "$WORKSPACE_DIR" ]; then
+  REPORT_OC_WS="$WORKSPACE_DIR"
+fi
+if [ -z "$REPORT_AGENT_BACKEND" ]; then
+  REPORT_AGENT_BACKEND="openclaw"
+fi
+
+# shim 文案
+if [ "$SHIM_CREATED" = 1 ]; then
+  REPORT_SHIM="已创建 $SHIM_PATH → $(py_abspath "$PY")"
+elif command -v python3 >/dev/null 2>&1; then
+  REPORT_SHIM="未改动（python3=$(py_mm python3)）"
+else
+  REPORT_SHIM="未创建"
+fi
+
+# smoke 文案
+REPORT_SMOKE_HEALTH="失败"
+[ "${SMOKE_OK:-0}" = 1 ] && REPORT_SMOKE_HEALTH="通过"
+REPORT_SMOKE_WP="未跑"
+case "${SMOKE_WP:-}" in
+  1) REPORT_SMOKE_WP="通过" ;;
+  0) REPORT_SMOKE_WP="未通过（仅警告）" ;;
+esac
+case "${SMOKE_CLI:-}" in
+  1) REPORT_SMOKE_CLI="通过" ;;
+  0) REPORT_SMOKE_CLI="失败" ;;
+  *) REPORT_SMOKE_CLI="跳过" ;;
+esac
+
+if [ -f "$ROOT/scripts/webui/webui-start.sh" ]; then
+  REPORT_WEBUI_CMD="bash '$ROOT/scripts/webui/webui-start.sh' start"
+else
+  REPORT_WEBUI_CMD="cd '$ROOT/scripts/webui' && $PY web_server.py"
+fi
+REPORT_COMFY_CMD="bash '$ROOT/scripts/gpu-pipeline/comfyui-start.sh' start"
+
+# 组装报告正文（终端 + 可选文件）
+_report_body() {
+  echo "== 安装报告 =="
+  echo "  平台: $UNAME_S  IS_WIN=$IS_WIN"
+  echo "  解释器: ${PY:-（未选定）}  版本=${PY_MM:-?}  内核ABI=${WANT_PY:-?}"
+  echo "  python3 别名: $REPORT_SHIM"
+  echo "  配置: $CONFIG_DST"
+  if [ "$AGENT_BACKEND_MIGRATED" = 1 ]; then
+    echo "  agent_backend: $REPORT_AGENT_BACKEND（已从 $AGENT_BACKEND_BEFORE 迁移）"
+  else
+    echo "  agent_backend: $REPORT_AGENT_BACKEND"
+  fi
+  echo "  ComfyUI: $REPORT_COMFYUI"
+  echo "  OpenClaw home: $REPORT_OC_HOME"
+  echo "  OpenClaw bin:  $REPORT_OC_BIN"
+  echo "  OpenClaw workspace: $REPORT_OC_WS"
+  echo "  smoke:"
+  echo "    card_asset_loader.health: $REPORT_SMOKE_HEALTH"
+  echo "    workplace 抽样: $REPORT_SMOKE_WP"
+  echo "    card_cli.py -h: $REPORT_SMOKE_CLI"
+  echo "  下一步:"
+  echo "    启动 WebUI: $REPORT_WEBUI_CMD"
+  echo "    启动 ComfyUI: $REPORT_COMFY_CMD"
+  echo "    WebUI   http://127.0.0.1:8318"
+  echo "    ComfyUI http://127.0.0.1:8188"
+  if [ "$IS_WIN" = 1 ]; then
+    echo "    （Windows 请始终在 Git Bash 里跑上面两条）"
+  fi
+}
+
+echo ""
+_report_body
+
+# 写入可粘贴的报告文件（优先 OpenClaw 数据目录）
+REPORT_FILE=""
+if [ -d "$OPENCLAW_DIR" ]; then
+  REPORT_FILE="$OPENCLAW_DIR/install-report.txt"
+elif [ -d "$(dirname "$CONFIG_DST")" ]; then
+  REPORT_FILE="$(dirname "$CONFIG_DST")/install-report.txt"
+fi
+if [ -n "$REPORT_FILE" ]; then
+  {
+    echo "# AmazingDraw 安装报告"
+    echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S %z')"
+    echo "# 发行版: $ROOT"
+    echo ""
+    _report_body
+  } > "$REPORT_FILE" 2>/dev/null && echo "  报告已写入: $REPORT_FILE" || true
 fi

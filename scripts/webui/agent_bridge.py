@@ -998,10 +998,10 @@ async def stream_agent_chat(
             "type": "text",
             "chunk": (
                 "❌ **AI 连抽 / 常规需要 OpenClaw**\n\n"
-                "当前未启用可用的 OpenClaw 对话后端（或配置仍是旧的 `custom`）。\n\n"
-                "**请先安装并登录 OpenClaw**，然后重启 / 刷新 WebUI 再试。\n"
+                "当前未启用可用的 OpenClaw 对话后端。\n\n"
+                "**请先安装并配置 OpenClaw**，然后重启 / 刷新 WebUI 再试。\n"
                 "直投、精选、新建卡片骨架 **不依赖** OpenClaw，可继续用。\n\n"
-                "安装与说明见「文档」页；配置页可检查 ComfyUI 与相关路径。"
+                "安装与说明见「文档」页；配置页可填写 openclaw_home / openclaw_bin（以及 ComfyUI 路径）。"
             ),
         }
         return

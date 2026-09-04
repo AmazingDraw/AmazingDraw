@@ -2,6 +2,13 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.8 — 2026-09-04
+
+- WebUI / gpu-pipeline 子进程改用 sys.executable（Windows 无 python3 时更稳）
+- OpenClaw 提示去掉 custom / 登录；安装与 WebUI 加载时自动将旧 custom / claudecode / hermes 迁为 openclaw
+- 安装脚本：写入安装报告（含 install-report.txt）、安装期迁配置、card_cli 冒烟加强
+- README 开头居中与徽章排版
+
 ## 0.1.7 — 2026-09-04
 
 - WebUI：可操作错误提示、新手引导、外接状态；OpenClaw/ComfyUI 路径探测；卡片/抽卡 URL 为 #cards / #draw

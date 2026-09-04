@@ -281,7 +281,7 @@ def load_system_config() -> Dict[str, Any]:
                 if k not in user_config:
                     user_config[k] = v
             # 强制回退已废弃的后端
-            if user_config.get("agent_backend") in ("claudecode", "hermes"):
+            if user_config.get("agent_backend") in ("claudecode", "hermes", "custom"):
                 user_config["agent_backend"] = "openclaw"
             # 归一化 chat_mode：仅 cards | draw
             user_config["chat_mode"] = normalize_chat_mode(user_config.get("chat_mode"), "cards")
@@ -414,7 +414,7 @@ def safe_write_config(file_path: Path, content: str, max_backups: int = 9):
 
 def save_system_config(config_data: Dict[str, Any]):
     """保存配置并合并已有字段"""
-    if config_data.get("agent_backend") in ("claudecode", "hermes"):
+    if config_data.get("agent_backend") in ("claudecode", "hermes", "custom"):
         config_data["agent_backend"] = "openclaw"
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     

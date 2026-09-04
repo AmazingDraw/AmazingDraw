@@ -99,7 +99,7 @@ def typical_render_minutes() -> Optional[float]:
     """与 cu-queue avg-eta / cu-submit 共用：最近成功交付均时（分钟）。"""
     try:
         proc = subprocess.run(
-            ["python3", str(QUEUE_SCRIPT), "avg-eta"],
+            [sys.executable, str(QUEUE_SCRIPT), "avg-eta"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -205,7 +205,7 @@ def safe_json(path: str) -> dict:
 def queue_status() -> dict:
     try:
         proc = subprocess.run(
-            ['python3', str(QUEUE_SCRIPT), 'status'],
+            [sys.executable, str(QUEUE_SCRIPT), 'status'],
             capture_output=True,
             text=True,
             timeout=10,
@@ -676,7 +676,7 @@ def cmd_pause() -> int:
     try:
         pause_proc = subprocess.run(
             [
-                'python3',
+                sys.executable,
                 str(QUEUE_SCRIPT),
                 'pause',
                 '--job-id',
@@ -746,7 +746,7 @@ def cmd_pause() -> int:
 def cmd_resume() -> int:
     paused = safe_json(str(PAUSED_STATE)) if PAUSED_STATE.exists() else {}
     job_id = str(paused.get('job_id') or '')
-    cmd = ['python3', str(QUEUE_SCRIPT), 'resume']
+    cmd = [sys.executable, str(QUEUE_SCRIPT), 'resume']
     if job_id:
         cmd += ['--job-id', job_id]
     try:
@@ -829,7 +829,7 @@ def cmd_terminate() -> int:
             try:
                 qproc = subprocess.run(
                     [
-                        'python3',
+                        sys.executable,
                         str(QUEUE_SCRIPT),
                         'nack',
                         '--job-id',
@@ -879,7 +879,7 @@ def cmd_terminate() -> int:
     cleared_count = 0
     try:
         clear_proc = subprocess.run(
-            ['python3', str(QUEUE_SCRIPT), 'clear', '--force'],
+            [sys.executable, str(QUEUE_SCRIPT), 'clear', '--force'],
             capture_output=True,
             text=True,
             timeout=10,
@@ -893,7 +893,7 @@ def cmd_terminate() -> int:
         queue_failures.append({'status': 'clear_error', 'error': str(exc)})
 
     try:
-        subprocess.run(['python3', str(QUEUE_SCRIPT), 'drafts', '--clean'], capture_output=True, text=True, timeout=10)
+        subprocess.run([sys.executable, str(QUEUE_SCRIPT), 'drafts', '--clean'], capture_output=True, text=True, timeout=10)
     except Exception:
         pass
 
@@ -920,7 +920,7 @@ def cmd_terminate() -> int:
 
 def cmd_clear() -> int:
     try:
-        proc = subprocess.run(['python3', str(QUEUE_SCRIPT), 'clear', '--force'], capture_output=True, text=True, timeout=10)
+        proc = subprocess.run([sys.executable, str(QUEUE_SCRIPT), 'clear', '--force'], capture_output=True, text=True, timeout=10)
         res = json.loads(proc.stdout)
         status = res.get('status')
         if status == 'cleared':

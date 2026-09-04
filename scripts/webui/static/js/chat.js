@@ -1194,7 +1194,7 @@ function formatFeaturedFailureDetail(detail) {
 
 function maybeAttachBackendConfigAction(msg, text) {
   if (!msg || !text) return;
-  if (!/不支持的后端|对话后端|agent_backend|需要 OpenClaw|未启用可用的 OpenClaw/.test(String(text))) return;
+  if (!/不支持的后端|对话后端|agent_backend|需要 OpenClaw|未启用可用的 OpenClaw|安装并配置 OpenClaw/.test(String(text))) return;
   attachGuidedErrorActions(msg, [
     { label: "打开文档", view: "docs" },
     { label: "打开配置", view: "settings" },

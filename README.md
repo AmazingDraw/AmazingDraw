@@ -1,7 +1,18 @@
-# AmazingDraw
+<h1 align="center">AmazingDraw</h1>
 
-[![X](https://img.shields.io/badge/X-%40AmazingDrawCLI-000000?style=flat&logo=x&logoColor=white)](https://x.com/AmazingDrawCLI) [![Telegram](https://img.shields.io/badge/Telegram-%40AmazingDraw-26A5E4?style=flat&logo=telegram&logoColor=white)](https://t.me/AmazingDraw) [![Release](https://img.shields.io/github/v/release/AmazingDraw/AmazingDraw?style=flat)](https://github.com/AmazingDraw/AmazingDraw/releases) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey?style=flat)](https://github.com/AmazingDraw/AmazingDraw/releases) [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.12-3776AB?style=flat&logo=python&logoColor=white)](https://github.com/AmazingDraw/AmazingDraw/releases)
+<p align="center">
+  <a href="https://x.com/AmazingDrawCLI"><img src="https://img.shields.io/badge/X-%40AmazingDrawCLI-000000?style=flat&logo=x&logoColor=white" alt="X @AmazingDrawCLI"></a>
+  <a href="https://t.me/AmazingDraw"><img src="https://img.shields.io/badge/Telegram-%40AmazingDraw-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Telegram @AmazingDraw"></a>
+</p>
 
+<p align="center">
+  <a href="https://github.com/AmazingDraw/AmazingDraw/releases"><img src="https://img.shields.io/github/v/release/AmazingDraw/AmazingDraw?style=flat" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat" alt="License MIT"></a>
+  <a href="https://github.com/AmazingDraw/AmazingDraw/releases"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey?style=flat" alt="macOS | Windows"></a>
+  <a href="https://github.com/AmazingDraw/AmazingDraw/releases"><img src="https://img.shields.io/badge/python-3.9%20%7C%203.12-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.9 | 3.12"></a>
+</p>
+
+<br><br>
 
 解决**不会写提示词的问题**：内置场景库、角色库，想抽什么只需简单一句话，不必自己攒 prompt。
 

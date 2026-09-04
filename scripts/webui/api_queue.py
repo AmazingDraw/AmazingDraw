@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -54,7 +55,7 @@ def _run_queue_cli(*args: str, timeout: float = 12.0) -> tuple[subprocess.Comple
     env["CU_WORK_DIR"] = str(TMP_DIR)
     env["CU_CARDS_DIR"] = str(CARDS_DIR)
     proc = subprocess.run(
-        ["python3", str(_gpu_pipeline_script("cu-queue.py")), *args],
+        [sys.executable, str(_gpu_pipeline_script("cu-queue.py")), *args],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -658,7 +659,7 @@ def remove_queue_job(job_id: str):
 def terminate_queue_api():
     """终止队列与绘图服务：效果等同于 /draw_terminate 且重置卡片状态"""
     import subprocess
-    cmd = ["python3", str(_gpu_pipeline_script("cu-control.py")), "terminate"]
+    cmd = [sys.executable, str(_gpu_pipeline_script("cu-control.py")), "terminate"]
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
         if res.returncode != 0:

@@ -1446,7 +1446,7 @@ def spawn_worker(task: dict) -> dict:
     bg_log = str(WORK_DIR / f"cu-submit-bg_{ts}.log")
     pid_file = str(WORK_DIR / f"cu-submit-bg_{ts}.pid")
     cmd = [
-        "python3", str(DETACHED_SPAWN),
+        sys.executable, str(DETACHED_SPAWN),
         "--cwd", str(WORKSPACE),
         "--log", bg_log,
         "--pid-file", pid_file,
