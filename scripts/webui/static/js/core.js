@@ -75,10 +75,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       loadCards();
     }
+    if (typeof maybeStartWebuiOnboarding === "function") maybeStartWebuiOnboarding();
   }).catch(() => {
     state.bootReady = true;
     renderChatModeButtons({ skipSidebar: true });
     loadCards();
+    if (typeof maybeStartWebuiOnboarding === "function") maybeStartWebuiOnboarding();
   });
 
   // 开启卡片列表增量轮询（每 3 秒一次）

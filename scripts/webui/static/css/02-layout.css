@@ -367,6 +367,7 @@ html.light-mode .nav-btn:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 
 .status-chip {
@@ -380,6 +381,13 @@ html.light-mode .nav-btn:hover {
   font-size: 0.7rem;
   color: var(--text-muted);
   font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.status-chip:hover {
+  border-color: rgba(124, 108, 255, 0.35);
+  color: var(--text-bright, #e8eaf0);
 }
 
 .status-chip .comfy-status-dot,

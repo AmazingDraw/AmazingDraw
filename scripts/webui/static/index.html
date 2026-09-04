@@ -28,11 +28,11 @@
   <!-- 自定义样式 -->
   <!-- 由 app.css 连续切分而来：顺序即层叠顺序，调换会改变样式优先级 -->
   <link rel="stylesheet" href="css/01-base.css?v=1.9.7">
-  <link rel="stylesheet" href="css/02-layout.css?v=1.10.0">
-  <link rel="stylesheet" href="css/03-chat.css?v=1.9.7">
+  <link rel="stylesheet" href="css/02-layout.css?v=1.10.1">
+  <link rel="stylesheet" href="css/03-chat.css?v=1.10.1">
   <link rel="stylesheet" href="css/04-panels.css?v=1.9.7">
-  <link rel="stylesheet" href="css/05-settings.css?v=1.9.7">
-  <link rel="stylesheet" href="css/06-components.css?v=1.9.7">
+  <link rel="stylesheet" href="css/05-settings.css?v=1.10.1">
+  <link rel="stylesheet" href="css/06-components.css?v=1.11.3">
   <link rel="stylesheet" href="css/07-effects.css?v=1.9.7">
 </head>
 <body>
@@ -110,15 +110,23 @@
 
       <!-- View B: Settings Sidebar (配置专属侧边栏) -->
       <div class="sidebar-sub-panel hidden" id="sidebar-settings-sub">
-        <!-- 精简服务状态条 -->
-        <div class="settings-status-strip">
-          <span class="status-chip">
-            <span class="comfy-status-dot connecting" id="settings-sidebar-comfy-dot"></span>
-            <span id="settings-sidebar-comfy-text">检测中...</span>
+        <!-- 外接状态：OpenClaw / Telegram / Obsidian（ComfyUI 在顶栏） -->
+        <div class="sidebar-section-label">
+          <i class="fa-solid fa-signal"></i>
+          <span>外接状态</span>
+        </div>
+        <div class="settings-status-strip" id="settings-status-strip">
+          <span class="status-chip" id="chip-openclaw" title="OpenClaw" data-anchor="settings-anchor-core" role="button" tabindex="0">
+            <span class="comfy-status-dot connecting" id="settings-sidebar-openclaw-dot"></span>
+            <span id="settings-sidebar-openclaw-text">OpenClaw</span>
           </span>
-          <span class="status-chip">
-            <span class="status-dot-ok"></span>
-            <span>OpenClaw</span>
+          <span class="status-chip" id="chip-telegram" title="Telegram" data-anchor="settings-anchor-delivery" role="button" tabindex="0">
+            <span class="comfy-status-dot connecting" id="settings-sidebar-telegram-dot"></span>
+            <span id="settings-sidebar-telegram-text">Telegram</span>
+          </span>
+          <span class="status-chip" id="chip-obsidian" title="Obsidian" data-anchor="settings-anchor-paths" role="button" tabindex="0">
+            <span class="comfy-status-dot connecting" id="settings-sidebar-obsidian-dot"></span>
+            <span id="settings-sidebar-obsidian-text">Obsidian</span>
           </span>
         </div>
 
@@ -218,6 +226,9 @@
           <main class="chat-container-main">
             <header class="chat-header">
               <div class="chat-active-card-info" id="chat-active-card-title"></div>
+              <div class="chat-header-actions">
+              <button type="button" class="btn-onboarding-launch" data-onboarding-replay title="新手导览" aria-label="新手导览"><i class="fa-regular fa-circle-question" aria-hidden="true"></i><span class="onboarding-launch-label">导览</span></button>
+            </div>
             </header>
 
             <div class="chat-main-row">
@@ -247,6 +258,9 @@
       <div class="workspace-view" id="view-settings">
         <header class="chat-header">
           <div class="chat-active-card-info"><i class="fa-solid fa-sliders"></i> 系统环境配置 · 管理 ComfyUI 绘图服务与物理文件存放目录</div>
+          <div class="chat-header-actions">
+            <button type="button" class="btn-onboarding-launch" data-onboarding-replay title="新手导览" aria-label="新手导览"><i class="fa-regular fa-circle-question" aria-hidden="true"></i><span class="onboarding-launch-label">导览</span></button>
+          </div>
         </header>
         <div class="settings-page-container">
           <div class="page-body">
@@ -411,6 +425,19 @@
                         <label>工作区目录 (openclaw_workspace)</label>
                         <input type="text" name="openclaw_workspace_dir" placeholder="如 ~/openclaw-workspace">
                         <span class="help-text">OpenClaw 本地工作区物理根目录。</span>
+                      </div>
+                    </div>
+
+                    <div class="form-grid-2">
+                      <div class="form-row">
+                        <label>OpenClaw 家目录 (openclaw_home)</label>
+                        <input type="text" name="openclaw_home" placeholder="如 ~/.openclaw 或 C:${HOME}/.openclaw">
+                        <span class="help-text">Windows 若自动检测失败可手动填 OpenClaw 家目录（含 openclaw.json）与可执行文件路径（openclaw.cmd）。</span>
+                      </div>
+                      <div class="form-row">
+                        <label>OpenClaw 可执行文件 (openclaw_bin)</label>
+                        <input type="text" name="openclaw_bin" placeholder="如 openclaw.cmd 的绝对路径">
+                        <span class="help-text">Windows 若自动检测失败可手动填 OpenClaw 家目录（含 openclaw.json）与可执行文件路径（openclaw.cmd）。</span>
                       </div>
                     </div>
 
@@ -635,6 +662,9 @@
       <div class="workspace-view" id="view-docs">
         <header class="chat-header">
           <div class="chat-active-card-info"><i class="fa-regular fa-file-lines"></i> 帮助文档 · 操作指南 / SKILL / 安装 README</div>
+          <div class="chat-header-actions">
+            <button type="button" class="btn-onboarding-launch" data-onboarding-replay title="新手导览" aria-label="新手导览"><i class="fa-regular fa-circle-question" aria-hidden="true"></i><span class="onboarding-launch-label">导览</span></button>
+          </div>
         </header>
         <div class="docs-page-container">
           <div class="docs-body-full">
@@ -835,12 +865,13 @@
 
   <!-- JavaScript 引导 -->
   <!-- 由 app.js 拆分而来：core.js 定义 state 与共享常量，必须最先加载 -->
-  <script src="js/core.js?v=1.10.0"></script>
-  <script src="js/shell.js?v=1.9.13"></script>
-  <script src="js/settings.js?v=1.9.10"></script>
+  <script src="js/core.js?v=1.10.1"></script>
+  <script src="js/shell.js?v=1.9.14"></script>
+  <script src="js/onboarding.js?v=1.11.4"></script>
+  <script src="js/settings.js?v=1.10.4"></script>
   <script src="js/cards.js?v=1.10.4"></script>
-  <script src="js/queue.js?v=1.9.7"></script>
-  <script src="js/chat.js?v=1.9.10"></script>
+  <script src="js/queue.js?v=1.9.9"></script>
+  <script src="js/chat.js?v=1.9.12"></script>
   <script src="js/widgets.js?v=1.9.7"></script>
 </body>
 </html>

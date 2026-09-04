@@ -114,7 +114,8 @@
   color: var(--text-bright);
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   font-weight: 500;
 }
 
@@ -736,3 +737,8 @@
   word-break: break-all;
 }
 
+#view-docs .chat-header .chat-header-actions,
+#view-settings .chat-header .chat-header-actions,
+#view-chat .chat-header .chat-header-actions {
+  flex-shrink: 0;
+}

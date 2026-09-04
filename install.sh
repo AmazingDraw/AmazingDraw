@@ -410,44 +410,79 @@ if [ -n "$PY" ] && [ -n "$PY_MM" ] && [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixe
   fi
 fi
 
-# ComfyUI / OpenClaw：软警告
+# ComfyUI / OpenClaw：本机路径侦测（可选依赖，不阻断安装）
+# 优先调用 tools/detect_local_deps.py；写入规则：仅填充空值或无效路径，不覆盖有效用户配置。
+DETECT_HELPER=""
+_INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
+for _cand in \
+  "$ROOT/tools/detect_local_deps.py" \
+  "$_INSTALL_DIR/tools/detect_local_deps.py" \
+  "$_INSTALL_DIR/detect_local_deps.py" \
+  "$ROOT/detect_local_deps.py"
+do
+  if [ -f "$_cand" ]; then
+    DETECT_HELPER="$_cand"
+    break
+  fi
+done
+
 COMFYUI_DIR="${COMFYUI_DIR:-}"
-if [ -z "$COMFYUI_DIR" ] && [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$DETECT_HELPER" ]; then
   CFG_PY="$(py_path "$CONFIG_DST")"
-  COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; print(os.path.expanduser(json.load(open(p,encoding='utf-8')).get('comfyui_dir','~/ComfyUI')))" "$CFG_PY" 2>/dev/null || true)
+  DETECT_PY="$(py_path "$DETECT_HELPER")"
+  # 人话输出到终端；--write 仅在空/无效时写入 comfyui_dir / openclaw_home / openclaw_bin
+  set +e
+  "$PY" "$DETECT_PY" --config "$CFG_PY" --write
+  _detect_rc=$?
+  set -e
+  if [ "$_detect_rc" -ne 0 ]; then
+    echo "  ⚠ 本机依赖侦测脚本异常（已忽略，安装继续）"
+  fi
+  # 侦测后同步权威配置 → 发行版 scripts/config.json（既有行为）
+  if [ -f "$CONFIG_DST" ]; then
+    SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
+    if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
+      cp "$CONFIG_DST" "$CONFIG_SRC"
+    fi
+  fi
+  # 读回 comfyui_dir 供插件拷贝
+  COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; v=json.load(open(p,encoding='utf-8')).get('comfyui_dir') or ''; print(os.path.expanduser(v) if v else '')" "$CFG_PY" 2>/dev/null || true)
   [ -n "$COMFYUI_DIR" ] && COMFYUI_DIR="$(bash_path "$COMFYUI_DIR")"
+elif [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
+  # 无 helper 时的精简回退（旧包）
+  CFG_PY="$(py_path "$CONFIG_DST")"
+  COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; print(os.path.expanduser(json.load(open(p,encoding='utf-8')).get('comfyui_dir','') or ''))" "$CFG_PY" 2>/dev/null || true)
+  [ -n "$COMFYUI_DIR" ] && COMFYUI_DIR="$(bash_path "$COMFYUI_DIR")"
+  if [ -z "$COMFYUI_DIR" ] || [ ! -f "$COMFYUI_DIR/main.py" ]; then
+    for _c in "${COMFYUI_DIR:-}" "$HOME/ComfyUI" "$HOME/comfyui" "$HOME/Documents/ComfyUI"; do
+      [ -n "$_c" ] || continue
+      if [ -f "$_c/main.py" ]; then COMFYUI_DIR="$_c"; break; fi
+    done
+  fi
+  if [ -n "$COMFYUI_DIR" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
+    echo "✓ 已找到本机 ComfyUI：$COMFYUI_DIR"
+  else
+    echo "ℹ 本机还没侦测到 ComfyUI（可选）。装好后可在 WebUI「配置」里填写 ComfyUI 本地根目录；或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
+  fi
+  if [ -d "$WORKSPACE_DIR" ]; then
+    echo "✓ OpenClaw 工作区：$WORKSPACE_DIR"
+  else
+    echo "ℹ 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
+  fi
 fi
-[ -n "$COMFYUI_DIR" ] || COMFYUI_DIR="$HOME/ComfyUI"
-if [ -f "$COMFYUI_DIR/main.py" ]; then
-  echo "  ✓ ComfyUI: $COMFYUI_DIR"
+
+# ComfyUI 插件拷贝（找到有效根目录时）
+if [ -n "$COMFYUI_DIR" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
   PLUGIN_SRC="$ROOT/ComfyUI-Card-Engine"
   if [ -d "$PLUGIN_SRC" ]; then
     PLUGIN_DST="$COMFYUI_DIR/custom_nodes/ComfyUI-Card-Engine"
     mkdir -p "$COMFYUI_DIR/custom_nodes"
     rm -rf "$PLUGIN_DST"
     cp -R "$PLUGIN_SRC" "$PLUGIN_DST"
-    echo "  ✓ ComfyUI 节点已安装到 $PLUGIN_DST"
+    echo "✓ ComfyUI 节点已安装到 $PLUGIN_DST"
   fi
-else
-  echo "  ⚠ ComfyUI 未安装于 ${COMFYUI_DIR}（可选；需手动安装）"
-  if [ -d "$ROOT/ComfyUI-Card-Engine" ]; then
-    echo "     装好后把 $ROOT/ComfyUI-Card-Engine 拷到 ComfyUI/custom_nodes/"
-  fi
-fi
-
-AGENT_BACKEND=""
-if [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
-  CFG_PY="$(py_path "$CONFIG_DST")"
-  AGENT_BACKEND=$($PY -c "import json,sys; print(json.load(open(sys.argv[1],encoding='utf-8')).get('agent_backend',''))" "$CFG_PY" 2>/dev/null || true)
-fi
-if [ -d "$WORKSPACE_DIR" ]; then
-  echo "  ✓ OpenClaw 工作区: $WORKSPACE_DIR"
-else
-  if [ "$AGENT_BACKEND" = "custom" ]; then
-    echo "  ℹ OpenClaw 可选，不是必须（当前 agent_backend=custom）"
-  else
-    echo "  ⚠ OpenClaw 工作区不存在: ${WORKSPACE_DIR}（当前 agent_backend=${AGENT_BACKEND:-未设置}；可选）"
-  fi
+elif [ -d "$ROOT/ComfyUI-Card-Engine" ]; then
+  echo "  （装好 ComfyUI 后，把 $ROOT/ComfyUI-Card-Engine 拷到 ComfyUI/custom_nodes/）"
 fi
 
 fail_if_fatal

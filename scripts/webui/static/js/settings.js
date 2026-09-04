@@ -15,6 +15,12 @@ async function loadModels() {
     }
     
     updateModelDropdown();
+    if (typeof updateSettingsIntegrationChips === "function") {
+      updateSettingsIntegrationChips(buildClientIntegrationsFallback());
+    }
+    if (typeof refreshIntegrationsStatus === "function") {
+      refreshIntegrationsStatus();
+    }
   } catch (err) {
     showToast("无法加载 AI 模型列表", "error");
   }
@@ -124,6 +130,79 @@ function updateComfyLink() {
   }
 }
 
+
+function buildClientIntegrationsFallback() {
+  const s = state.settings || {};
+  const chatId = String(s.telegram_chat_id || "").trim();
+  const vault = String(s.obsidian_vault_dir || "").trim();
+  // Browser cannot see env token / vault FS. Temporary optimistic hint until server responds.
+  return {
+    openclaw: !!(state.openclawModels && state.openclawModels.length > 0),
+    telegram: s.delivery_telegram !== false && !!chatId,
+    obsidian: !!vault,
+  };
+}
+
+async function refreshIntegrationsStatus() {
+  try {
+    const res = await fetch("/api/config/integrations");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.integrations && typeof updateSettingsIntegrationChips === "function") {
+      updateSettingsIntegrationChips(data.integrations);
+    }
+  } catch (_) {}
+}
+
+function updateSettingsIntegrationChips(integ) {
+  if (!integ || typeof integ !== "object") return;
+  const specs = [
+    { key: "openclaw", dotId: "settings-sidebar-openclaw-dot", chipId: "chip-openclaw", label: "OpenClaw" },
+    { key: "telegram", dotId: "settings-sidebar-telegram-dot", chipId: "chip-telegram", label: "Telegram" },
+    { key: "obsidian", dotId: "settings-sidebar-obsidian-dot", chipId: "chip-obsidian", label: "Obsidian" },
+  ];
+  specs.forEach((spec) => {
+    if (!Object.prototype.hasOwnProperty.call(integ, spec.key)) return;
+    const online = !!integ[spec.key];
+    const dot = document.getElementById(spec.dotId);
+    const chip = document.getElementById(spec.chipId);
+    // text ids: settings-sidebar-*-text
+    const textNode = document.getElementById(`settings-sidebar-${spec.key}-text`);
+    if (dot) dot.className = online ? "comfy-status-dot online" : "comfy-status-dot offline";
+    if (textNode) textNode.textContent = spec.label;
+    if (chip) {
+      chip.title = online ? `${spec.label}：已就绪` : `${spec.label}：未就绪`;
+      chip.setAttribute("aria-label", chip.title);
+    }
+  });
+}
+
+function initSettingsIntegrationChipClicks() {
+  const strip = document.getElementById("settings-status-strip");
+  if (!strip || strip.dataset.chipClicksBound === "1") return;
+  strip.dataset.chipClicksBound = "1";
+  const activate = (chip) => {
+    const targetId = chip.getAttribute("data-anchor");
+    if (!targetId) return;
+    const targetEl = document.getElementById(targetId);
+    if (!targetEl) return;
+    targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.querySelectorAll(".sidebar-anchor-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-anchor") === targetId);
+    });
+  };
+  strip.querySelectorAll(".status-chip[data-anchor]").forEach((chip) => {
+    chip.addEventListener("click", () => activate(chip));
+    chip.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        activate(chip);
+      }
+    });
+  });
+}
+
+
 async function loadSettings() {
   try {
     const res = await fetch("/api/settings");
@@ -167,6 +246,12 @@ async function loadSettings() {
       }
       if (form.elements["openclaw_workspace_dir"]) {
         form.elements["openclaw_workspace_dir"].value = state.settings.openclaw_workspace_dir || "";
+      }
+      if (form.elements["openclaw_home"]) {
+        form.elements["openclaw_home"].value = state.settings.openclaw_home || "";
+      }
+      if (form.elements["openclaw_bin"]) {
+        form.elements["openclaw_bin"].value = state.settings.openclaw_bin || "";
       }
       if (form.elements["recording_dir"]) {
         form.elements["recording_dir"].value = state.settings.recording_dir || "";
@@ -372,6 +457,13 @@ async function loadSettings() {
       form.elements["independent_llm_model"].value = state.settings.independent_llm_model;
     }
     updateComfyLink();
+    initSettingsIntegrationChipClicks();
+    if (typeof updateSettingsIntegrationChips === "function") {
+      updateSettingsIntegrationChips(buildClientIntegrationsFallback());
+    }
+    if (typeof refreshIntegrationsStatus === "function") {
+      refreshIntegrationsStatus();
+    }
     // 始终完整同步按钮+指示条；侧栏由 boot / 显式切换负责，避免二次 loadCards
     renderChatModeButtons({ skipSidebar: true });
     state.settingsDirty = false;
@@ -411,7 +503,7 @@ async function autoSaveSettings() {
   if (!form) return;
   
   const data = Object.assign({}, state.settings || {}, {
-    agent_backend: form.elements["agent_backend"] ? form.elements["agent_backend"].value : (state.settings.agent_backend || "openclaw"),
+    agent_backend: (state.settings && state.settings.agent_backend) || "openclaw",
     llm_model: form.elements["llm_model"].value,
     comfyui_host: form.elements["comfyui_host"].value.trim(),
     output_dir: form.elements["output_dir"] ? form.elements["output_dir"].value.trim() : (state.settings.output_dir || ""),
@@ -433,6 +525,8 @@ async function autoSaveSettings() {
     // A 组路径与算法配置
     comfyui_dir: form.elements["comfyui_dir"] ? form.elements["comfyui_dir"].value.trim() : (state.settings.comfyui_dir || ""),
     openclaw_workspace_dir: form.elements["openclaw_workspace_dir"] ? form.elements["openclaw_workspace_dir"].value.trim() : (state.settings.openclaw_workspace_dir || ""),
+    openclaw_home: form.elements["openclaw_home"] ? form.elements["openclaw_home"].value.trim() : (state.settings.openclaw_home || ""),
+    openclaw_bin: form.elements["openclaw_bin"] ? form.elements["openclaw_bin"].value.trim() : (state.settings.openclaw_bin || ""),
     obsidian_vault_dir: form.elements["obsidian_vault_dir"] ? form.elements["obsidian_vault_dir"].value.trim() : (state.settings.obsidian_vault_dir || ""),
     tmp_dir: form.elements["tmp_dir"] ? form.elements["tmp_dir"].value.trim() : (state.settings.tmp_dir || ""),
     cards_dir: form.elements["cards_dir"] ? form.elements["cards_dir"].value.trim() : (state.settings.cards_dir || ""),

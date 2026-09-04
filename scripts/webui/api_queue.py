@@ -35,6 +35,7 @@ from card_cli_commands import cmd_progress
 from card_config import TMP_DIR
 from card_io import card_path
 from card_status_service import restore_card_after_cancel
+from agent_install_paths import resolve_openclaw_bin, resolve_openclaw_home
 
 router = APIRouter(tags=["queue"])
 
@@ -99,6 +100,80 @@ _comfy_queue_cache = {
     "queue": {"running": 0, "pending": 0},
     "online": False
 }
+
+def _telegram_token_configured(cfg: Dict[str, Any]) -> bool:
+    """True if a bot token is available from config, env, or workspace .bot_tokens."""
+    token = str(cfg.get("telegram_bot_token") or "").strip()
+    if token:
+        return True
+    for key in (
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_BOT_TOKEN_DEFAULT",
+        "TELEGRAM_BOT_TOKEN_DRAW",
+        "TELEGRAM_BOT_TOKEN_DAILY",
+    ):
+        if (os.environ.get(key) or "").strip():
+            return True
+    # Same fallback as cu-deliver.sh: <workspace>/.bot_tokens → default=
+    try:
+        ws_raw = str(cfg.get("openclaw_workspace_dir") or "").strip()
+        ws = Path(os.path.expanduser(ws_raw)) if ws_raw else (Path.home() / ".openclaw" / "workspace")
+        token_file = ws / ".bot_tokens"
+        if token_file.is_file():
+            for line in token_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                line = line.strip()
+                if line.startswith("default=") and line.split("=", 1)[1].strip():
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _cheap_integrations_status() -> Dict[str, bool]:
+    """Configured + locally present (not a live network ping)."""
+    openclaw = False
+    try:
+        if (resolve_openclaw_home() / "openclaw.json").exists():
+            openclaw = True
+        elif _MODELS_CACHE.get("openclaw_models"):
+            openclaw = True
+        else:
+            oc_bin = resolve_openclaw_bin() or ""
+            # Bare name (e.g. "openclaw") means not resolved to a real path.
+            if oc_bin and Path(oc_bin).name != oc_bin and Path(oc_bin).is_file():
+                openclaw = True
+    except Exception:
+        openclaw = False
+
+    telegram = False
+    obsidian = False
+    try:
+        cfg = load_system_config()
+        delivery_on = cfg.get("delivery_telegram") is not False
+        chat_id = str(cfg.get("telegram_chat_id") or "").strip()
+        telegram = bool(delivery_on and chat_id and _telegram_token_configured(cfg))
+
+        vault_raw = str(cfg.get("obsidian_vault_dir") or "").strip()
+        if vault_raw:
+            vault = Path(os.path.expanduser(vault_raw))
+            # 配置了路径，且 vault 存在、含灵感库（或 .obsidian）即视为已安装可用
+            obsidian = vault.is_dir() and (
+                (vault / "灵感库").is_dir() or (vault / ".obsidian").is_dir()
+            )
+    except Exception:
+        pass
+
+    return {
+        "openclaw": bool(openclaw),
+        "telegram": bool(telegram),
+        "obsidian": bool(obsidian),
+    }
+
+
+@router.get("/api/config/integrations")
+def get_integrations_status():
+    """Lightweight OpenClaw / Telegram / Obsidian readiness for settings chips."""
+    return {"integrations": _cheap_integrations_status()}
 
 @router.get("/api/queue/status")
 def get_queue_status():
@@ -218,7 +293,8 @@ def get_queue_status():
             "error": queue_store.get("error"),
         },
         "runtime": runtime_info,
-        "stdout": stdout_val
+        "stdout": stdout_val,
+        "integrations": _cheap_integrations_status(),
     }
 
 @router.post("/api/queue/unlock")
@@ -649,35 +725,9 @@ _LAST_CONFIG_MTIMES = {
 }
 
 def _resolve_bin_path(name: str) -> str:
-    import os
-    import shutil
-    import sys
-    from pathlib import Path
-    found = shutil.which(name)
-    if found:
-        return found
-    home = Path.home()
-    search_dirs = [
-        home / ".local" / "bin",
-        home / "bin",
-        Path("/usr/local/bin"),
-        Path("/usr/bin"),
-        Path("/opt/homebrew/bin"),
-    ]
-    if sys.platform == "win32":
-        search_dirs.extend([
-            home / "AppData" / "Local" / "Programs" / name,
-            home / "AppData" / "Local" / "bin",
-        ])
-        exts = [".exe", ".cmd", ".bat", ""]
-    else:
-        exts = [""]
-    for sd in search_dirs:
-        for ext in exts:
-            target = sd / f"{name}{ext}"
-            if target.exists() and os.access(target, os.X_OK):
-                return str(target.resolve())
-    return name
+    """Backward-compatible wrapper around agent_install_paths.resolve_bin_path."""
+    from agent_install_paths import resolve_bin_path
+    return resolve_bin_path(name)
 
 def _bg_scan_models():
     global _MODELS_CACHE, _MODELS_SCANNING, _LAST_SCAN_TIME
@@ -692,7 +742,7 @@ def _bg_scan_models():
     
     # 1. 获取 openclaw 模型 (先尝试命令行)
     try:
-        openclaw_bin = _resolve_bin_path("openclaw")
+        openclaw_bin = resolve_openclaw_bin()
         res = subprocess.run([openclaw_bin, "models", "list", "--json"], capture_output=True, text=True, timeout=15)
         if res.returncode == 0:
             data = json.loads(res.stdout)
@@ -710,7 +760,7 @@ def _bg_scan_models():
     # 1b. 兜底直接读取 openclaw.json 配置文件
     if not openclaw_models:
         try:
-            config_path = Path.home() / ".openclaw" / "openclaw.json"
+            config_path = resolve_openclaw_home() / "openclaw.json"
             if config_path.exists():
                 data = json.loads(config_path.read_text(encoding="utf-8"))
                 
@@ -749,7 +799,7 @@ def list_available_models():
     from pathlib import Path
     now = time.time()
     
-    openclaw_json = Path.home() / ".openclaw" / "openclaw.json"
+    openclaw_json = resolve_openclaw_home() / "openclaw.json"
     current_openclaw_mtime = openclaw_json.stat().st_mtime if openclaw_json.exists() else 0
     config_changed = (
         current_openclaw_mtime != _LAST_CONFIG_MTIMES["openclaw"]

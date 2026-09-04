@@ -160,6 +160,8 @@ function initChatModeSelector() {
       state.settings.chat_mode = mode;
       try { localStorage.setItem("chat_mode", mode); } catch (_) {}
       renderChatModeButtons();
+      // URL：卡片 #cards / 抽卡 #draw（与顶层 #settings #docs 并列）
+      if (typeof persistActiveView === "function") persistActiveView("chat");
       
       try {
         const res = await fetch("/api/settings", {
@@ -253,25 +255,64 @@ function showNavigationGuardModal(onSave, onDiscard, onCancel) {
 const WORKSPACE_VIEWS = ["chat", "settings", "docs"];
 const VIEW_STORAGE_KEY = "active_view";
 
+function currentChatModeForHash() {
+  if (state.settings) state.settings.chat_mode = normalizeChatMode(state.settings.chat_mode);
+  return (state.settings && state.settings.chat_mode) === "draw" ? "draw" : "cards";
+}
+
+/** hash 路由：#cards / #draw / #settings / #docs；旧 #chat 兼容为当前 chat_mode */
+function parseHashRoute() {
+  const raw = String(location.hash || "").replace(/^#\/?/, "").split(/[/?#]/)[0].trim().toLowerCase();
+  if (raw === "cards" || raw === "draw") return { view: "chat", mode: raw };
+  if (raw === "chat") return { view: "chat", mode: null }; // legacy
+  if (raw === "settings" || raw === "docs") return { view: raw, mode: null };
+  return null;
+}
+
 function viewFromHash() {
-  const raw = String(location.hash || "").replace(/^#\/?/, "").split(/[/?#]/)[0].trim();
-  return WORKSPACE_VIEWS.includes(raw) ? raw : "";
+  const parsed = parseHashRoute();
+  return parsed ? parsed.view : "";
+}
+
+function hashForWorkspaceView(view) {
+  const v = WORKSPACE_VIEWS.includes(view) ? view : "chat";
+  if (v === "settings" || v === "docs") return v;
+  return currentChatModeForHash();
 }
 
 function persistActiveView(view) {
   const v = WORKSPACE_VIEWS.includes(view) ? view : "chat";
-  try { localStorage.setItem(VIEW_STORAGE_KEY, v); } catch (_) {}
-  const want = "#" + v;
+  const hash = hashForWorkspaceView(v);
+  try { localStorage.setItem(VIEW_STORAGE_KEY, hash); } catch (_) {}
+  const want = "#" + hash;
   if (location.hash !== want) {
     history.replaceState(null, "", want);
   }
 }
 
+function applyChatModeFromRoute(mode) {
+  if (!mode) return false;
+  if (!state.settings) state.settings = {};
+  const next = normalizeChatMode(mode);
+  if (normalizeChatMode(state.settings.chat_mode) === next) return false;
+  state.settings.chat_mode = next;
+  try { localStorage.setItem("chat_mode", next); } catch (_) {}
+  return true;
+}
+
 function restoreActiveView() {
-  const fromHash = viewFromHash();
-  if (fromHash) return fromHash;
+  const parsed = parseHashRoute();
+  if (parsed) {
+    if (parsed.mode) applyChatModeFromRoute(parsed.mode);
+    return parsed.view;
+  }
   try {
     const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (stored === "cards" || stored === "draw") {
+      applyChatModeFromRoute(stored);
+      return "chat";
+    }
+    if (stored === "chat") return "chat"; // legacy storage
     if (WORKSPACE_VIEWS.includes(stored)) return stored;
   } catch (_) {}
   return "chat";
@@ -520,8 +561,18 @@ function initNavigation() {
   });
 
   window.addEventListener("hashchange", () => {
-    const v = viewFromHash() || "chat";
-    if (v !== state.activeView) switchView(v);
+    const parsed = parseHashRoute() || { view: "chat", mode: null };
+    const modeChanged = applyChatModeFromRoute(parsed.mode);
+    if (parsed.view !== state.activeView) {
+      switchView(parsed.view);
+    } else {
+      // 同在对话页：#cards ↔ #draw 只切模式；旧 #chat 归一到 #cards/#draw
+      if (modeChanged) {
+        renderChatModeButtons();
+        if (typeof updateSidebarViewMode === "function") updateSidebarViewMode();
+      }
+      persistActiveView(parsed.view);
+    }
   });
   switchView(restoreActiveView());
 }

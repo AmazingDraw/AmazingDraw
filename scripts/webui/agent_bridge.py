@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import AsyncGenerator, Awaitable, Callable, Dict, Any, Optional
 
 from operation_registry import CliProcessRecord, operation_registry
+from agent_install_paths import resolve_openclaw_bin, resolve_openclaw_home
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent.parent
@@ -193,7 +194,7 @@ def base64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode('utf-8').rstrip('=')
 
 def get_gateway_info():
-    config_path = Path.home() / ".openclaw" / "openclaw.json"
+    config_path = resolve_openclaw_home() / "openclaw.json"
     if not config_path.exists():
         return 18789, ""
     try:
@@ -215,7 +216,7 @@ def get_device_info():
     ``device_identities`` (key ``primary``). ``identity/device.json`` is only a
     retired Doctor-import leftover and is often already gone.
     """
-    device_path = Path.home() / ".openclaw" / "identity" / "device.json"
+    device_path = resolve_openclaw_home() / "identity" / "device.json"
     if device_path.exists():
         try:
             with open(device_path, "r", encoding="utf-8") as f:
@@ -228,7 +229,7 @@ def get_device_info():
 
 
 def _device_info_from_sqlite():
-    db_path = Path.home() / ".openclaw" / "state" / "openclaw.sqlite"
+    db_path = resolve_openclaw_home() / "state" / "openclaw.sqlite"
     if not db_path.exists():
         return None
     try:
@@ -841,14 +842,19 @@ async def _run_openclaw_cli_fallback(
     home = str(Path.home())
     local_bin = os.path.join(home, ".local", "bin")
     if local_bin not in env.get("PATH", ""):
-        env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
+        env["PATH"] = local_bin + os.pathsep + env.get("PATH", "")
 
     # 必须用 --session-key 对齐 WS 路径的 sessionKey，不能用 --session-id。
     # 网关把 agent:main:explicit:<id> 映射到它自己生成的内部会话（id 与这里的 <id> 不同），
     # 而 --session-id <id> 会另开一个字面同名的空会话：降级一次，整段历史就被换掉，
     # 表现为「同一个对话，模型突然不记得前面说过什么」。
+    oc_bin = resolve_openclaw_bin()
+    # Prefer resolved binary; also prepend its dir so sibling shims resolve.
+    bin_dir = str(Path(oc_bin).expanduser().resolve().parent) if oc_bin else ""
+    if bin_dir and bin_dir not in env.get("PATH", ""):
+        env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
     cmd = [
-        "openclaw", "agent",
+        oc_bin, "agent",
         "--agent", "main",
         "--session-key", _session_key(session_id),
         "--message", full_message,
@@ -988,7 +994,16 @@ async def stream_agent_chat(
     on_status: Optional[StatusCallback] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     if backend != "openclaw":
-        yield {"type": "text", "chunk": f"❌ 不支持的后端: {backend}"}
+        yield {
+            "type": "text",
+            "chunk": (
+                "❌ **AI 连抽 / 常规需要 OpenClaw**\n\n"
+                "当前未启用可用的 OpenClaw 对话后端（或配置仍是旧的 `custom`）。\n\n"
+                "**请先安装并登录 OpenClaw**，然后重启 / 刷新 WebUI 再试。\n"
+                "直投、精选、新建卡片骨架 **不依赖** OpenClaw，可继续用。\n\n"
+                "安装与说明见「文档」页；配置页可检查 ComfyUI 与相关路径。"
+            ),
+        }
         return
 
     if backend == "openclaw":

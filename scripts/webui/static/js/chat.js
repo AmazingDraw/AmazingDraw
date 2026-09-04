@@ -444,6 +444,9 @@ function initChat() {
       }
 
       smoother.flush();
+      if (aiBubbleCreated && streamViewVisible()) {
+        maybeAttachBackendConfigAction(document.getElementById(msgId), replyText);
+      }
 
       if (!aiBubbleCreated && streamViewVisible()) {
         if (thinkingId) removeChatThinking(thinkingId);
@@ -1128,6 +1131,76 @@ async function sendDrawChatMessage(text, opts = {}) {
   });
 }
 
+
+function appendGuidedChatError(markdownText, actions) {
+  const msg = appendChatMessage("ai", markdownText, { persist: false });
+  if (!msg) return null;
+  attachGuidedErrorActions(msg, actions);
+  return msg;
+}
+
+function attachGuidedErrorActions(msg, actions) {
+  if (!msg || !Array.isArray(actions) || !actions.length) return;
+  const existing = msg.querySelector(".guided-error-actions");
+  if (existing) existing.remove();
+  const host = msg.querySelector(".msg-bubble")?.parentElement || msg;
+  const bar = document.createElement("div");
+  bar.className = "guided-error-actions";
+  actions.forEach((action) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "guided-error-btn";
+    btn.textContent = action.label || "去配置";
+    btn.addEventListener("click", () => {
+      if (action.view && typeof switchView === "function") {
+        switchView(action.view);
+      }
+      if (action.focus) {
+        setTimeout(() => {
+          const form = document.getElementById("form-settings-page");
+          let el = form && form.elements ? form.elements[action.focus] : null;
+          if (!el) el = document.querySelector(`[name="${action.focus}"]`);
+          if (el && typeof el.focus === "function") {
+            el.focus();
+            if (typeof el.scrollIntoView === "function") {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }
+        }, 160);
+      }
+    });
+    bar.appendChild(btn);
+  });
+  host.appendChild(bar);
+  const body = document.getElementById("chat-body");
+  if (body) body.scrollTop = body.scrollHeight;
+}
+
+function formatFeaturedFailureDetail(detail) {
+  const raw = String(detail || "未知错误");
+  const isVault = /找不到\s*Obsidian\s*灵感库|灵感库目录|obsidian_vault_dir|Obsidian/i.test(raw);
+  const isEmptyMd = /未找到任何\s*\.md|没有可用的\s*\.md|\.md\s*文件/i.test(raw);
+  if (isVault || isEmptyMd) {
+    return {
+      text: `❌ **精选失败**\n\n${raw}\n\n请在「配置」中把 \`obsidian_vault_dir\` 设为 **Vault 根目录**（不要填「灵感库」本身），并确保其中有 \`灵感库/*.md\`。`,
+      actions: [{ label: "去配置 Obsidian 路径", view: "settings", focus: "obsidian_vault_dir" }],
+    };
+  }
+  return {
+    text: `❌ **精选失败**\n\n${raw}`,
+    actions: [],
+  };
+}
+
+function maybeAttachBackendConfigAction(msg, text) {
+  if (!msg || !text) return;
+  if (!/不支持的后端|对话后端|agent_backend|需要 OpenClaw|未启用可用的 OpenClaw/.test(String(text))) return;
+  attachGuidedErrorActions(msg, [
+    { label: "打开文档", view: "docs" },
+    { label: "打开配置", view: "settings" },
+  ]);
+}
+
 async function handleFeaturedSubmitFlow() {
   appendChatMessage("user", "🎲 精选模式：随机灵感库入队", { persist: false });
   const thinkingId = appendChatThinking();
@@ -1142,7 +1215,8 @@ async function handleFeaturedSubmitFlow() {
     removeChatThinking(thinkingId);
     setLoadingState(false);
     if (!res.ok) {
-      appendChatMessage("ai", `❌ 精选失败: ${data.detail || res.statusText}`, { persist: false });
+      const guided = formatFeaturedFailureDetail(data.detail || res.statusText);
+      appendGuidedChatError(guided.text, guided.actions);
       return;
     }
     if (data.card_id) {
@@ -1151,12 +1225,13 @@ async function handleFeaturedSubmitFlow() {
       await loadCards();
       selectCard(data.card_id);
     } else {
-      appendChatMessage("ai", `❌ 精选失败: ${data.detail || "未知错误"}`, { persist: false });
+      const guided = formatFeaturedFailureDetail(data.detail || "未知错误");
+      appendGuidedChatError(guided.text, guided.actions);
     }
   } catch (err) {
     removeChatThinking(thinkingId);
     setLoadingState(false);
-    appendChatMessage("ai", `❌ 请求失败: ${err.message}`, { persist: false });
+    appendGuidedChatError(`❌ 请求失败: ${err.message}`, []);
   }
 }
 

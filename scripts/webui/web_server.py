@@ -188,6 +188,8 @@ def load_system_config() -> Dict[str, Any]:
         "webui_host": "0.0.0.0",
         "webui_port": 8318,
         "openclaw_ws_timeout_seconds": 600,
+        "openclaw_home": "",
+        "openclaw_bin": "",
         "scene_cooldown_window": 9,
         "scene_library_weights": {
             "school_scenes": 5,
@@ -288,7 +290,7 @@ def load_system_config() -> Dict[str, Any]:
             
             # 展开用户目录路径
             config = user_config.copy()
-            for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "openclaw_workspace_dir", "custom_presets_dir"]:
+            for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "openclaw_workspace_dir", "custom_presets_dir", "openclaw_home", "openclaw_bin"]:
                 if k in config and isinstance(config[k], str):
                     val = os.path.expanduser(config[k])
                     if val.strip() and not os.path.isabs(val):
@@ -310,7 +312,7 @@ def load_system_config() -> Dict[str, Any]:
         
     # 返回展开后的 defaults
     config = defaults.copy()
-    for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "custom_presets_dir"]:
+    for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "custom_presets_dir", "openclaw_home", "openclaw_bin"]:
         if k in config and isinstance(config[k], str):
             val = os.path.expanduser(config[k])
             if val.strip() and not os.path.isabs(val):

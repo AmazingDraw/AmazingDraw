@@ -72,18 +72,15 @@ async function loadQueueStatus() {
       qBadge.className = q.local_queue.length > 0 ? "badge-text warning" : "badge-text success";
     }
     
-    // 1b. 更新 ComfyUI 状态指示灯（顶栏 + 配置侧边栏同步）
+    // 1b. 更新 ComfyUI 状态指示灯（仅顶栏；侧栏改展示 OpenClaw/Telegram/Obsidian）
     const comfyDot = document.getElementById("comfy-status-dot");
-    const settingsComfyDot = document.getElementById("settings-sidebar-comfy-dot");
-    const settingsComfyText = document.getElementById("settings-sidebar-comfy-text");
     if (q.comfyui_online) {
       if (comfyDot) { comfyDot.className = "comfy-status-dot online"; comfyDot.parentNode.title = "ComfyUI 在线"; }
-      if (settingsComfyDot) settingsComfyDot.className = "comfy-status-dot online";
-      if (settingsComfyText) { settingsComfyText.textContent = "连接正常"; settingsComfyText.style.color = "var(--color-success, #10b981)"; }
     } else {
       if (comfyDot) { comfyDot.className = "comfy-status-dot offline"; comfyDot.parentNode.title = "ComfyUI 离线"; }
-      if (settingsComfyDot) settingsComfyDot.className = "comfy-status-dot offline";
-      if (settingsComfyText) { settingsComfyText.textContent = "未连接"; settingsComfyText.style.color = "var(--color-danger, #ef4444)"; }
+    }
+    if (q.integrations && typeof updateSettingsIntegrationChips === "function") {
+      updateSettingsIntegrationChips(q.integrations);
     }
     
     // 2. 渲染当前在跑的 runtime 状态；boot/startup/rendering/delivering 都要显示，避免开始阶段看不到状态
