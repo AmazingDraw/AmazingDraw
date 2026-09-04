@@ -1,6 +1,6 @@
 # AmazingDraw
 
-解决**不会写提示词的问题**：内置场景库、角色库，想抽什么，只需简单一句话，不必自己攒 prompt。**macOS** 为实际使用平台；**Windows（Git Bash）** 尚未在真机上测试。另外上线 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎使用。
+解决**不会写提示词的问题**：内置场景库、角色库，想抽什么，只需简单一句话，不必自己攒 prompt。**macOS** 为实际使用平台；**Windows（Git Bash）** 安装脚本会在需要时补 `python3` 别名，完整实机 QA 仍在完善。另外上线 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎使用。
 
 ## Skill
 
@@ -27,7 +27,7 @@
 bash install.sh
 ```
 
-Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bash。PowerShell 不能直接跑 `install.sh`。Windows 安装路径按 Git Bash 写了，但尚未在实机上测试。
+Windows 请安装对应版本的 Python（勾选 Add to PATH），并用 Git Bash。PowerShell 不能直接跑 `install.sh`。`install.sh` 会在 `python3` 缺失或版本不匹配时写入 `~/.local/bin/python3` 别名；完整 Windows 实机 QA 仍在完善。
 
 安装会按 `config.example.json` 生成 `~/.openclaw/draw-cards/config.json`（已有则不覆盖）。对话后端默认 `custom`，OpenClaw 可选。
 
