@@ -2,6 +2,11 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.6 — 2026-09-04
+
+- Windows: 场景库抽样改进程内读取；子进程强制 UTF-8 输出并多编码解码（禁止裸 encoding=utf-8）
+- install: 更智能的 Python 匹配/别名/硬依赖检查，并增加 workplace 进程内抽样自检
+
 ## 0.1.5 — 2026-09-03
 
 - README 加上提示词反推 bot 入口；Windows 改为尚未真机测试

@@ -466,6 +466,19 @@ else
   fatal_add "smoke 失败：选定解释器无法加载场景库（from card_asset_loader import health）。请确认 native 与 Python ${WANT_PY:-?} 匹配，且 assets.bin 完整"
 fi
 
+
+# 可选：进程内 workplace 抽样（验证 create --scene 办公室 同类路径；失败仅警告）
+if [ "$SMOKE_OK" = 1 ]; then
+  if (
+    cd "$ROOT"
+    PYTHONPATH=card_engine_core/native "$PY" -c "from card_scene_router import sample_library_entries as s; r=s(\"workplace_scenes\", include_tags=[\"workplace\"], count=1); assert r; print((r[0].get(\"label\") or r[0].get(\"id\") or \"\")[:40])"
+  ); then
+    echo "  ✓ smoke: workplace 进程内抽样通过"
+  else
+    echo "  ⚠ smoke: workplace 进程内抽样未通过（health 已过；若 create 仍失败请升级含抽样修复的版本）"
+  fi
+fi
+
 fail_if_fatal
 
 # ── 摘要 ──

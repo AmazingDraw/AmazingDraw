@@ -10,6 +10,7 @@ import json
 import random
 import re
 import subprocess
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -71,19 +72,39 @@ from card_config import (
 )
 
 def run_script(script_name, *args, **kwargs):
-    """调用同目录脚本"""
+    """调用同目录脚本（当前解释器；强制子进程 UTF-8 输出后再按 utf-8 解码）"""
     script = SCRIPT_DIR.parent / script_name
-    cmd = ["python3", str(script)] + list(args)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=kwargs.get("timeout", 30))
+    cmd = [sys.executable, str(script)] + list(args)
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=kwargs.get("timeout", 30),
+        env=env,
+    )
     if result.returncode != 0 and kwargs.get("check", True):
-        print(f"⚠️  {script_name} 失败: {result.stderr[:200]}")
-    return result.stdout.strip()
+        err = result.stderr or ""
+        print(f"⚠️  {script_name} 失败: {err[:200]}")
+    return (result.stdout or "").strip()
 
 def run_bash(script_name, *args, input_str=None):
     """调用同目录 bash 脚本"""
     script = SCRIPT_DIR.parent / script_name
     cmd = ["bash", str(script)] + list(args)
-    result = subprocess.run(cmd, input=input_str or None, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(
+        cmd,
+        input=input_str or None,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
     return result
 
 from card_record import (
@@ -1874,7 +1895,7 @@ def cmd_queue(args):
     # 构造 cu-queue.py 的执行参数
     queue_script = SCRIPT_DIR.parent / "gpu-pipeline" / "cu-queue.py"
 
-    cmd_args = ["python3", str(queue_script), args.action]
+    cmd_args = [sys.executable, str(queue_script), args.action]
 
     if args.action == "clear":
         if getattr(args, "force", False):
