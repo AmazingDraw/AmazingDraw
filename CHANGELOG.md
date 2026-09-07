@@ -2,6 +2,13 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.10 — 2026-09-08
+
+- 建卡：无人物/仅体型预设时身份与体型正确关联；孕妇类人物不再被清成随机身份
+- 角色库：「甜辣微胖」「图书馆女神」独立身份，不再误挂女大学生；大学组仍为 6 个 college-*
+- 安装：报告/就绪端口跟随 comfyui_host；探活在填写 host 之后；install 脚本去重；有 .venv 时轻查 comfy-aimdo（仅警告）
+- 工作流：UI→API 转换加固（4-tuple 连线、Power Lora）；安装向导支持 Desktop basePath 探测
+
 ## 0.1.9 — 2026-09-07
 
 - 新增交互安装向导与就绪矩阵（ComfyUI / OpenClaw / 工作流 / Telegram 引导）

@@ -23,7 +23,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 
@@ -37,6 +37,11 @@ from card_config import TMP_DIR
 from card_io import card_path
 from card_status_service import restore_card_after_cancel
 from agent_install_paths import resolve_openclaw_bin, resolve_openclaw_home
+
+from workflow_convert_lib import (
+    _is_api_workflow,
+    perform_workflow_conversion,
+)
 
 router = APIRouter(tags=["queue"])
 
@@ -880,94 +885,50 @@ def get_doc(doc_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def perform_workflow_conversion(ui_json: Dict[str, Any], object_info: Dict[str, Any]) -> Dict[str, Any]:
-    """核心算法：将 UI JSON 转换为 API JSON"""
-    links_map = {}
-    for l in ui_json.get("links", []):
-        if not l or len(l) < 6:
-            continue
-        link_id, origin_node_id, origin_slot_index, target_node_id, target_slot_index, link_type = l
-        links_map[link_id] = [str(origin_node_id), origin_slot_index]
-    
-    api_workflow = {}
-    
-    for node in ui_json.get("nodes", []):
-        node_id = str(node.get("id"))
-        class_type = node.get("type")
-        if not class_type:
-            continue
-            
-        inputs = {}
-        
-        # 1. 映射连线输入
-        node_inputs_list = node.get("inputs", [])
-        for in_slot in node_inputs_list:
-            slot_name = in_slot.get("name")
-            link_id = in_slot.get("link")
-            if slot_name and link_id and link_id in links_map:
-                inputs[slot_name] = links_map[link_id]
-        
-        # 2. 映射 widget 字段
-        node_def = object_info.get(class_type, {})
-        input_def = node_def.get("input", {})
-        required_inputs = input_def.get("required", {})
-        optional_inputs = input_def.get("optional", {})
-        
-        all_inputs_def = {}
-        all_inputs_def.update(required_inputs)
-        all_inputs_def.update(optional_inputs)
-        
-        widgets_values = node.get("widgets_values", [])
-        w_idx = 0
-        
-        for name, def_val in all_inputs_def.items():
-            is_link_type = False
-            if isinstance(def_val, list) and len(def_val) > 0:
-                val_type = def_val[0]
-                if val_type in ["MODEL", "LATENT", "IMAGE", "CLIP", "CONDITIONING", "VAE", "NOISE", "GUIDANCE", "CONTROL_NET", "STYLE_MODEL"]:
-                    is_link_type = True
-            
-            if is_link_type:
-                continue
-                
-            if name in inputs:
-                continue
-                
-            if w_idx < len(widgets_values):
-                inputs[name] = widgets_values[w_idx]
-                w_idx += 1
-                
-        api_workflow[node_id] = {
-            "inputs": inputs,
-            "class_type": class_type
-        }
-        
-    return api_workflow
-
 
 @router.post("/api/workflow/convert")
 def convert_workflow_api(req: Dict[str, Any]):
-    """ComfyUI UI-JSON 转换 API-JSON 服务"""
+    """ComfyUI UI-JSON → API-JSON. Surfaces warnings; detects already-API payloads."""
     ui_json = req.get("json_data")
     if not ui_json:
         raise HTTPException(status_code=400, detail="Missing json_data")
-        
+
+    if _is_api_workflow(ui_json):
+        return {
+            "status": "ok",
+            "api_workflow": ui_json,
+            "warnings": ["input already API-format; returned as pass-through"],
+            "already_api": True,
+        }
+
     config = load_system_config()
     host = config.get("comfyui_host", "http://127.0.0.1:8188")
-    
+
     import requests
+
     try:
-        object_info = requests.get(f"{host}/object_info", timeout=3).json()
+        object_info = requests.get(f"{host}/object_info", timeout=15).json()
     except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"无法连接 ComfyUI 服务 ({host})，转换功能需要 ComfyUI 处于启动运行状态，请先在 Settings 中确认并开启 ComfyUI 后端！"
+            detail=(
+                f"无法连接 ComfyUI 服务 ({host})，转换功能需要 ComfyUI 处于启动运行状态，"
+                "请先在 Settings 中确认并开启 ComfyUI 后端！"
+            ),
         )
-        
+
     try:
-        api_json = perform_workflow_conversion(ui_json, object_info)
-        return {"status": "ok", "api_workflow": api_json}
+        api_json, warnings = perform_workflow_conversion(ui_json, object_info)
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"工作流转换失败: {str(err)}")
 
+    status = "ok" if not warnings else "ok_with_warnings"
+    return {
+        "status": status,
+        "api_workflow": api_json,
+        "warnings": warnings,
+        "already_api": False,
+        "node_count": len(api_json),
+        "warning_count": len(warnings),
+    }
 

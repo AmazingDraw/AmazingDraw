@@ -607,7 +607,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
   # F. WebUI 说明
   "$PY" "$WIZ_PY" ${WIZARD_NI} webui-blurb || true
 
-  # G. 可选路径：output_dir / comfyui_host / openclaw_workspace / obsidian
+  # G. 可选路径：output_dir / comfyui_host / openclaw_workspace / obsidian（须在 readiness-summary 之前）
   set +e
   "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-extras --config "$CFG_PY"
   _wiz_rc=$?
@@ -815,12 +815,52 @@ else
 fi
 REPORT_COMFY_CMD="bash '$ROOT/scripts/gpu-pipeline/comfyui-start.sh' start"
 
-# 就绪矩阵（交互/非交互都打印；失败不致命）
+# 就绪矩阵（在 prompt-extras 之后跑一次；交互/非交互都打印；失败不致命）
 if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "${WIZARD_HELPER:-}" ]; then
   CFG_PY="$(py_path "$CONFIG_DST")"
   WIZ_PY="$(py_path "$WIZARD_HELPER")"
   ROOT_PY="$(py_path "$ROOT")"
   "$PY" "$WIZ_PY" readiness-summary --config "$CFG_PY" --root "$ROOT_PY" || true
+fi
+
+# 报告 URL：Comfy 来自 config.comfyui_host（缺省标注默认 8188）；
+# WebUI 来自 webui_host/webui_port（缺省标注 WebUI 默认 8318，与 Comfy 端口无关）。
+REPORT_COMFY_URL="http://127.0.0.1:8188"
+REPORT_COMFY_URL_NOTE="（默认）"
+REPORT_WEBUI_URL="http://127.0.0.1:8318"
+REPORT_WEBUI_URL_NOTE="（WebUI 默认）"
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
+  CFG_PY="$(py_path "$CONFIG_DST")"
+  _url_line=$($PY -c "
+import json,sys
+p=sys.argv[1]
+try:
+  c=json.load(open(p,encoding='utf-8'))
+except Exception:
+  c={}
+raw=(c.get('comfyui_host') or '').strip()
+if raw:
+  if '://' not in raw: raw='http://'+raw
+  comfy=raw; cnot=''
+else:
+  comfy='http://127.0.0.1:8188'; cnot='（默认）'
+host=(c.get('webui_host') or '').strip()
+port=c.get('webui_port')
+from_cfg=bool(host) or (port is not None and str(port).strip()!='')
+if not from_cfg:
+  webui='http://127.0.0.1:8318'; wnote='（WebUI 默认）'
+else:
+  if not host or host in ('0.0.0.0','::','[::]'): host='127.0.0.1'
+  try: port_i=int(port) if port is not None and str(port).strip()!='' else 8318
+  except Exception: port_i=8318
+  webui='http://%s:%d'%(host,port_i); wnote=''
+print(comfy+'|'+cnot+'|'+webui+'|'+wnote)
+" "$CFG_PY" 2>/dev/null || true)
+  if [ -n "${_url_line:-}" ]; then
+    IFS='|' read -r REPORT_COMFY_URL REPORT_COMFY_URL_NOTE REPORT_WEBUI_URL REPORT_WEBUI_URL_NOTE <<EOF
+$_url_line
+EOF
+  fi
 fi
 
 # 组装报告正文（终端 + 可选文件）
@@ -851,8 +891,8 @@ _report_body() {
   echo "  下一步:"
   echo "    启动 WebUI: $REPORT_WEBUI_CMD"
   echo "    启动 ComfyUI: $REPORT_COMFY_CMD"
-  echo "    WebUI   http://127.0.0.1:8318"
-  echo "    ComfyUI http://127.0.0.1:8188"
+  echo "    WebUI   ${REPORT_WEBUI_URL}${REPORT_WEBUI_URL_NOTE}"
+  echo "    ComfyUI ${REPORT_COMFY_URL}${REPORT_COMFY_URL_NOTE}"
   if [ "$IS_WIN" = 1 ]; then
     echo "    （Windows 请始终在 Git Bash 里跑上面两条）"
   fi

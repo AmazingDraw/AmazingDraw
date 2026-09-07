@@ -36,70 +36,181 @@ def _expand(raw: str) -> Path:
 
 
 def _is_comfyui_root(p: Path) -> bool:
+    """CLI root = directory containing main.py. Do not reject lean trees (tests)."""
     try:
         return p.is_dir() and (p / "main.py").is_file()
     except Exception:
         return False
 
-def _comfyui_candidates(cfg: Dict[str, Any]) -> List[Path]:
-    out: List[Path] = []
+
+def _comfyui_richness(p: Path) -> int:
+    """Prefer installs that look complete; never used to reject main.py-only roots."""
+    score = 0
+    try:
+        if (p / "models").is_dir():
+            score += 2
+        if (p / "comfy").is_dir():
+            score += 1
+        if (p / ".venv").is_dir() or (p / "venv").is_dir():
+            score += 1
+    except Exception:
+        pass
+    return score
+
+
+def _desktop_comfy_config_paths() -> List[Path]:
+    """Best-effort Desktop App config.json locations (basePath lives here)."""
+    home = Path.home()
+    paths: List[Path] = []
+    # macOS
+    paths.append(home / "Library" / "Application Support" / "ComfyUI" / "config.json")
+    # Windows Roaming / Local
+    appdata = os.environ.get("APPDATA")
+    localappdata = os.environ.get("LOCALAPPDATA")
+    if appdata:
+        paths.append(Path(appdata) / "ComfyUI" / "config.json")
+    else:
+        paths.append(home / "AppData" / "Roaming" / "ComfyUI" / "config.json")
+    if localappdata:
+        paths.append(Path(localappdata) / "ComfyUI" / "config.json")
+    else:
+        paths.append(home / "AppData" / "Local" / "ComfyUI" / "config.json")
+    # Linux-ish (rare for Desktop App; cheap)
+    paths.append(home / ".config" / "ComfyUI" / "config.json")
+    return paths
+
+
+def read_desktop_comfy_base_path() -> Optional[Path]:
+    """Read Comfy Desktop App config basePath if present. Not a CLI root by itself."""
+    for cfg_path in _desktop_comfy_config_paths():
+        try:
+            if not cfg_path.is_file():
+                continue
+            data = json.loads(cfg_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                continue
+            raw = data.get("basePath")
+            if isinstance(raw, str) and raw.strip():
+                return _expand(raw)
+        except Exception:
+            continue
+    return None
+
+
+def _comfyui_candidates(cfg: Dict[str, Any]) -> List[Tuple[Path, int]]:
+    """Ordered (path, priority) candidates. Lower priority number = preferred.
+
+    0 env COMFYUI_DIR → 1 config comfyui_dir → 2 Desktop basePath →
+    3 ~/ComfyUI → 4 other home → 5 Documents/Desktop → 6 Applications/stubs.
+    Application Support/ComfyUI itself is only a root if it has main.py.
+    """
+    out: List[Tuple[Path, int]] = []
     seen = set()
 
-    def add(raw: Optional[str]) -> None:
+    def add(raw: Optional[str], priority: int) -> None:
         if not raw or not str(raw).strip():
             return
         try:
             pth = _expand(str(raw))
         except Exception:
             return
-        key = str(pth)
+        try:
+            key = str(pth.resolve()) if pth.exists() else str(pth)
+        except Exception:
+            key = str(pth)
+        if sys.platform in ("darwin", "win32") or os.environ.get("MSYSTEM"):
+            key = key.casefold()
         if key in seen:
             return
         seen.add(key)
-        out.append(pth)
+        out.append((pth, priority))
 
-    add(os.environ.get("COMFYUI_DIR"))
+    add(os.environ.get("COMFYUI_DIR"), 0)
     raw_cfg = cfg.get("comfyui_dir")
     if isinstance(raw_cfg, str):
-        add(raw_cfg)
+        add(raw_cfg, 1)
+
+    base = read_desktop_comfy_base_path()
+    if base is not None:
+        add(str(base), 2)
 
     home = Path.home()
-    for rel in ("ComfyUI", "comfyui", "Documents/ComfyUI", "Desktop/ComfyUI"):
-        add(str(home / Path(rel)))
+    add(str(home / "ComfyUI"), 3)
+    add(str(home / "comfyui"), 4)
+    add(str(home / "Documents" / "ComfyUI"), 5)
+    add(str(home / "Desktop" / "ComfyUI"), 5)
 
     if sys.platform == "darwin":
-        add("/Applications/ComfyUI")
-        add(str(home / "Library" / "Application Support" / "ComfyUI"))
+        add("/Applications/ComfyUI", 6)
+        # App Support dir: only useful if someone put CLI main.py there
+        add(str(home / "Library" / "Application Support" / "ComfyUI"), 6)
 
     if sys.platform == "win32" or os.environ.get("MSYSTEM"):
         user = os.environ.get("USER") or os.environ.get("USERNAME") or ""
         for drive in ("C", "D", "E"):
-            add("/" + drive.lower() + "/ComfyUI")
-            add(drive + ":/ComfyUI")
+            add("/" + drive.lower() + "/ComfyUI", 6)
+            add(drive + ":/ComfyUI", 6)
             if user:
-                base = "/" + drive.lower() + "/Users/" + user
-                add(base + "/ComfyUI")
-                add(drive + ":/Users/" + user + "/ComfyUI")
-                add(base + "/Desktop/ComfyUI")
-                add(base + "/Documents/ComfyUI")
-        add(str(home / "ComfyUI"))
-        add(str(home / "Desktop" / "ComfyUI"))
-        add(str(home / "Documents" / "ComfyUI"))
+                base_u = "/" + drive.lower() + "/Users/" + user
+                add(base_u + "/ComfyUI", 3)
+                add(drive + ":/Users/" + user + "/ComfyUI", 3)
+                add(base_u + "/Desktop/ComfyUI", 5)
+                add(base_u + "/Documents/ComfyUI", 5)
+                add(drive + ":/Users/" + user + "/Desktop/ComfyUI", 5)
+                add(drive + ":/Users/" + user + "/Documents/ComfyUI", 5)
+
     return out
 
-def discover_comfyui(cfg: Dict[str, Any]) -> Tuple[Optional[Path], bool]:
+
+def discover_comfyui(
+    cfg: Dict[str, Any],
+) -> Tuple[Optional[Path], bool, List[Path]]:
+    """Find CLI ComfyUI root(s).
+
+    Returns (chosen, keep_existing_config, all_valid_roots).
+    keep_existing is True when config.comfyui_dir already points at a valid CLI root.
+    """
+    candidates = _comfyui_candidates(cfg)
+    valid: List[Tuple[Path, int, int]] = []  # path, priority, -richness
+    for cand, pri in candidates:
+        if not _is_comfyui_root(cand):
+            continue
+        try:
+            resolved = cand.resolve()
+        except Exception:
+            resolved = cand
+        rich = _comfyui_richness(resolved)
+        valid.append((resolved, pri, -rich))
+
+    # de-dupe by resolved path keeping best (lowest pri, then richer).
+    # On case-insensitive volumes (macOS default), ComfyUI vs comfyui is one root.
+    best_by_key: Dict[str, Tuple[Path, int, int]] = {}
+    for item in valid:
+        key = str(item[0])
+        if sys.platform in ("darwin", "win32") or os.environ.get("MSYSTEM"):
+            key = key.casefold()
+        prev = best_by_key.get(key)
+        if prev is None or (item[1], item[2]) < (prev[1], prev[2]):
+            best_by_key[key] = item
+    ranked = sorted(best_by_key.values(), key=lambda t: (t[1], t[2], str(t[0])))
+    all_roots = [t[0] for t in ranked]
+
+    # Prefer existing valid config (do not overwrite on --write)
     raw = cfg.get("comfyui_dir")
     if isinstance(raw, str) and raw.strip():
         cur = _expand(raw)
         if _is_comfyui_root(cur):
-            return cur, True
-    for cand in _comfyui_candidates(cfg):
-        if _is_comfyui_root(cand):
             try:
-                return cand.resolve(), False
+                cur_r = cur.resolve()
             except Exception:
-                return cand, False
-    return None, False
+                cur_r = cur
+            # ensure cur is in all_roots list (front for messaging)
+            others = [p for p in all_roots if str(p) != str(cur_r)]
+            return cur_r, True, [cur_r] + others
+
+    if not ranked:
+        return None, False, []
+    return ranked[0][0], False, all_roots
 
 def _win_runnable_without_x_ok(target: Path) -> bool:
     """On win32, existing .exe/.cmd/.bat are runnable even when X_OK is false."""
@@ -244,6 +355,24 @@ def discover_workspace(home: Optional[Path]) -> Optional[Path]:
     return None
 
 
+def _normalize_comfy_host(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if "://" not in s:
+        s = "http://" + s
+    return s
+
+
+def _comfy_host_empty_or_invalid(current: Any) -> bool:
+    """Empty / whitespace-only treated as unset (mirror path empty/invalid)."""
+    if current is None:
+        return True
+    if not isinstance(current, str):
+        return True
+    return not current.strip()
+
+
 def _should_write_path(_current: Any, keep_existing: bool) -> bool:
     if keep_existing:
         return False
@@ -258,12 +387,24 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
         "openclaw_bin": None,
         "workspace": None,
         "wrote": [],
+        "comfyui_candidates": None,
+        "comfyui_note": None,
     }
 
-    comfy, comfy_keep = discover_comfyui(cfg)
+    comfy, comfy_keep, comfy_all = discover_comfyui(cfg)
     if comfy is not None:
         result["comfyui_dir"] = str(comfy)
-        _eprint("✓ 已找到本机 ComfyUI：" + str(comfy))
+        result["comfyui_candidates"] = [str(p) for p in comfy_all]
+        _eprint("✓ 已找到本机 ComfyUI CLI：" + str(comfy))
+        if len(comfy_all) > 1:
+            others = [str(p) for p in comfy_all if str(p) != str(comfy)]
+            note = (
+                "发现多份 ComfyUI CLI，已选用 %s；另有：%s。"
+                "抽卡请用含 main.py 的 CLI 根目录，不要用 Comfy Desktop App。"
+                % (str(comfy), "、".join(others))
+            )
+            result["comfyui_note"] = note
+            _eprint("⚠ " + note)
         if do_write and _should_write_path(cfg.get("comfyui_dir"), comfy_keep):
             store = str(comfy)
             try:
@@ -278,12 +419,17 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
             result["wrote"].append("comfyui_dir")
             _eprint("  已写入配置 comfyui_dir")
     else:
+        result["comfyui_candidates"] = []
         tip = (
-            "ℹ 本机还没侦测到 ComfyUI（可选）。装好后可在 WebUI「配置」里填写 "
-            "ComfyUI 本地根目录；或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
+            "ℹ 未侦测到 AmazingDraw 所需的 ComfyUI CLI（含 main.py 的 git/源码根目录）。"
+            "仅安装 Comfy Desktop App 不够：请打开 Application Support/ComfyUI/config.json "
+            "查看 basePath，或把 CLI 路径贴进安装向导 / WebUI「配置」，"
+            "或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
+            "非默认安装位置必须粘贴路径或设 COMFYUI_DIR。"
         )
         if sys.platform == "win32" or os.environ.get("MSYSTEM"):
             tip += " 若装在其它盘，可设 COMFYUI_DIR=D:/ComfyUI 之类路径。"
+        result["comfyui_note"] = tip
         _eprint(tip)
 
     oc_home, oc_home_keep = discover_openclaw_home(cfg)
@@ -325,6 +471,18 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
             "需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
         )
 
+    # Honor COMFYUI_HOST env when config comfyui_host empty/invalid (mirror COMFYUI_DIR).
+    env_host = _normalize_comfy_host(os.environ.get("COMFYUI_HOST") or "")
+    if env_host:
+        result["comfyui_host_env"] = env_host
+        if do_write and _comfy_host_empty_or_invalid(cfg.get("comfyui_host")):
+            cfg["comfyui_host"] = env_host
+            changed = True
+            result["wrote"].append("comfyui_host")
+            _eprint("  已写入配置 comfyui_host（来自环境变量 COMFYUI_HOST）=" + env_host)
+        elif not _comfy_host_empty_or_invalid(cfg.get("comfyui_host")):
+            result["comfyui_host"] = str(cfg.get("comfyui_host")).strip()
+
     if do_write and changed:
         _save_cfg(config_path, cfg)
 
@@ -341,13 +499,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     do_write = bool(args.write) and not args.dry_run
     result = run(config_path, do_write=do_write)
     if args.json:
-        print(json.dumps({
+        payload = {
             "comfyui_dir": result.get("comfyui_dir"),
             "openclaw_home": result.get("openclaw_home"),
             "openclaw_bin": result.get("openclaw_bin"),
             "workspace": result.get("workspace"),
             "wrote": result.get("wrote"),
-        }, ensure_ascii=False))
+        }
+        if result.get("comfyui_candidates") is not None:
+            payload["comfyui_candidates"] = result.get("comfyui_candidates")
+        if result.get("comfyui_note"):
+            payload["comfyui_note"] = result.get("comfyui_note")
+        print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 
