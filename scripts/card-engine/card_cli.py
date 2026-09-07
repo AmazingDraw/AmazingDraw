@@ -205,7 +205,7 @@ CHAIN_EPILOG = f"""
 
 🏃 批量连抽导演流 (Chain Mode Workflow):
   C0. [可选检索] search   -> 模糊搜索场景库/角色库 (如 python3 card_cli.py search --person jk)
-  C1. chain --count N --person 女初中生 --profile jc-shy --user-input "用户原始要求"  -> 创建 N 张卡骨架并返回 card_id（--person 锁身份，--profile 锁体型；--user-input 必传，落卡供约束解析）
+  C1. chain --count N --person 神秘少女 --profile jc-shy --user-input "用户原始要求"  -> 创建 N 张卡骨架并返回 card_id（--person 锁身份，--profile 锁体型；--user-input 必传，落卡供约束解析）
   C2. 逐张决策             -> AI 先深读骨架信息，再逐张进行 8 维创意决策
   C3. 逐张一次 fill        -> 每张卡只用一次 fill（勿拆 --phase）：--json-file / --json 一次写齐 director+slots+elevation+theme_zh
   C4. 逐张 resume         -> 运行 python3 card_cli.py chain --resume <card_id> 自动进行 render -> check -> autofix -> submit --confirm
@@ -426,6 +426,11 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
     c_featured.add_argument("--width", type=int, help="手动指定生图宽度")
     c_featured.add_argument("--height", type=int, help="手动指定生图高度")
     c_featured.add_argument("--workflow", help="指定 workflow 配置文件别名")
+    c_featured.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只建精选卡并模拟提交命令，不入 GPU 队列",
+    )
 
     c_direct = sub.add_parser(
         "direct",
@@ -534,8 +539,10 @@ def build_parser(command_set, description):
 
   ③ 灵感精选模式 (Featured Inspiration Mode):
     $ python3 card_cli.py featured [--workflow <工作流>] [--width <宽>] [--height <高>]
+    $ python3 card_cli.py featured --dry-run
     → 自动扫描 Obsidian 灵感库所有优秀笔记，随机抽取并智能解析
     → 绕过常规卡片引擎槽位填充，初始化特色 featured 卡片并自动一键提交至 GPU 队列
+    → `--dry-run` 停在提交前：写卡 + 打印 submit 命令，不入队
 
   ④ 英文直投模式 (Direct Raw Mode):
     $ python3 card_cli.py direct --prompt "<英文提示词>" --person "<中文人物>" --scene "<中文场景>" --theme "<中文主题>" --narrative "<中文叙事>" --lighting "<中文光影>" --style "<中文风格>"

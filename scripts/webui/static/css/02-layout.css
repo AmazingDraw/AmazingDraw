@@ -726,6 +726,10 @@ html.light-mode .sidebar-card-item:hover {
 }
 
 .sidebar-card-item .session-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
   font-weight: 500;
   font-size: 0.82rem;
   color: var(--text-bright);
@@ -735,6 +739,18 @@ html.light-mode .sidebar-card-item:hover {
   padding-right: 25px;
   flex: 1;
   min-width: 0;
+}
+
+.sidebar-card-item .session-recovered-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  white-space: nowrap;
 }
 
 .sidebar-card-item .card-scene {

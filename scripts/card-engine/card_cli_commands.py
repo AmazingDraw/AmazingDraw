@@ -261,10 +261,10 @@ def cmd_fill(args):
             else:
                 slen = len(story_zh)
                 rules = load_validation_rules()
-                min_limit = rules.get("min_story_chars", 80)
-                min_tol = rules.get("min_story_tolerance", 70)
-                max_limit = rules.get("max_story_chars", 200)
-                max_tol = rules.get("max_story_tolerance", 210)
+                min_limit = rules.get("min_story_chars", 60)
+                min_tol = rules.get("min_story_tolerance", 60)
+                max_limit = rules.get("max_story_chars", 240)
+                max_tol = rules.get("max_story_tolerance", 240)
                 if slen < min_tol:
                     errors.append(f"❌ story_elevation_zh 过短 (最少{min_limit}字，容错{min_tol}字，当前{slen}字)")
                 elif slen > max_tol:

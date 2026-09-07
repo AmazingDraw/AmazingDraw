@@ -168,6 +168,22 @@ DEPRECATED_CONFIG_KEYS = (
 )
 PRESETS_DIR = SCRIPT_DIR.parent / "presets"
 
+# 历史桌面 Pi / 第三方后端已退役；运行时一律归一为 openclaw。
+_DEPRECATED_AGENT_BACKENDS = frozenset(
+    {"claudecode", "hermes", "custom", "builtin", "pi"}
+)
+
+
+def normalize_agent_backend(value: Any) -> str:
+    """Only OpenClaw remains; anything else maps to openclaw."""
+    backend = str(value or "openclaw").strip().lower()
+    if backend == "openclaw":
+        return "openclaw"
+    if backend in _DEPRECATED_AGENT_BACKENDS or backend:
+        return "openclaw"
+    return "openclaw"
+
+
 def load_system_config() -> Dict[str, Any]:
     """载入本地 config.json，自带默认值兜底"""
     defaults = {
@@ -280,9 +296,22 @@ def load_system_config() -> Dict[str, Any]:
             for k, v in defaults.items():
                 if k not in user_config:
                     user_config[k] = v
-            # 强制回退已废弃的后端
-            if user_config.get("agent_backend") in ("claudecode", "hermes", "custom"):
-                user_config["agent_backend"] = "openclaw"
+            # 强制回退已废弃的后端（含历史 builtin/pi）
+            normalized_backend = normalize_agent_backend(
+                user_config.get("agent_backend")
+            )
+            if user_config.get("agent_backend") != normalized_backend:
+                user_config["agent_backend"] = normalized_backend
+                try:
+                    disk = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                    if disk.get("agent_backend") != normalized_backend:
+                        disk["agent_backend"] = normalized_backend
+                        safe_write_config(
+                            CONFIG_PATH,
+                            json.dumps(disk, indent=2, ensure_ascii=False),
+                        )
+                except Exception:
+                    pass
             # 归一化 chat_mode：仅 cards | draw
             user_config["chat_mode"] = normalize_chat_mode(user_config.get("chat_mode"), "cards")
             for key in DEPRECATED_CONFIG_KEYS:
@@ -414,8 +443,10 @@ def safe_write_config(file_path: Path, content: str, max_backups: int = 9):
 
 def save_system_config(config_data: Dict[str, Any]):
     """保存配置并合并已有字段"""
-    if config_data.get("agent_backend") in ("claudecode", "hermes", "custom"):
-        config_data["agent_backend"] = "openclaw"
+    if "agent_backend" in config_data:
+        config_data["agent_backend"] = normalize_agent_backend(
+            config_data.get("agent_backend")
+        )
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     
     current_config = {}
@@ -530,17 +561,29 @@ def run_core_cmd(cmd_func, args):
 
 
 # cards/settings/pipeline → api_cards.py
+def _peek_agent_backend() -> str:
+    """Read agent_backend without full config expand (history-dir routing)."""
+    try:
+        if CONFIG_PATH.exists():
+            raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            return normalize_agent_backend(raw.get("agent_backend"))
+    except Exception:
+        pass
+    return "openclaw"
+
+
 def get_chat_history_dir() -> Path:
     # 1. 优先使用环境变量自定义路径，极大提升 Docker/容器化部署时的移植性
     env_dir = os.environ.get("AMAZING_DRAW_CHAT_DIR")
     if env_dir:
         return Path(env_dir)
-    
-    # 2. 其次，若存在 ~/.openclaw 目录，则整合入 openclaw 体系
-    openclaw_dir = Path.home() / ".openclaw"
-    if openclaw_dir.exists() and openclaw_dir.is_dir():
-        return openclaw_dir / "webui-chat"
-        
+
+    # 2. 仅 openclaw 后端写入 ~/.openclaw/webui-chat；不因目录存在而误入
+    if _peek_agent_backend() == "openclaw":
+        openclaw_dir = Path.home() / ".openclaw"
+        if openclaw_dir.exists() and openclaw_dir.is_dir():
+            return openclaw_dir / "webui-chat"
+
     # 3. 兜底使用项目同级 data 目录，确保纯本地独立环境开箱即用，避免污染主目录
     return Path(__file__).resolve().parent / "data" / "webui-chat"
 
@@ -552,6 +595,8 @@ def configure_operation_journal() -> None:
     """Restore durable operation metadata after the history path is final."""
     from operation_registry import operation_registry
 
+    # Prefer the module global so tests can patch CHAT_HISTORY_DIR without
+    # fighting a fresh get_chat_history_dir() resolution.
     operation_registry.configure_journal(
         CHAT_HISTORY_DIR / "operations-v1.json"
     )

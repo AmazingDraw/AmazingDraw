@@ -11,6 +11,22 @@
 # ============================================================
 set -euo pipefail
 
+# 非交互：环境变量或 --non-interactive（安装向导不提问）
+AMAZINGDRAW_INSTALL_NONINTERACTIVE="${AMAZINGDRAW_INSTALL_NONINTERACTIVE:-0}"
+_INSTALL_ARGS=()
+for _a in "$@"; do
+  case "$_a" in
+    --non-interactive|--noninteractive)
+      AMAZINGDRAW_INSTALL_NONINTERACTIVE=1
+      ;;
+    *)
+      _INSTALL_ARGS+=("$_a")
+      ;;
+  esac
+done
+# 剩余参数目前忽略；保留扩展位
+export AMAZINGDRAW_INSTALL_NONINTERACTIVE
+
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 # zip 根或仓库根：若当前目录下已有 tree/（即在 dist/ 里跑），则进入 tree。
 # 不会向上查找 dist；解压后的 zip 根没有 tree/，ROOT 保持为 zip 根。
@@ -337,15 +353,8 @@ if [ -f "$CONFIG_DST" ]; then
   fi
 fi
 
-# ── 3.6 默认工作流：把发行版自带的 ComfyUI 图复制到用户 ComfyUI（开箱即用）──
-if [ -d "$ROOT/workflows" ] && [ -n "$PY" ]; then
-  CFG_PY="$(py_path "$CONFIG_DST")"
-  WF_COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; print(os.path.expanduser(json.load(open(p,encoding='utf-8')).get('comfyui_dir','~/ComfyUI')))" "$CFG_PY" 2>/dev/null || echo "$HOME/ComfyUI")
-  WF_COMFYUI_DIR="$(bash_path "$WF_COMFYUI_DIR")"
-  COMFYUI_WF_DIR="$WF_COMFYUI_DIR/workflows"
-  mkdir -p "$COMFYUI_WF_DIR"
-  cp -R "$ROOT/workflows/"* "$COMFYUI_WF_DIR/" 2>/dev/null && echo "✓ 默认工作流已复制到 $COMFYUI_WF_DIR"
-fi
+# ── 3.6 默认工作流复制：推迟到侦测/向导之后（需有效 comfyui_dir）──
+# 见下方「安装向导」workflow-step；非交互同样由向导 best-effort 复制。
 
 # ── 4. python3 别名（仅当需要）──
 if [ -n "$PY" ] && [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixed" ]; then
@@ -512,6 +521,120 @@ elif [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
   fi
 fi
 
+# ── 安装向导（交互：补路径 / 工作流 / Telegram；非交互：静默 best-effort）──
+WIZARD_HELPER=""
+for _cand in \
+  "$ROOT/tools/install_wizard.py" \
+  "$_INSTALL_DIR/tools/install_wizard.py" \
+  "$_INSTALL_DIR/install_wizard.py" \
+  "$ROOT/install_wizard.py"
+do
+  if [ -f "$_cand" ]; then
+    WIZARD_HELPER="$_cand"
+    break
+  fi
+done
+
+WIZARD_NI=""
+if [ "${AMAZINGDRAW_INSTALL_NONINTERACTIVE}" = "1" ]; then
+  WIZARD_NI="--non-interactive"
+fi
+
+# 报告字段：向导备注（写入 install-report）
+WIZARD_NOTES=""
+REPORT_WORKFLOW="未跑向导"
+REPORT_TELEGRAM="未询问"
+
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
+  CFG_PY="$(py_path "$CONFIG_DST")"
+  WIZ_PY="$(py_path "$WIZARD_HELPER")"
+  ROOT_PY="$(py_path "$ROOT")"
+
+  echo ""
+  echo "== 安装向导 =="
+  if [ "${AMAZINGDRAW_INSTALL_NONINTERACTIVE}" = "1" ]; then
+    echo "  （非交互模式：不提问，仅 best-effort）"
+  fi
+
+  # B. ComfyUI 缺失则粘贴
+  set +e
+  "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-comfyui --config "$CFG_PY"
+  _wiz_rc=$?
+  set -e
+  case "$_wiz_rc" in
+    0) ;;
+    2) WIZARD_NOTES="${WIZARD_NOTES}comfyui:skipped;" ;;
+    *) echo "  ⚠ ComfyUI 向导步骤异常（已忽略）" ;;
+  esac
+
+  # C. OpenClaw 缺失则粘贴
+  set +e
+  "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-openclaw --config "$CFG_PY"
+  _wiz_rc=$?
+  set -e
+  case "$_wiz_rc" in
+    0) ;;
+    2) WIZARD_NOTES="${WIZARD_NOTES}openclaw:skipped;" ;;
+    *) echo "  ⚠ OpenClaw 向导步骤异常（已忽略）" ;;
+  esac
+
+  # 向导可能刚写入路径：读回 COMFYUI_DIR 供插件拷贝
+  COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; v=json.load(open(p,encoding='utf-8')).get('comfyui_dir') or ''; print(os.path.expanduser(v) if v else '')" "$CFG_PY" 2>/dev/null || true)
+  [ -n "$COMFYUI_DIR" ] && COMFYUI_DIR="$(bash_path "$COMFYUI_DIR")"
+
+  # D. 工作流：复制默认 Moody + 模型清单 + 可选自定义（自定义≠一键接好）
+  set +e
+  "$PY" "$WIZ_PY" ${WIZARD_NI} workflow-step --config "$CFG_PY" --root "$ROOT_PY"
+  _wiz_rc=$?
+  set -e
+  case "$_wiz_rc" in
+    0) REPORT_WORKFLOW="默认/已处理" ;;
+    2) REPORT_WORKFLOW="已跳过"; WIZARD_NOTES="${WIZARD_NOTES}workflow:skipped;" ;;
+    *) REPORT_WORKFLOW="异常（已忽略）"; echo "  ⚠ 工作流向导步骤异常（已忽略）" ;;
+  esac
+
+  # E. Telegram 可选
+  set +e
+  "$PY" "$WIZ_PY" ${WIZARD_NI} telegram-step --config "$CFG_PY"
+  _wiz_rc=$?
+  set -e
+  case "$_wiz_rc" in
+    0) REPORT_TELEGRAM="已写入/确认" ;;
+    2) REPORT_TELEGRAM="已跳过" ;;
+    *) REPORT_TELEGRAM="异常（已忽略）" ;;
+  esac
+
+  # F. WebUI 说明
+  "$PY" "$WIZ_PY" ${WIZARD_NI} webui-blurb || true
+
+  # G. 可选路径：output_dir / comfyui_host / openclaw_workspace / obsidian
+  set +e
+  "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-extras --config "$CFG_PY"
+  _wiz_rc=$?
+  set -e
+  case "$_wiz_rc" in
+    0) WIZARD_NOTES="${WIZARD_NOTES}extras:ok;" ;;
+    2) WIZARD_NOTES="${WIZARD_NOTES}extras:skipped;" ;;
+    *) echo "  ⚠ 可选路径向导步骤异常（已忽略）" ;;
+  esac
+
+  # 同步权威配置 → 发行版 scripts/config.json
+  if [ -f "$CONFIG_DST" ]; then
+    SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
+    if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
+      cp "$CONFIG_DST" "$CONFIG_SRC"
+    fi
+  fi
+elif [ -z "$WIZARD_HELPER" ]; then
+  echo "ℹ 未找到 install_wizard.py，跳过交互向导（旧包兼容）。"
+  # 旧行为回退：若已有有效 ComfyUI，直接拷 workflows
+  if [ -n "${COMFYUI_DIR:-}" ] && [ -f "$COMFYUI_DIR/main.py" ] && [ -d "$ROOT/workflows" ]; then
+    mkdir -p "$COMFYUI_DIR/workflows"
+    cp -R "$ROOT/workflows/"* "$COMFYUI_DIR/workflows/" 2>/dev/null && echo "✓ 默认工作流已复制到 $COMFYUI_DIR/workflows" || true
+    REPORT_WORKFLOW="旧包回退复制"
+  fi
+fi
+
 # ComfyUI 插件拷贝（找到有效根目录时）
 if [ -n "$COMFYUI_DIR" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
   PLUGIN_SRC="$ROOT/ComfyUI-Card-Engine"
@@ -585,6 +708,9 @@ REPORT_COMFYUI="未找到"
 REPORT_OC_HOME="未找到"
 REPORT_OC_BIN="未找到"
 REPORT_OC_WS="未找到"
+REPORT_WORKFLOW="${REPORT_WORKFLOW:-未跑向导}"
+REPORT_TELEGRAM="${REPORT_TELEGRAM:-未询问}"
+WIZARD_NOTES="${WIZARD_NOTES:-}"
 if [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
   CFG_PY="$(py_path "$CONFIG_DST")"
   _rep="$($PY - "$CFG_PY" <<'PY'
@@ -689,6 +815,14 @@ else
 fi
 REPORT_COMFY_CMD="bash '$ROOT/scripts/gpu-pipeline/comfyui-start.sh' start"
 
+# 就绪矩阵（交互/非交互都打印；失败不致命）
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "${WIZARD_HELPER:-}" ]; then
+  CFG_PY="$(py_path "$CONFIG_DST")"
+  WIZ_PY="$(py_path "$WIZARD_HELPER")"
+  ROOT_PY="$(py_path "$ROOT")"
+  "$PY" "$WIZ_PY" readiness-summary --config "$CFG_PY" --root "$ROOT_PY" || true
+fi
+
 # 组装报告正文（终端 + 可选文件）
 _report_body() {
   echo "== 安装报告 =="
@@ -705,6 +839,11 @@ _report_body() {
   echo "  OpenClaw home: $REPORT_OC_HOME"
   echo "  OpenClaw bin:  $REPORT_OC_BIN"
   echo "  OpenClaw workspace: $REPORT_OC_WS"
+  echo "  工作流向导: ${REPORT_WORKFLOW:-未记录}"
+  echo "  Telegram: ${REPORT_TELEGRAM:-未记录}"
+  if [ -n "${WIZARD_NOTES:-}" ]; then
+    echo "  向导备注: $WIZARD_NOTES"
+  fi
   echo "  smoke:"
   echo "    card_asset_loader.health: $REPORT_SMOKE_HEALTH"
   echo "    workplace 抽样: $REPORT_SMOKE_WP"

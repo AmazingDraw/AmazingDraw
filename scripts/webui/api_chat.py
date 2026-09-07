@@ -44,6 +44,7 @@ from web_server import (
     get_cached_session_title,
     get_chat_history_dir,
     load_system_config,
+    normalize_agent_backend,
     safe_chat_id,
     webui_session_file,
     webui_session_id,
@@ -130,7 +131,7 @@ def run_core_cmd(*args, **kwargs):
 @router.get("/api/chat/sessions")
 def get_chat_sessions():
     config = load_system_config()
-    backend = (config.get("agent_backend", "openclaw") or "openclaw").lower()
+    backend = normalize_agent_backend(config.get("agent_backend"))
     
     sessions = []
     
@@ -138,6 +139,7 @@ def get_chat_sessions():
         # 唯一数据源：对话历史目录。抽卡会话一律是 uuid 命名，
         # 卡片模式（以 card_id 或 webui-draw-card- 命名）与 home/direct 等杂项天然被过滤掉。
         directory = CHAT_HISTORY_DIR
+        recovered_ids = operation_registry.list_recovered_unknown_session_ids()
         if directory.exists():
             for p in directory.glob("*.jsonl"):
                 session_id = p.stem
@@ -158,7 +160,8 @@ def get_chat_sessions():
                 sessions.append({
                     "session_id": session_id,
                     "title": title,
-                    "updated_at": mtime
+                    "updated_at": mtime,
+                    "recovered_unknown": session_id in recovered_ids,
                 })
                 
 
@@ -237,7 +240,7 @@ def new_chat_window(req: Dict[str, Any]):
 @router.delete("/api/chat/sessions/{session_id}")
 async def delete_chat_session(session_id: str, cancel_active: bool = False):
     config = load_system_config()
-    backend = (config.get("agent_backend", "openclaw") or "openclaw").lower()
+    backend = normalize_agent_backend(config.get("agent_backend"))
 
     active, _ = operation_registry.prepare_session_delete(
         session_id,
@@ -266,10 +269,61 @@ async def delete_chat_session(session_id: str, cancel_active: bool = False):
         raise
 
 
+def _ensure_force_delete_cancel_handler(operation) -> None:
+    """Force-delete must cancel without going through /operations/.../cancel.
+
+    Recovered unknown_remote ops often have no live handler. Mirror the cancel
+    API: gateway gets abort; null/cli transport is abandoned locally.
+    """
+    if operation.cancel_handler is not None:
+        return
+    if not operation.is_recovered_unknown:
+        return
+    operation_id = operation.operation_id
+    if not operation.dispatch_started:
+        async def cancel_undispatched_recovered_operation():
+            return {
+                "status": "cancelled",
+                "cancelled": True,
+                "operation_id": operation_id,
+            }
+
+        operation_registry.set_cancel_handler(
+            operation_id,
+            cancel_undispatched_recovered_operation,
+        )
+    elif operation.transport == "gateway":
+        async def abort_recovered_gateway_operation():
+            return await abort_openclaw_operation(
+                operation_id,
+                operation.session_id,
+            )
+
+        operation_registry.set_cancel_handler(
+            operation_id,
+            abort_recovered_gateway_operation,
+        )
+    else:
+        # transport is None / cli after restart: no safe remote cancel identity.
+        async def abandon_recovered_without_transport():
+            return {
+                "status": "cancelled",
+                "cancelled": True,
+                "operation_id": operation_id,
+                "detail": "abandoned recovered unknown_remote without transport",
+            }
+
+        operation_registry.set_cancel_handler(
+            operation_id,
+            abandon_recovered_without_transport,
+        )
+
+
 async def _finish_session_delete(session_id: str, *, backend: str, active):
     cancel_results = []
     if active:
         for operation in active:
+            _ensure_force_delete_cancel_handler(operation)
             result = await operation_registry.cancel(operation.operation_id)
             cancel_results.append(result)
         unsafe = [
@@ -369,7 +423,7 @@ def delete_chat_message(req: Dict[str, Any]):
         
     config = load_system_config()
     chat_mode = normalize_chat_mode(req.get("chat_mode") or config.get("chat_mode"), "cards")
-    backend = (config.get("agent_backend", "openclaw") or "openclaw").lower()
+    backend = normalize_agent_backend(config.get("agent_backend"))
     
     hist_key = session_id if is_draw_mode(chat_mode) else card_id
     if not hist_key:
@@ -568,7 +622,7 @@ async def chat_api(req: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="Message is empty")
 
     config = load_system_config()
-    backend = (config.get("agent_backend", "openclaw") or "openclaw").lower()
+    backend = normalize_agent_backend(config.get("agent_backend"))
     chat_mode = normalize_chat_mode(
         incoming.get("chat_mode") or config.get("chat_mode"),
         "cards",

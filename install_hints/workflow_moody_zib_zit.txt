@@ -1,0 +1,26 @@
+============================================================
+默认工作流 Moody ZIB+ZIT（id: moody_zib_zit）模型清单
+============================================================
+工作流文件：Moody_ZIB_ZIT_20步_CFG3_512x768.json
+放置位置：  $COMFYUI_DIR/workflows/
+
+请把下列模型放到 ComfyUI 的 models/ 对应子目录（缺一不可出图）：
+
+| 用途              | 文件名                              | 放置目录                    | 来源 |
+|-------------------|-------------------------------------|-----------------------------|------|
+| 一阶段 UNET（ZIB）| MoodyWildMix-zib-base.safetensors   | models/diffusion_models/    | CivitAI · Moody Wild Mix |
+| 二阶段 UNET（ZIT）| MoodyRealMix-zit-write.safetensors  | models/diffusion_models/    | CivitAI · Moody Real Mix |
+| 文本编码器        | qwen_3_4b.safetensors               | models/text_encoders/       | Hugging Face · Comfy-Org/z_image_turbo |
+| VAE               | ae.safetensors                      | models/vae/                 | Hugging Face · Comfy-Org/z_image_turbo |
+
+链接：
+  Moody Wild Mix: https://civitai.red/models/2384856/moody-wild-mix
+  Moody Real Mix: https://civitai.com/models/621441
+  z_image_turbo:  https://huggingface.co/Comfy-Org/z_image_turbo
+
+说明：
+  · CLIPLoader type 请选 lumina2
+  · 角色 LoRA 子目录：models/loras/girls_like_zi/（可选，抽素人/明星写真用）
+  · 推荐参数以 CivitAI 模型页为准（ZIB 约 CFG 4·40 步；ZIT 约 CFG 1·8 步）
+  · 本清单对应 config 里 workflows.moody_zib_zit（含 prompt_nodes 等节点绑定）
+============================================================

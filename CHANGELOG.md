@@ -2,6 +2,13 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.9 — 2026-09-07
+
+- 新增交互安装向导与就绪矩阵（ComfyUI / OpenClaw / 工作流 / Telegram 引导）
+- 中文升华字数范围调整为 60–240
+- Telegram 发版改为纯文本：表格短名嵌 zip 直链（不挂包、不附 Release 页链接）
+- 多人卡编号分人格式强制
+
 ## 0.1.8 — 2026-09-04
 
 - WebUI / gpu-pipeline 子进程改用 sys.executable（Windows 无 python3 时更稳）

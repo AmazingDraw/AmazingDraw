@@ -49,10 +49,30 @@ async function appendRecoveredOperationNotice(sessionId, historyToken) {
     const suffix = recovered.length > 1 ? `（共 ${recovered.length} 个未决操作）` : "";
     const notice = appendChatMessage(
       "ai",
-      `⚠️ 上次运行在 WebUI 重启时中断，远端状态未知${suffix}。系统没有自动重放；你可以重新发送指令。${shortId ? `\n\n操作：\`${shortId}\`` : ""}`,
+      `⚠️ 上次运行在 WebUI 重启时中断，远端状态未知${suffix}。系统没有自动重放；你可以重新发送指令，或放弃并删除此会话。${shortId ? `\n\n操作：\`${shortId}\`` : ""}`,
       { persist: false },
     );
-    if (notice) notice.classList.add("operation-recovery-notice");
+    if (!notice) return;
+    notice.classList.add("operation-recovery-notice");
+    const actions = document.createElement("div");
+    actions.className = "operation-recovery-actions";
+    actions.style.marginTop = "8px";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-danger-minimal btn-sm";
+    btn.textContent = "放弃并删除此会话";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openDangerConfirmModal({
+        title: "放弃并删除",
+        message: "将放弃未知远端状态的操作，并删除本会话历史。",
+        hint: "此操作不可恢复。",
+        confirmLabel: "放弃并删除",
+        onConfirm: () => deleteSession(sessionId, true),
+      });
+    });
+    actions.appendChild(btn);
+    notice.appendChild(actions);
   } catch (err) {
     // 恢复提示不应影响正常历史加载。
   }
@@ -1382,6 +1402,7 @@ function renderSessionsList(sessions) {
   itemsToRender.forEach((sess) => {
     const div = document.createElement("div");
     const isActive = sess.session_id === state.activeSessionId;
+    const recoveredUnknown = !!sess.recovered_unknown;
     div.className = `sidebar-card-item ${isActive ? 'active' : ''}`;
     div.setAttribute("data-session-id", sess.session_id);
     div.addEventListener("click", () => selectSession(sess.session_id));
@@ -1390,16 +1411,17 @@ function renderSessionsList(sessions) {
       <div class="session-title">
         <i class="fa-regular fa-comment-dots" style="margin-right: 6px; color: var(--color-primary);"></i>
         ${escapeHtml(sess.title) || "未命名会话"}
+        ${recoveredUnknown ? '<span class="session-recovered-badge" title="重启后远端状态未知">待清理</span>' : ""}
       </div>
       <div class="card-scene" style="font-size: 0.68rem; margin-top: 4px; opacity: 0.7;">ID: ${sess.session_id.substring(0, 12)}...</div>
       <div class="card-time">${formatCardTime(sess.updated_at)}</div>
       
       <div class="card-action-buttons">
-        <button class="card-action-btn btn-delete" title="删除会话"><i class="fa-solid fa-trash-can"></i></button>
+        <button class="card-action-btn btn-delete" title="${recoveredUnknown ? "放弃并删除" : "删除会话"}"><i class="fa-solid fa-trash-can"></i></button>
       </div>
 
       <div class="card-delete-confirm-overlay">
-        <span>确认删除该对话？</span>
+        <span>${recoveredUnknown ? "放弃并删除该对话？" : "确认删除该对话？"}</span>
         <button class="confirm-yes">确定</button>
         <button class="confirm-no">取消</button>
       </div>
@@ -1421,7 +1443,7 @@ function renderSessionsList(sessions) {
       confirmYes.addEventListener("click", async (e) => {
         e.stopPropagation();
         overlay.classList.remove("show");
-        await deleteSession(sess.session_id);
+        await deleteSession(sess.session_id, recoveredUnknown);
       });
     }
     

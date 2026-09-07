@@ -244,10 +244,18 @@ class ChatOperation:
 class OperationRegistry:
     """Thread-safe registry with async subscribers and cancellation hooks."""
 
+    # Legacy desktop backends + aged terminal ops / orphan tombstones.
+    _DEPRECATED_BACKENDS = frozenset(
+        {"builtin", "pi", "claudecode", "hermes", "custom"}
+    )
+    _TERMINAL_OP_MAX_AGE_SEC = 14 * 86400
+    _TOMBSTONE_MAX_AGE_SEC = 14 * 86400
+
     def __init__(self, journal_path: Optional[Path] = None) -> None:
         self._operations: Dict[str, ChatOperation] = {}
         self._cli_processes: Dict[str, CliProcessRecord] = {}
         self._tombstones: Set[str] = set()
+        self._tombstone_times: Dict[str, float] = {}
         self._lock = threading.RLock()
         self._journal_path: Optional[Path] = None
         self._journal_error: Optional[str] = None
@@ -276,6 +284,7 @@ class OperationRegistry:
             self._operations.clear()
             self._cli_processes.clear()
             self._tombstones.clear()
+            self._tombstone_times.clear()
             if journal_path.exists():
                 try:
                     self._load_journal_locked()
@@ -288,7 +297,9 @@ class OperationRegistry:
                         os.replace(journal_path, quarantine)
                     self._operations.clear()
                     self._tombstones.clear()
+                    self._tombstone_times.clear()
             self._lift_orphaned_tombstones_locked()
+            self._gc_stale_locked()
             self._commit_locked()
 
     def _load_journal_locked(self) -> None:
@@ -392,6 +403,17 @@ class OperationRegistry:
             for session_id in tombstones
             if str(session_id).strip()
         }
+        times_raw = raw.get("session_tombstone_times") or {}
+        if times_raw and not isinstance(times_raw, dict):
+            raise ValueError("operation journal tombstone times must be an object")
+        self._tombstone_times = {}
+        for session_id in self._tombstones:
+            raw_ts = times_raw.get(session_id) if isinstance(times_raw, dict) else None
+            try:
+                # Missing stamps → ancient → eligible for immediate orphan GC.
+                self._tombstone_times[session_id] = float(raw_ts or 0)
+            except (TypeError, ValueError):
+                self._tombstone_times[session_id] = 0.0
 
     def _lift_orphaned_tombstones_locked(self) -> None:
         """Drop tombstones whose history file is still on disk.
@@ -409,6 +431,50 @@ class OperationRegistry:
         }
         if stale:
             self._tombstones -= stale
+            for session_id in stale:
+                self._tombstone_times.pop(session_id, None)
+
+    def _gc_stale_locked(self) -> None:
+        """Drop legacy/aged terminal ops and aged orphan tombstones."""
+        if self._journal_path is None:
+            return
+        hist_dir = self._journal_path.parent
+        now = time.time()
+
+        drop_ops = []
+        for operation_id, operation in self._operations.items():
+            if not operation.is_terminal:
+                continue
+            backend = str(operation.request.backend or "").strip().lower()
+            stamp = float(
+                operation.terminal_at
+                or operation.created_at
+                or 0
+            )
+            aged = (now - stamp) > self._TERMINAL_OP_MAX_AGE_SEC
+            if backend in self._DEPRECATED_BACKENDS or aged:
+                drop_ops.append(operation_id)
+        for operation_id in drop_ops:
+            del self._operations[operation_id]
+
+        live_sessions = {
+            op.session_id
+            for op in self._operations.values()
+            if not op.is_terminal
+        }
+        drop_tombs = set()
+        for session_id in self._tombstones:
+            if session_id in live_sessions:
+                continue
+            if (hist_dir / f"{session_id}.jsonl").exists():
+                continue
+            stamped = float(self._tombstone_times.get(session_id) or 0)
+            if (now - stamped) > self._TOMBSTONE_MAX_AGE_SEC:
+                drop_tombs.add(session_id)
+        if drop_tombs:
+            self._tombstones -= drop_tombs
+            for session_id in drop_tombs:
+                self._tombstone_times.pop(session_id, None)
 
     def _journal_document_locked(self) -> Dict[str, Any]:
         operations = {}
@@ -439,6 +505,10 @@ class OperationRegistry:
             "updated_at": time.time(),
             "operations": operations,
             "session_tombstones": sorted(self._tombstones),
+            "session_tombstone_times": {
+                session_id: float(self._tombstone_times.get(session_id) or 0)
+                for session_id in sorted(self._tombstones)
+            },
         }
 
     def _commit_locked(self) -> None:
@@ -753,6 +823,15 @@ class OperationRegistry:
                 for operation in operations
             ]
 
+    def list_recovered_unknown_session_ids(self) -> Set[str]:
+        """Sessions with non-terminal recovered unknown_remote ops (restart zombies)."""
+        with self._lock:
+            return {
+                operation.session_id
+                for operation in self._operations.values()
+                if operation.is_recovered_unknown and not operation.is_terminal
+            }
+
     def prepare_session_delete(
         self,
         session_id: str,
@@ -765,6 +844,7 @@ class OperationRegistry:
             if active and not force:
                 return active, False
             self._tombstones.add(session_id)
+            self._tombstone_times[session_id] = time.time()
             self._commit_locked()
             return active, True
 
@@ -774,6 +854,7 @@ class OperationRegistry:
             if session_id not in self._tombstones:
                 return
             self._tombstones.discard(session_id)
+            self._tombstone_times.pop(session_id, None)
             self._commit_locked()
 
     @contextlib.contextmanager
@@ -918,15 +999,47 @@ class OperationRegistry:
         if handler is None:
             with self._lock:
                 operation = self.get(operation_id)
-                operation.cancel_requested = operation.is_recovered_unknown
-                operation.cancel_error = (
-                    "no cancellation transport is registered"
-                )
-                self._commit_locked()
-                self._publish_locked(
-                    operation,
-                    self._state_event(operation),
-                )
+                # WebUI 重启后 recovered + unknown_remote 且无 transport：
+                # 没有可安全 abort 的远端句柄，本地放弃记账，避免会话永久删不掉。
+                if (
+                    operation.is_recovered_unknown
+                    and operation.transport is None
+                ):
+                    abandon = True
+                else:
+                    abandon = False
+                    operation.cancel_requested = operation.is_recovered_unknown
+                    operation.cancel_error = (
+                        "no cancellation transport is registered"
+                    )
+                    self._commit_locked()
+                    self._publish_locked(
+                        operation,
+                        self._state_event(operation),
+                    )
+            if abandon:
+                self.transition(operation_id, "cancelling")
+                if not self.get(operation_id).is_terminal:
+                    self.transition(operation_id, "cancelled")
+                current = self.get(operation_id)
+                with self._lock:
+                    current.cancel_requested = True
+                    current.cancel_confirmed = True
+                    current.cancel_error = None
+                    result = {
+                        "status": (
+                            "cancelled"
+                            if current.state == "cancelled"
+                            else "already_terminal"
+                        ),
+                        "cancelled": current.state == "cancelled",
+                        "state": current.state,
+                        "operation_id": operation_id,
+                        "detail": "abandoned recovered unknown_remote without transport",
+                    }
+                    current.cancel_result = copy.deepcopy(result)
+                    self._commit_locked()
+                return result
             return {
                 "status": "unavailable",
                 "cancelled": False,
@@ -1126,6 +1239,7 @@ class OperationRegistry:
             self._operations.clear()
             self._cli_processes.clear()
             self._tombstones.clear()
+            self._tombstone_times.clear()
             self._journal_path = None
             self._journal_error = None
         for task in tasks:
