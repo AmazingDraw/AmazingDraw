@@ -2,6 +2,11 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.12 — 2026-09-08
+
+- 安装脚本跨平台加固（CRLF/.gitattributes、zsh PATH、插件自删防护、Linux 明示不支持、全角标点 unbound 补强）
+- 施工仓去掉多余 install_dist 包装，发行包仍只用根 install.sh
+
 ## 0.1.11 — 2026-09-08
 
 - 修复 macOS/UTF-8 环境下安装脚本因全角括号导致的变量解析失败（安装会直接退出）

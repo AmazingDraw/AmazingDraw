@@ -223,30 +223,40 @@ SHIM
   export PATH="$local_bin:$PATH"
   PATH_APPENDED=1
 
-  # 持久化：PATH 若长期缺 ~/.local/bin，往 ~/.bashrc 追加守卫块
+  # 持久化：PATH 若长期缺 ~/.local/bin，往登录 rc 追加守卫块。
+  # macOS 默认 zsh（不读 .bashrc）；bash 登录 shell 只读 .bash_profile——都须覆盖。
   case ":$PATH:" in
     *":$local_bin:"*) ;;
     *) PATH_APPENDED=1 ;;
   esac
-  local bashrc="$HOME/.bashrc"
   local marker="# AmazingDraw: ensure python3 alias for card-engine subprocesses"
-  if [ ! -f "$bashrc" ] || ! grep -qF "$marker" "$bashrc" 2>/dev/null; then
-    {
-      echo ""
-      echo "$marker"
-      echo "export PATH=\"\$HOME/.local/bin:\$PATH\""
-    } >> "$bashrc" || {
-      fatal_add "已写 $SHIM_PATH，但无法追加 PATH 到 $bashrc。请手动：export PATH=\"\$HOME/.local/bin:\$PATH\""
-      return 1
-    }
+  local rc_files=("$HOME/.bashrc")
+  # .bash_profile 仅在已存在时追加（bash 登录 shell 优先读它，不读 .bashrc）
+  [ -f "$HOME/.bash_profile" ] && rc_files+=("$HOME/.bash_profile")
+  # zsh：已有 .zshrc 或 macOS（默认 shell 即 zsh）时写入
+  if [ -f "$HOME/.zshrc" ] || [ "$UNAME_S" = "Darwin" ]; then
+    rc_files+=("$HOME/.zshrc")
   fi
+  local rc
+  for rc in "${rc_files[@]}"; do
+    if [ ! -f "$rc" ] || ! grep -qF "$marker" "$rc" 2>/dev/null; then
+      {
+        echo ""
+        echo "$marker"
+        echo "export PATH=\"\$HOME/.local/bin:\$PATH\""
+      } >> "$rc" || {
+        fatal_add "已写 ${SHIM_PATH}，但无法追加 PATH 到 ${rc}。请手动：export PATH=\"\$HOME/.local/bin:\$PATH\""
+        return 1
+      }
+    fi
+  done
 
   # 校验：现在的 python3 必须是 WANT_PY
   hash -r 2>/dev/null || true
   local verify
   verify="$(py_mm python3)"
   if [ -z "$verify" ] || [ "$verify" != "$WANT_PY" ]; then
-    fatal_add "已创建 $SHIM_PATH → $target，但 python3 仍报告 ${verify:-不可用}（期望 ${WANT_PY}）。请检查 PATH 是否含 $local_bin，新开终端后再试。"
+    fatal_add "已创建 ${SHIM_PATH} → ${target}，但 python3 仍报告 ${verify:-不可用}（期望 ${WANT_PY}）。请检查 PATH 是否含 ${local_bin}，新开终端后再试。"
     return 1
   fi
   SHIM_CREATED=1
@@ -310,7 +320,7 @@ if [ ! -f "$CONFIG_DST" ]; then
     cp "$CONFIG_SRC" "$CONFIG_DST"
     echo "✓ 已从发行版默认配置生成 $CONFIG_DST"
   else
-    echo "⚠ 未找到默认配置 $CONFIG_SRC，请手动创建 $CONFIG_DST"
+    echo "⚠ 未找到默认配置 ${CONFIG_SRC}，请手动创建 $CONFIG_DST"
   fi
 else
   echo "✓ 保留已有配置 $CONFIG_DST"
@@ -390,6 +400,9 @@ if [ ! -d "$NATIVE_DIR" ]; then
   fatal_add "缺少目录 ${NATIVE_DIR}（内核）。请从 Releases 下载带 native 的压缩包，不要只用公开仓 git 树"
 elif [ "$HAVE_SO" -eq 0 ] && [ "$HAVE_PYD" -eq 0 ]; then
   fatal_add "native/ 内无 .so 也无 .pyd。请下载 AmazingDraw-darwin-cp39|cp312.zip 或 AmazingDraw-windows-cp39|cp312.zip"
+elif [ "$UNAME_S" = "Linux" ]; then
+  # 发行版仅 macOS/Windows 两平台；darwin 的 .so 无法在 Linux 加载，直接明说
+  fatal_add "暂不支持 Linux：发行版仅提供 macOS（darwin）与 Windows 包。请在 macOS / Windows（Git Bash）上安装"
 elif [ "$IS_WIN" = 1 ]; then
   if [ "$HAVE_PYD" -eq 0 ]; then
     fatal_add "Windows 需要 .pyd 内核，当前 native/ 只有 .so（不能用 macOS 包）"
@@ -401,7 +414,7 @@ elif [ "$IS_WIN" = 1 ]; then
   fi
 else
   if [ "$HAVE_SO" -eq 0 ]; then
-    fatal_add "macOS/Linux 需要 .so 内核，当前 native/ 只有 .pyd（请下 darwin 包）"
+    fatal_add "macOS 需要 .so 内核，当前 native/ 只有 .pyd（请下 darwin 包）"
   else
     echo "  ✓ native 核心: $HAVE_SO 个 .so（${NATIVE_DIR}）"
   fi
@@ -640,10 +653,17 @@ if [ -n "$COMFYUI_DIR" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
   PLUGIN_SRC="$ROOT/ComfyUI-Card-Engine"
   if [ -d "$PLUGIN_SRC" ]; then
     PLUGIN_DST="$COMFYUI_DIR/custom_nodes/ComfyUI-Card-Engine"
-    mkdir -p "$COMFYUI_DIR/custom_nodes"
-    rm -rf "$PLUGIN_DST"
-    cp -R "$PLUGIN_SRC" "$PLUGIN_DST"
-    echo "✓ ComfyUI 节点已安装到 $PLUGIN_DST"
+    # 自删防护：发行版若被解压进 ComfyUI/custom_nodes/ 内，源==目标，rm -rf 会先删源
+    _src_real="$(cd "$PLUGIN_SRC" && pwd -P)"
+    _dst_parent="$(cd "$COMFYUI_DIR/custom_nodes" 2>/dev/null && pwd -P)"
+    if [ -n "$_dst_parent" ] && [ "$_src_real" = "$_dst_parent/ComfyUI-Card-Engine" ]; then
+      echo "✓ ComfyUI 节点源即目标（发行版位于 custom_nodes 内），跳过拷贝"
+    else
+      mkdir -p "$COMFYUI_DIR/custom_nodes"
+      rm -rf "$PLUGIN_DST"
+      cp -R "$PLUGIN_SRC" "$PLUGIN_DST"
+      echo "✓ ComfyUI 节点已安装到 $PLUGIN_DST"
+    fi
   fi
 elif [ -d "$ROOT/ComfyUI-Card-Engine" ]; then
   echo "  （装好 ComfyUI 后，把 $ROOT/ComfyUI-Card-Engine 拷到 ComfyUI/custom_nodes/）"
@@ -686,7 +706,9 @@ SMOKE_CLI=""
 if [ -f "$ROOT/scripts/card-engine/card_cli.py" ] && [ -n "$PY" ]; then
   if (
     cd "$ROOT/scripts/card-engine"
-    PYTHONPATH="$ROOT/card_engine_core/native${PYTHONPATH:+:$PYTHONPATH}" "$PY" card_cli.py -h >/dev/null 2>&1
+    # 相对路径：Git Bash 下绝对 POSIX 路径不会自动转给 Windows python.exe；
+    # card_cli 自带 _path_bootstrap 兜底，这里仅作冗余
+    PYTHONPATH="../../card_engine_core/native" "$PY" card_cli.py -h >/dev/null 2>&1
   ); then
     SMOKE_CLI=1
     echo "  ✓ smoke: card_cli.py -h 通过"
