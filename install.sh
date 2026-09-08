@@ -205,7 +205,7 @@ _ensure_python3_shim() {
 
   local local_bin="$HOME/.local/bin"
   mkdir -p "$local_bin" || {
-    fatal_add "无法创建 $local_bin（python3 别名目录）。请手动把匹配的 Python 加到 PATH，或自行 ln -s '$target' '$local_bin/python3'"
+    fatal_add "无法创建 ${local_bin}（python3 别名目录）。请手动把匹配的 Python 加到 PATH，或自行 ln -s '$target' '$local_bin/python3'"
     return 1
   }
   SHIM_PATH="$local_bin/python3"
@@ -246,14 +246,14 @@ SHIM
   local verify
   verify="$(py_mm python3)"
   if [ -z "$verify" ] || [ "$verify" != "$WANT_PY" ]; then
-    fatal_add "已创建 $SHIM_PATH → $target，但 python3 仍报告 ${verify:-不可用}（期望 $WANT_PY）。请检查 PATH 是否含 $local_bin，新开终端后再试。"
+    fatal_add "已创建 $SHIM_PATH → $target，但 python3 仍报告 ${verify:-不可用}（期望 ${WANT_PY}）。请检查 PATH 是否含 $local_bin，新开终端后再试。"
     return 1
   fi
   SHIM_CREATED=1
   return 0
 }
 
-# 先选 Python（后续步骤可能调用 $PY）
+# 先选 Python（后续步骤可能调用 ${PY}）
 if [ "$WANT_PY" = "mixed" ]; then
   fatal_add "native/ 同时含 Python 3.9 与 3.12 内核，禁止混装。请只保留与本包标签一致的一套"
 elif [ -z "$WANT_PY" ]; then
@@ -289,7 +289,7 @@ if [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixed" ]; then
   echo "  本包内核 Python: $WANT_PY"
 fi
 if [ "$IS_WIN" = 1 ]; then
-  echo "  Windows Git Bash：~/ 即 $HOME（通常 /c/Users/<你>）"
+  echo "  Windows Git Bash：~/ 即 ${HOME}（通常 /c/Users/<你>）"
 fi
 
 # 无 Python 时目录步骤仍尽量做完，再 fail_if_fatal
@@ -387,14 +387,14 @@ fi
 
 # native 存在与种类
 if [ ! -d "$NATIVE_DIR" ]; then
-  fatal_add "缺少目录 $NATIVE_DIR（内核）。请从 Releases 下载带 native 的压缩包，不要只用公开仓 git 树"
+  fatal_add "缺少目录 ${NATIVE_DIR}（内核）。请从 Releases 下载带 native 的压缩包，不要只用公开仓 git 树"
 elif [ "$HAVE_SO" -eq 0 ] && [ "$HAVE_PYD" -eq 0 ]; then
   fatal_add "native/ 内无 .so 也无 .pyd。请下载 AmazingDraw-darwin-cp39|cp312.zip 或 AmazingDraw-windows-cp39|cp312.zip"
 elif [ "$IS_WIN" = 1 ]; then
   if [ "$HAVE_PYD" -eq 0 ]; then
     fatal_add "Windows 需要 .pyd 内核，当前 native/ 只有 .so（不能用 macOS 包）"
   else
-    echo "  ✓ native Windows 核心: $HAVE_PYD 个 .pyd（$NATIVE_DIR）"
+    echo "  ✓ native Windows 核心: $HAVE_PYD 个 .pyd（${NATIVE_DIR}）"
   fi
   if [ "$HAVE_SO" -gt 0 ]; then
     fatal_add "native/ 同时含 .so 与 .pyd；Windows 上请只保留 .pyd"
@@ -403,7 +403,7 @@ else
   if [ "$HAVE_SO" -eq 0 ]; then
     fatal_add "macOS/Linux 需要 .so 内核，当前 native/ 只有 .pyd（请下 darwin 包）"
   else
-    echo "  ✓ native 核心: $HAVE_SO 个 .so（$NATIVE_DIR）"
+    echo "  ✓ native 核心: $HAVE_SO 个 .so（${NATIVE_DIR}）"
   fi
   if [ "$HAVE_PYD" -gt 0 ]; then
     fatal_add "native/ 同时含 .so 与 .pyd；请只保留本平台对应种类"
@@ -871,7 +871,7 @@ _report_body() {
   echo "  python3 别名: $REPORT_SHIM"
   echo "  配置: $CONFIG_DST"
   if [ "$AGENT_BACKEND_MIGRATED" = 1 ]; then
-    echo "  agent_backend: $REPORT_AGENT_BACKEND（已从 $AGENT_BACKEND_BEFORE 迁移）"
+    echo "  agent_backend: ${REPORT_AGENT_BACKEND}（已从 $AGENT_BACKEND_BEFORE 迁移）"
   else
     echo "  agent_backend: $REPORT_AGENT_BACKEND"
   fi
