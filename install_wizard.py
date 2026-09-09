@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """AmazingDraw install wizard helpers (Python 3.9+).
 
-Called from install.sh / install_dist.sh after detect_local_deps.
+Called from install.sh after detect_local_deps.
 
 Exit codes (documented):
   0  success (path written / step done / already valid)

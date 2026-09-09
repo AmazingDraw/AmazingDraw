@@ -71,6 +71,7 @@
 | `scene_library_weights` | 子库抽样权重，键名带 `_scenes`：`school_scenes` / `general_scenes` / `medical_scenes` / `workplace_scenes` / `sm_scenes` / `special_scenes` / `perspective_scenes` |
 | `scene_registry` | 场景库注册（enabled / 中文名 / 文件名）。WebUI 权重面板依赖它 |
 | `resolution_presets` | 版式像素。常见键 `vertical` 512×768、`horizontal` 768×512、`square` 640×640、`widescreen` 1088×464 |
+| `perspective_metrics_enabled` | 默认 `true`。PerspectiveContract P1 指标打点（`perspective_metrics.py`）；也可被环境变量 `AMAZING_DRAW_PERSPECTIVE_METRICS` 覆盖。**不**写完整 prompt。见 [PERSPECTIVE_CONTRACT.md](./PERSPECTIVE_CONTRACT.md) |
 
 ---
 

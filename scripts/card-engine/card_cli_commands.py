@@ -92,10 +92,14 @@ def run_script(script_name, *args, **kwargs):
         print(f"⚠️  {script_name} 失败: {err[:200]}")
     return (result.stdout or "").strip()
 
-def run_bash(script_name, *args, input_str=None):
-    """调用同目录 bash 脚本"""
+def run_bash(script_name, *args, input_str=None, env=None):
+    """调用同目录 bash 脚本；env 可注入 PERSPECTIVE_KEY 等旁路标记。"""
+    import os as _os
     script = SCRIPT_DIR.parent / script_name
     cmd = ["bash", str(script)] + list(args)
+    run_env = _os.environ.copy()
+    if env:
+        run_env.update(env)
     result = subprocess.run(
         cmd,
         input=input_str or None,
@@ -104,6 +108,7 @@ def run_bash(script_name, *args, input_str=None):
         encoding="utf-8",
         errors="replace",
         timeout=30,
+        env=run_env,
     )
     return result
 

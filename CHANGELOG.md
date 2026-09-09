@@ -2,6 +2,10 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.13 — 2026-09-09
+
+- 强化场景视角门控与校验对齐，补充运行指标；普通场景行为保持不变。
+
 ## 0.1.12 — 2026-09-08
 
 - 安装脚本跨平台加固（CRLF/.gitattributes、zsh PATH、插件自删防护、Linux 明示不支持、全角标点 unbound 补强）

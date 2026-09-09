@@ -1106,6 +1106,17 @@ def direct_submit_api(req: Dict[str, Any]):
             "meta_style_display": style_val
         }
     }
+    try:
+        import sys
+        from pathlib import Path as _P
+        _ce = _P(__file__).resolve().parent.parent / "card-engine"
+        if str(_ce) not in sys.path:
+            sys.path.insert(0, str(_ce))
+        from perspective_runtime import ensure_card_perspective_key
+        ensure_card_perspective_key(card)
+    except Exception:
+        pass
+
     save_card(card)
 
     # 用户输入可以先落历史；成功提示必须等队列返回结构化 acceptance ACK。
