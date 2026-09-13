@@ -525,6 +525,13 @@ def cmd_fill(args):
                 reason_txt = "；".join(reasons) if reasons else "自动归一化"
                 print(f"💡 自动钳制裸露模式: {ef or '空'} -> {ef_clamped} ({reason_txt})")
             card["director"]["exposure_mode"] = ef_clamped
+            from card_exposure import persist_perspective_exposure_meta
+            persist_perspective_exposure_meta(
+                card,
+                exp_meta,
+                scene=card.get("scene") or {},
+                seed=card.get("card_id"),
+            )
             ef = ef_clamped
             progress['director'] = True
             if director_changed:
@@ -692,6 +699,13 @@ def cmd_fill(args):
                 reason_txt = "；".join(reasons) if reasons else "自动归一化"
                 print(f"💡 自动钳制裸露模式: {ef or '空'} -> {ef_clamped} ({reason_txt})")
             card["director"]["exposure_mode"] = ef_clamped
+            from card_exposure import persist_perspective_exposure_meta
+            persist_perspective_exposure_meta(
+                card,
+                exp_meta,
+                scene=card.get("scene") or {},
+                seed=card.get("card_id"),
+            )
 
             # ── 硬性中文校验（elevation 字段） ──
             zh_errors = []
@@ -1128,6 +1142,7 @@ def cmd_patch(args):
             from card_validation import run_preflight_check
             from card_exposure import (
                 lower_clothing_policy_for_card,
+                resolve_half_nude_region_for_card,
                 validate_exposure_consistency,
             )
 
@@ -1148,6 +1163,9 @@ def cmd_patch(args):
                     (card.get("director") or {}).get("pose_direction") or ""
                 ),
                 lower_policy=lower_clothing_policy_for_card(card),
+                half_nude_region=resolve_half_nude_region_for_card(
+                    card, exposure_mode=selected_mode
+                ),
             )
             if consistency.get("missing_signals"):
                 exposure_errors.append(

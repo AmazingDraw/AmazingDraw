@@ -16,11 +16,11 @@
 
 解决**不会写提示词的问题**：内置场景库、角色库，想抽什么只需简单一句话，不必自己攒 prompt。
 
-**macOS** 是主要使用平台；**Windows** 可用 Git Bash 安装运行。另有 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎试用。
+**macOS** 是主要使用平台；**Windows** 可用 Git Bash 安装运行。另有 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎使用。
 
 ## Skill
 
-解压目录根有 `SKILL.md`。把**整个目录**交给 Cursor / Claude Code / OpenClaw 等 AI Agent，一句话就能抽卡，例如 `随机抽三张`、`办公室 轻松风格 抽一张`。也可以自定义场景库和角色库。
+解压目录根有 `SKILL.md`。把**整个目录**交给 [Cursor](https://www.cursor.com/) / [Claude Code](https://github.com/anthropics/claude-code) / [OpenClaw](https://github.com/openclaw/openclaw) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) 等 AI Agent，一句话就能抽卡，例如 `随机抽三张`、`办公室 偷拍风格 抽一张`。也可以自定义场景库和角色库。
 
 ![总架构](doc/architecture.svg)
 
@@ -51,12 +51,13 @@ bash install.sh
 
 ## 推荐模型
 
-场景库和角色库内容较多，**上下文够长、内容限制少**的模型更合适。
+场景库和角色库内容较多，**上下文够长、指令遵循度高、内容限制少**的模型更合适。
 
 | 推荐 | 模型 | 说明 |
-| --- | --- | --- |
-| ⭐⭐⭐ | DeepSeek V4 Flash | 首选。限制少，跟指令稳，相对便宜，适合日常抽卡与连抽 |
-| ⭐⭐ | Grok 4.x | 次选。限制少，创意空间大，适合放开写的场景 |
+| :--- | :--- | :--- |
+| ⭐⭐⭐⭐⭐ | **DeepSeek Flash** | **首选主力**。内容限制少，严格遵循长结构化指令与互斥门禁，JSON 输出与字段格式极稳；响应迅速且成本极低，是日常单抽、批量出卡与 AI 连抽的最优解。 |
+| ⭐⭐⭐⭐ | **Grok** | **次选（尺度与创意）**。内容审核极为宽松自由，文笔想象力与细节感官张力突出，对高刺激、大尺度放开写的野性场景表现极佳；格式遵循偶尔偶有发散，适合追求画面创意与放飞描写的场景。 |
+| ⭐⭐⭐⭐ | **Gemini Flash** | **次选（超大吞吐，需适当调教）**。拥有百万级超大上下文窗口与极高并发速度，响应极快；但其原生安全过滤策略相对敏感，**需要通过 System Prompt 或前置引导词适当调教脱敏**才能完全发挥实力，适合大吞吐量批量生成。 |
 
 
 ## 使用

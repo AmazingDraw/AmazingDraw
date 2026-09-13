@@ -137,9 +137,11 @@ python3 scripts/card-engine/tools/perspective_metrics_summary.py --tail 20 --jso
 ## 9. 测试
 
 ```bash
-python3 -m pytest tests/test_perspective_silk.py tests/test_perspective_rear.py \
-  tests/test_perspective_facial.py tests/test_perspective_metrics.py -q
 ```
+
+> ⚠️ **不要用 `pytest` 跑这些文件。** 它们用的是自研 `check()` 沙盒（判定失败只记录、**从不 raise/assert**），
+> `pytest` 会把它们全部报成 "passed" —— 即使断言实际失败。必须直接执行文件本身，
+> 看输出里的 `📊 汇总: N/M 通过` 与进程退出码。
 
 | 文件 | 覆盖 |
 | :--- | :--- |
@@ -147,6 +149,7 @@ python3 -m pytest tests/test_perspective_silk.py tests/test_perspective_rear.py 
 | `tests/test_perspective_rear.py` | rear rewrite、inject、零差分 |
 | `tests/test_perspective_facial.py` | SAFE_CUMS、skip rear、§4/§11 不削弱 |
 | `tests/test_perspective_metrics.py` | 打点、sanitize、summary |
+| `tests/test_perspective_exposure_region.py` | 鱼眼白名单三效果、`half_nude.region` 子约束、persist / Spec 回退、普通场景零差分 |
 
 ---
 
@@ -157,7 +160,7 @@ python3 -m pytest tests/test_perspective_silk.py tests/test_perspective_rear.py 
 | [FALLBACK_GUIDE.md](./FALLBACK_GUIDE.md) | silk 拼装跳过、视角曝光绑定 |
 | [CHECK_SCRIPT_GUIDE.md](./CHECK_SCRIPT_GUIDE.md) | §3 / `PERSPECTIVE_KEY` |
 | [AUTO_FIX_GUIDE.md](./AUTO_FIX_GUIDE.md) | Spec rewrite vs 旧 CARD_RULES |
-| [EXPOSURE_LIMITS_GUIDE.md](./EXPOSURE_LIMITS_GUIDE.md) | `Spec.exposure_modes` / `meta.perspective_key` |
+| [EXPOSURE_CLAMPING.md](./ops/EXPOSURE_CLAMPING.md)（索引：[EXPOSURE_LIMITS_GUIDE.md](./ops/EXPOSURE_LIMITS_GUIDE.md)） | `Spec.exposure_modes` / `exposure_constraints.half_nude.region` / `meta.perspective_key` |
 | [DEDUPE_GUIDE.md](./DEDUPE_GUIDE.md) | 占位符 + silk 去重门控 |
 | [CONFIG_GUIDE.md](./CONFIG_GUIDE.md) | `perspective_metrics_enabled` |
 | [dev/ARCHITECTURE.md](./dev/ARCHITECTURE.md) | 模块指针 |

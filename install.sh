@@ -16,6 +16,20 @@ AMAZINGDRAW_INSTALL_NONINTERACTIVE="${AMAZINGDRAW_INSTALL_NONINTERACTIVE:-0}"
 _INSTALL_ARGS=()
 for _a in "$@"; do
   case "$_a" in
+    -h|--help)
+      echo "== AmazingDraw 安装引导 =="
+      echo "用法: bash install.sh [选项]"
+      echo ""
+      echo "选项:"
+      echo "  -h, --help            显示本帮助信息并退出"
+      echo "  --non-interactive     非交互模式（不向用户提问，自动采用默认值）"
+      echo ""
+      echo "环境变量:"
+      echo "  AMAZINGDRAW_INSTALL_NONINTERACTIVE=1   等同于 --non-interactive"
+      echo "  OPENCLAW_DIR=...                       指定 OpenClaw 数据目录（默认 ~/.openclaw/draw-cards）"
+      echo "  COMFYUI_DIR=...                        指定 ComfyUI 本地根目录"
+      exit 0
+      ;;
     --non-interactive|--noninteractive)
       AMAZINGDRAW_INSTALL_NONINTERACTIVE=1
       ;;
@@ -80,13 +94,20 @@ fail_if_fatal() {
 # 读解释器主.次版本；失败返回空
 py_mm() {
   local bin="$1"
-  command -v "$bin" >/dev/null 2>&1 || return 0
-  "$bin" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" 2>/dev/null || true
+  if ! command -v "$bin" >/dev/null 2>&1 && [ ! -x "$bin" ]; then
+    return 0
+  fi
+  "$bin" -c "import sys; print('%s.%s' % (sys.version_info[0], sys.version_info[1]))" 2>/dev/null || true
 }
 
 # 绝对路径（供 shim）
 py_abspath() {
   local bin="$1"
+  if [ -x "$bin" ]; then
+    case "$bin" in
+      /*|[A-Za-z]:/*|[A-Za-z]:\\*) printf '%s' "$bin"; return 0 ;;
+    esac
+  fi
   if command -v "$bin" >/dev/null 2>&1; then
     # command -v 在函数/alias 下可能不是路径；优先 which / type -P
     local p
@@ -169,6 +190,80 @@ _pick_py() {
     PY_MM="$mm"
     return 0
   done
+
+  # ── 兜底探测：若 PATH 中未找到匹配项，深度探测常见安装路径与 py 启动器 ──
+  local -a deep_cands=()
+  if [ "$IS_WIN" = 1 ]; then
+    local win_user_py="$HOME/AppData/Local/Programs/Python"
+    case "$WANT_PY" in
+      3.9)
+        deep_cands+=(
+          "$win_user_py/Python39/python.exe"
+          "/c/Program Files/Python39/python.exe"
+          "/c/Python39/python.exe"
+        )
+        ;;
+      3.12)
+        deep_cands+=(
+          "$win_user_py/Python312/python.exe"
+          "/c/Program Files/Python312/python.exe"
+          "/c/Python312/python.exe"
+        )
+        ;;
+    esac
+    if command -v py >/dev/null 2>&1; then
+      local py_flag=""
+      case "$WANT_PY" in
+        3.9)  py_flag="-3.9" ;;
+        3.12) py_flag="-3.12" ;;
+      esac
+      if [ -n "$py_flag" ]; then
+        local py_exe
+        py_exe="$(py "$py_flag" -c "import sys; print(sys.executable)" 2>/dev/null || true)"
+        if [ -n "$py_exe" ]; then
+          py_exe="$(bash_path "$py_exe")"
+          deep_cands+=("$py_exe")
+        fi
+      fi
+    fi
+  else
+    case "$WANT_PY" in
+      3.9)
+        deep_cands+=(
+          "/opt/homebrew/bin/python3.9"
+          "/usr/local/bin/python3.9"
+          "/Library/Frameworks/Python.framework/Versions/3.9/bin/python3"
+          "$HOME/.pyenv/shims/python3.9"
+        )
+        ;;
+      3.12)
+        deep_cands+=(
+          "/opt/homebrew/bin/python3.12"
+          "/usr/local/bin/python3.12"
+          "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+          "$HOME/.pyenv/shims/python3.12"
+        )
+        ;;
+    esac
+  fi
+
+  for cand in "${deep_cands[@]}"; do
+    [ -n "$cand" ] || continue
+    if [ ! -x "$cand" ] && ! command -v "$cand" >/dev/null 2>&1; then
+      continue
+    fi
+    mm="$(py_mm "$cand")"
+    [ -n "$mm" ] || continue
+    if [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixed" ]; then
+      if [ "$mm" != "$WANT_PY" ]; then
+        continue
+      fi
+    fi
+    PY="$cand"
+    PY_MM="$mm"
+    return 0
+  done
+
   return 1
 }
 
@@ -373,7 +468,7 @@ fi
 
 # ── 5. 硬依赖校验 ──
 echo ""
-echo "== 环境校验 =="
+echo "== [1/4] 环境校验 =="
 
 if [ -n "$PY" ]; then
   $PY --version 2>&1 | sed 's/^/  Python: /' || true
@@ -429,6 +524,17 @@ if [ -n "$PY" ] && [ -n "$PY_MM" ] && [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixe
     fatal_add "当前解释器是 ${PY_MM}，本包内核是 Python ${WANT_PY}。请改用匹配的 Python，或改下对应 cp39/cp312 压缩包"
   else
     echo "  ✓ 解释器 $PY ($PY_MM) 与内核标签一致"
+  fi
+fi
+
+# ── 5.05 WebUI 依赖探测（可选依赖，仅友好提示，不阻断）──
+HAVE_WEBUI_DEPS=0
+if [ -n "$PY" ]; then
+  if "$PY" -c "import fastapi, uvicorn" >/dev/null 2>&1; then
+    HAVE_WEBUI_DEPS=1
+    echo "  ✓ WebUI 依赖: fastapi, uvicorn 已就绪"
+  else
+    echo "  ℹ WebUI 依赖未就绪（若需运行 WebUI，请安装：${PY} -m pip install fastapi uvicorn）"
   fi
 fi
 
@@ -489,6 +595,8 @@ do
   fi
 done
 
+echo ""
+echo "== [2/4] 本机依赖侦测 =="
 COMFYUI_DIR="${COMFYUI_DIR:-}"
 if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$DETECT_HELPER" ]; then
   CFG_PY="$(py_path "$CONFIG_DST")"
@@ -564,7 +672,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
   ROOT_PY="$(py_path "$ROOT")"
 
   echo ""
-  echo "== 安装向导 =="
+  echo "== [3/4] 安装向导 =="
   if [ "${AMAZINGDRAW_INSTALL_NONINTERACTIVE}" = "1" ]; then
     echo "  （非交互模式：不提问，仅 best-effort）"
   fi
@@ -673,7 +781,7 @@ fail_if_fatal
 
 # ── 6. 安装后 smoke（场景库）──
 echo ""
-echo "== 安装后自检 =="
+echo "== [4/4] 安装后自检 =="
 SMOKE_OK=0
 if (
   cd "$ROOT"
@@ -704,16 +812,19 @@ fi
 # card_cli 启动自检（致命：证明选定 $PY 下 CLI 能起来）
 SMOKE_CLI=""
 if [ -f "$ROOT/scripts/card-engine/card_cli.py" ] && [ -n "$PY" ]; then
-  if (
+  _cli_out=""
+  if _cli_out=$(
     cd "$ROOT/scripts/card-engine"
     # 相对路径：Git Bash 下绝对 POSIX 路径不会自动转给 Windows python.exe；
     # card_cli 自带 _path_bootstrap 兜底，这里仅作冗余
-    PYTHONPATH="../../card_engine_core/native" "$PY" card_cli.py -h >/dev/null 2>&1
+    PYTHONPATH="../../card_engine_core/native" "$PY" card_cli.py -h 2>&1
   ); then
     SMOKE_CLI=1
     echo "  ✓ smoke: card_cli.py -h 通过"
   else
     SMOKE_CLI=0
+    echo "  ✗ smoke 错误详情（card_cli.py -h）:"
+    printf '%s\n' "$_cli_out" | tail -n 8 | sed 's/^/    /'
     fatal_add "smoke 失败：card_cli.py -h 无法在选定解释器下启动。请确认 scripts/card-engine 与 native 完整"
   fi
 else
@@ -911,8 +1022,12 @@ _report_body() {
   echo "    workplace 抽样: $REPORT_SMOKE_WP"
   echo "    card_cli.py -h: $REPORT_SMOKE_CLI"
   echo "  下一步:"
-  echo "    启动 WebUI: $REPORT_WEBUI_CMD"
-  echo "    启动 ComfyUI: $REPORT_COMFY_CMD"
+  if [ "${HAVE_WEBUI_DEPS:-0}" = 1 ]; then
+    echo "    启动 WebUI: ${REPORT_WEBUI_CMD}"
+  else
+    echo "    启动 WebUI: ${REPORT_WEBUI_CMD}（提示：需先 pip install fastapi uvicorn）"
+  fi
+  echo "    启动 ComfyUI: ${REPORT_COMFY_CMD}"
   echo "    WebUI   ${REPORT_WEBUI_URL}${REPORT_WEBUI_URL_NOTE}"
   echo "    ComfyUI ${REPORT_COMFY_URL}${REPORT_COMFY_URL_NOTE}"
   if [ "$IS_WIN" = 1 ]; then

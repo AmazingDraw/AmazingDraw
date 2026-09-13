@@ -91,7 +91,11 @@ def merge_config(path: Path, updates: Dict[str, Any]) -> None:
 
 
 def _expand(raw: str) -> Path:
-    return Path(os.path.expanduser(str(raw).strip())).expanduser()
+    s = str(raw).strip()
+    # 剥离拖拽文件夹或文件进终端时终端可能自动附加的首尾单/双引号
+    if (s.startswith("'") and s.endswith("'")) or (s.startswith('"') and s.endswith('"')):
+        s = s[1:-1].strip()
+    return Path(os.path.expanduser(s)).expanduser()
 
 
 def _is_comfyui_root(p: Path) -> bool:
@@ -187,6 +191,8 @@ def prompt_path(
     for attempt in range(1, max_retries + 1):
         raw = ask_line(prompt)
         token = raw.strip()
+        if (token.startswith("'") and token.endswith("'")) or (token.startswith('"') and token.endswith('"')):
+            token = token[1:-1].strip()
         if token in SKIP_TOKENS or token.lower() in ("s", "skip"):
             return None, "skip"
         # also treat pure skip-like Chinese
@@ -1203,15 +1209,39 @@ def cmd_prompt_extras(args: argparse.Namespace) -> int:
 
     updates: Dict[str, Any] = {}
     _eprint("")
-    _eprint("—— 可选路径与主机 ——")
+    _eprint("—— 可选进阶设置（出图目录 / ComfyUI地址 / 工作区）——")
+
+    cur_out = str(cfg.get("output_dir") or "").strip() or "~/Downloads/card-engine-out"
+    cur_host = str(cfg.get("comfyui_host") or "").strip() or "http://127.0.0.1:8188"
+    cur_ws = str(cfg.get("openclaw_workspace_dir") or "").strip()
+
+    # 快捷跳过/自定义分流
+    lead_input = ask_line(
+        "是否自定义进阶设置？[y/N]（直接回车使用推荐标准设置；输入 y 自定义）：\n> "
+    ).strip()
+
+    # 判断是否为直接传入路径（兼容单测自动化注入路径的情况）
+    raw_out = ""
+    is_path_like = (
+        lead_input.startswith(("/", "\\", "~"))
+        or (len(lead_input) > 2 and lead_input[1] == ":")
+        or "/" in lead_input
+        or "\\" in lead_input
+    )
+
+    if is_path_like:
+        raw_out = lead_input
+    elif lead_input.lower() in ("y", "yes", "是", "1"):
+        _eprint("当前 output_dir：%s" % cur_out)
+        raw_out = ask_line("出图输出目录 output_dir（回车保留 / s 跳过）：\n> ").strip()
+    else:
+        _eprint("✓ 保持推荐进阶配置（出图: %s，ComfyUI: %s）" % (cur_out, cur_host))
+        return EXIT_SKIP
 
     # output_dir
-    cur_out = str(cfg.get("output_dir") or "").strip() or "~/Downloads/card-engine-out"
-    _eprint("当前 output_dir：%s" % cur_out)
-    raw = ask_line("出图输出目录 output_dir（回车保留 / s / skip / 稍后 跳过）：\n> ").strip()
-    if raw and raw not in SKIP_TOKENS and raw.lower() not in ("s", "skip"):
+    if raw_out and raw_out not in SKIP_TOKENS and raw_out.lower() not in ("s", "skip"):
         try:
-            pth = _expand(raw)
+            pth = _expand(raw_out)
             store = str(pth)
             try:
                 home = Path.home().resolve()
@@ -1224,13 +1254,12 @@ def cmd_prompt_extras(args: argparse.Namespace) -> int:
             _eprint("✓ 将写入 output_dir = " + store)
         except Exception:
             _eprint("  路径无法解析，保留原值。")
-    elif raw in SKIP_TOKENS or raw.lower() in ("s", "skip") or raw in ("稍后",):
+    elif raw_out in SKIP_TOKENS or raw_out.lower() in ("s", "skip") or raw_out in ("稍后",):
         _eprint("已跳过 output_dir。")
     else:
         _eprint("保留 output_dir。")
 
     # comfyui_host
-    cur_host = str(cfg.get("comfyui_host") or "").strip() or "http://127.0.0.1:8188"
     _eprint("当前 comfyui_host：%s" % cur_host)
     raw = ask_line("ComfyUI 地址 comfyui_host（回车保留 / s 跳过）：\n> ").strip()
     if raw and raw not in SKIP_TOKENS and raw.lower() not in ("s", "skip") and raw != "稍后":
@@ -1244,7 +1273,6 @@ def cmd_prompt_extras(args: argparse.Namespace) -> int:
         _eprint("保留 comfyui_host。")
 
     # openclaw_workspace_dir
-    cur_ws = str(cfg.get("openclaw_workspace_dir") or "").strip()
     hint = cur_ws or "~/.openclaw/workspace"
     _eprint("当前 openclaw_workspace_dir：%s" % (cur_ws or "（空，常见 %s）" % hint))
     raw = ask_line("OpenClaw 工作区目录（回车保留/空 / s 跳过）：\n> ").strip()
