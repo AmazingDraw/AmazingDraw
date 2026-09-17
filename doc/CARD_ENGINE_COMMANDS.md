@@ -20,11 +20,11 @@ python3 card_cli.py create --person "JK" --profile jk-pink --user-input "高冷�
 python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle --user-input "加入宠物元素"
 ```
 
-| 参数 | 说明 |
-|------|------|
-| `--user-input` | **必填**。风格/元素等用户补充（如：可爱风格、高冷风格、加入宠物元素） |
-| `--mode` | `amateur`(默认) / `celebrity` |
-| `--bundle` | 启用结构化 JSON 词库参考（默认关闭）。不带值：智能加载四类词库常用章节；带值：`--bundle "tattoo:图案速查|皮肤融合,props:振动棒"` 按指定章节加载 |
+| 参数             | 说明                                                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--user-input` | **必填**。风格/元素等用户补充（如：可爱风格、高冷风格、加入宠物元素）                                                                                         |
+| `--mode`       | `amateur`(默认) / `celebrity`                                                                                                                                   |
+| `--bundle`     | 启用结构化 JSON 词库参考（默认关闭）。不带值：智能加载四类词库常用章节；带值：指定章节加载（例：`--bundle "tattoo:图案速查,props:振动棒"`，同库多章节用竖线隔开） |
 
 ---
 
@@ -51,15 +51,13 @@ python3 card_cli.py fill --card <id> --json '{"theme_zh":"...","director":{...},
 python3 card_cli.py fill --card <id> --phase director   # 第一阶段：8维导演
 python3 card_cli.py fill --card <id> --phase slots      # 第二阶段：12槽位
 python3 card_cli.py fill --card <id> --phase elevation  # 第三阶段：叙事升华
-
-> 🚦 **内置 Preflight 前置预检**：在 `fill` 的最终提交存盘时刻，系统会自动跑一遍纯文本 preflight 门禁检查（包括 theme_zh 撞字、pose_direction 包含身份词、裸露方向互斥、`lower` 必须明确实体上装、连体衣封闭裆+露下冲突、裙装「开裆」误写、`half_nude` 缺结构词/缺裸露表达、`half_covered` 残留直接露点、`lower`/`none` 下 unbuttoned 敞衣冲突等），若校验不通过会直接拦截并退出（exit code 1），拒绝将修改写入 JSON 库。`half_nude` 下的 `unbuttoned` **不**在此拦截。完整清单见 [PREFLIGHT_GUIDE.md](./PREFLIGHT_GUIDE.md) §2。
 ```
 
-| 参数 | 说明 |
-|------|------|
+| 参数                         | 说明                                                      |
+| ---------------------------- | --------------------------------------------------------- |
 | `--json-file` / `--json` | **连抽推荐**：一次写齐 director + slots + elevation |
-| `--phase` | 可选分阶段；**仅**常规模式精细打磨，连抽勿用 |
-| `--clothing` | 服装描述（旧 `--exposure-clothing` 已弃用） |
+| `--phase`                  | 可选分阶段；**仅**常规模式精细打磨，连抽勿用        |
+| `--clothing`               | 服装描述（旧`--exposure-clothing` 已弃用）              |
 
 ---
 
@@ -143,13 +141,13 @@ python3 card_cli.py submit --card <id> --confirm --dry-run  # 模拟预览
 
 ## 7. 数字指令（常规模式）
 
-| 指令 | 操作 |
-|------|------|
-| `1` / `画` | 提交生成 |
-| `6` | 合理性检查 |
-| `9` | 纹身修改 |
-| `0` / `换` | 重抽 |
-| `2-5,7,8` | 动态方向（需先 `options`） |
+| 指令           | 操作                        |
+| -------------- | --------------------------- |
+| `1` / `画` | 提交生成                    |
+| `6`          | 合理性检查                  |
+| `9`          | 纹身修改                    |
+| `0` / `换` | 重抽                        |
+| `2-5,7,8`    | 动态方向（需先`options`） |
 
 > 连抽模式不用数字指令，走 `fill → chain --resume → submit`
 
@@ -166,13 +164,13 @@ python3 card_cli.py chain --count 3 --person "JK" --scene "教室" --user-input 
 python3 card_cli.py chain --resume <card_id>
 ```
 
-> 连抽填卡：**一次** `fill --json-file`，不要拆三次 `--phase`。批量 `--batch` **未实现**，请逐张 `--resume`。
+> 连抽填卡：**一次** `fill --json-file`，不要拆三次 `--phase`，逐张 `--resume`。
 >
 > `chain --resume` 为**引擎级全局串行**（`/tmp/cu-card/chain-resume.lock`）：多进程并行 resume 会排队，避免 `check_prompt` 并发互拖；`fill`/`create` 不受此锁影响。GPU 渲染仍由 `cu-gpu.lock` 串行。
 >
 > `chain` **不会自动删除任何旧草稿**。草稿清理由用户在 WebUI 中显式预览并确认，避免跨会话误删。
 >
-> **dry-run 测试（2026-08-16 新增）**：`chain --resume <card_id> --dry-run` 仅跑 render→check→autofix 全流程校验，**停在提交前不渲染**（卡 status 停在 validated，不入 GPU 队列），用于审查/测试。普通 `--resume` 会走到 submit 入队。
+> **dry-run 测试**：`chain --resume <card_id> --dry-run` 仅跑 render→check→autofix 全流程校验，**停在提交前不渲染**（卡 status 停在 validated，不入 GPU 队列），用于审查/测试。普通 `--resume` 会走到 submit 入队。
 
 ---
 
@@ -186,7 +184,7 @@ python3 card_cli.py direct \
   [--width 512 --height 768] [--dry-run]
 ```
 
-> `--prompt` 为唯一技术必填，6 个中文元数据参数生成归档文件名。  
+> `--prompt` 为唯一技术必填，6 个中文元数据参数生成归档文件名。
 > **CLI `direct`** 走 `cu-submit --raw`，**不**经过卡引擎场景库 / 灵感原点 meta。
 > **WebUI 直投**仍会先提取人物、场景和叙事并生成卡片，再提交原始 Prompt；其卡号使用
 > 并发安全的唯一 ID。所有入口统一拒绝含路径分隔符、控制字符或越出卡片目录的 `card_id`。
@@ -199,7 +197,7 @@ python3 card_cli.py direct \
 python3 card_cli.py featured [--workflow moody_zib_zit] [--width 512] [--height 768]
 ```
 
-> 从 Obsidian `vault/灵感库/` 随机抽已归档词条；卡片写死 **灵感原点 meta**（`special-ethereal-origin`，代码内建，**不在** `special_scenes.json`），原样旁路渲染。  
+> 从 Obsidian `vault/灵感库/` 随机抽已归档词条；卡片写死 **灵感原点 meta**（`special-ethereal-origin`，代码内建，**不在** `special_scenes.json`），原样旁路渲染。
 > 与 CLI `direct` 无关。`create` 若 topic 含「直投 / direct injection」会旁路同一 meta，仍不等于 `direct` 命令。
 
 ---
@@ -281,7 +279,6 @@ rm -f /tmp/cu-card/cu-gpu.lock
 ---
 
 发行包不含 `tests/` 目录；自测命令仅 skill 开发树提供，zip 用户请跳过。
-
 
 ---
 

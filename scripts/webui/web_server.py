@@ -252,6 +252,7 @@ def load_system_config() -> Dict[str, Any]:
         },
         "exposure_limit": ["half_covered", "half_nude"],
         "restrict_roles": True,
+        "disabled_celebrities": [],
         "enable_ai_check": False,
         "default_workflow": "moody",
         "workflows_aliases": {

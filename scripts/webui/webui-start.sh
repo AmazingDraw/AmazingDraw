@@ -9,8 +9,16 @@ WEBUI_PID_FILE="/tmp/amazing-draw-webui.pid"
 WEBUI_LOG="/tmp/amazing-draw-webui.log"
 DETACHED_SPAWN="$(cd "$SCRIPT_DIR/../gpu-pipeline" && pwd)/detached_spawn.py"
 
+# 自动探测具备 fastapi 的 python 解释器（兼容 Homebrew python3.14 与系统 Python 3.9 环境）
+PYTHON_BIN="python3"
+if ! python3 -c "import fastapi" >/dev/null 2>&1; then
+  if /usr/bin/python3 -c "import fastapi" >/dev/null 2>&1; then
+    PYTHON_BIN="/usr/bin/python3"
+  fi
+fi
+
 if [ -f "$CONFIG_FILE" ]; then
-  WEBUI_PORT=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('webui_port', 8318))")
+  WEBUI_PORT=$("$PYTHON_BIN" -c "import json; print(json.load(open('$CONFIG_FILE')).get('webui_port', 8318))")
 fi
 
 health_ok() {
@@ -44,11 +52,11 @@ start_webui() {
   fi
 
   echo "🚀 启动 WebUI..."
-  python3 "$DETACHED_SPAWN" \
+  "$PYTHON_BIN" "$DETACHED_SPAWN" \
     --cwd "$WEBUI_DIR" \
     --log "$WEBUI_LOG" \
     --pid-file "$WEBUI_PID_FILE" \
-    -- python3 "$WEBUI_DIR/web_server.py" >/dev/null
+    -- "$PYTHON_BIN" "$WEBUI_DIR/web_server.py" >/dev/null
 
   for _ in $(seq 1 30); do
     if health_ok; then

@@ -10,6 +10,7 @@
   "openclaw_bin": "",
   "agent_backend": "openclaw",
   "restrict_roles": true,
+  "disabled_celebrities": [],
   "enable_ai_check": false,
   "custom_presets_dir": "~/.openclaw/draw-cards/custom_presets",
   "default_workflow": "moody_zib_zit",

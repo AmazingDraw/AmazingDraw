@@ -105,19 +105,93 @@ def _merge_custom_presets(presets: dict) -> dict:
     return presets
 
 
-def load_celebrities() -> dict:
-    # 发布态：加密资产加载器优先；失败回退开发态明文
+def get_disabled_celebrity_candidates() -> set:
+    """获取当前配置中所有被禁用的明星标识集合（含中文名/触发词/lora键及归一化形式）。"""
+    disabled_set = set()
     try:
-        from card_asset_loader import load_celebrities as _load_enc
-        enc = _load_enc()
-        if enc:
-            return enc
+        cfg_path = ROOT_DIR.parent / "config.json"
+        if cfg_path.exists():
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            disabled_raw = cfg.get("disabled_celebrities") or []
+            if isinstance(disabled_raw, (list, tuple, set)):
+                for d in disabled_raw:
+                    s = str(d or "").strip()
+                    if s:
+                        disabled_set.add(s)
+                        disabled_set.add(_compact(s))
     except Exception:
         pass
+    return disabled_set
+
+
+def is_celebrity_disabled(identifier: str) -> bool:
+    """判定指定的明星姓名/触发词/LoRA键名是否属于当前被禁用的明星。"""
+    raw = str(identifier or "").strip()
+    if not raw:
+        return False
+    disabled_set = get_disabled_celebrity_candidates()
+    if not disabled_set:
+        return False
+    candidates = {raw, _compact(raw)}
+    if any(c in disabled_set for c in candidates if c):
+        return True
+    # 进一步在原始完整未过滤的 celebrities.json 中逆查其名字与触发词
     celebs_path = CONFIG_DIR / "celebrities.json"
     if celebs_path.exists():
-        return json.loads(celebs_path.read_text(encoding="utf-8"))
-    return {"z": {}, "flux": {}}
+        try:
+            raw_data = json.loads(celebs_path.read_text(encoding="utf-8"))
+            for pool in raw_data.values():
+                if not isinstance(pool, dict):
+                    continue
+                for lora_key, val in pool.items():
+                    name = val[0] if isinstance(val, (list, tuple)) and val else str(val)
+                    trig = val[1] if isinstance(val, (list, tuple)) and len(val) > 1 else name
+                    item_tokens = {lora_key, _compact(lora_key), name, _compact(name), trig, _compact(trig)}
+                    if raw in item_tokens or _compact(raw) in item_tokens:
+                        if any(tok in disabled_set for tok in item_tokens if tok):
+                            return True
+        except Exception:
+            pass
+    return False
+
+
+def load_celebrities() -> dict:
+    celebs_path = CONFIG_DIR / "celebrities.json"
+    if not celebs_path.exists():
+        return {"z": {}, "flux": {}}
+    try:
+        data = json.loads(celebs_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"z": {}, "flux": {}}
+
+    # 支持从 config.json 读取 disabled_celebrities 黑名单（可填中文名、触发词或 lora 键名）
+    disabled_set = get_disabled_celebrity_candidates()
+    if not disabled_set:
+        return data
+
+    filtered = {}
+    for pool_name, pool in data.items():
+        if not isinstance(pool, dict):
+            filtered[pool_name] = pool
+            continue
+        filtered_pool = {}
+        for lora_key, val in pool.items():
+            name = val[0] if isinstance(val, (list, tuple)) and val else str(val)
+            trigger = val[1] if isinstance(val, (list, tuple)) and len(val) > 1 else name
+            # 匹配 lora_key / 姓名 / 触发词 / 紧凑归一化
+            match_candidates = {
+                lora_key,
+                _compact(lora_key),
+                name,
+                _compact(name),
+                trigger,
+                _compact(trigger),
+            }
+            if any(c in disabled_set for c in match_candidates if c):
+                continue
+            filtered_pool[lora_key] = val
+        filtered[pool_name] = filtered_pool
+    return filtered
 
 
 def load_random_history() -> dict:
@@ -184,6 +258,14 @@ def pick_non_repeating_celebrity_auto(celebs: dict):
 
 def pick_celebrity_role(person: str = None, trigger: str = None, lora: str = None, model_type: str = "auto") -> dict:
     """解析或随机抽选明星角色"""
+    # 0. 显式指定检测：若显式指定的 person/trigger/lora 属于被禁用的明星，Fail-Fast 强拦截
+    explicit_target = str(person or trigger or lora or "").strip()
+    if explicit_target and is_celebrity_disabled(explicit_target):
+        raise ValueError(
+            f"明星「{explicit_target}」已被配置禁用 (disabled_celebrities)，"
+            "禁止显式指定创卡。如需使用请先在 config.json 中解除屏蔽或更换人选！"
+        )
+
     celebs = load_celebrities()
     z_pool = celebs.get("z", {})
     flux_pool = celebs.get("flux", {})
