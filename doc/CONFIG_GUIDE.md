@@ -52,7 +52,7 @@
 | `llm_fallback_models` | 备用模型列表 |
 | `llm_temperature` | 默认 `0.7` |
 | `llm_retry_limit` | 失败重试。代码默认 `1` |
-| `agent_backend` | 发行默认 `custom`；本地 skill 常用 `openclaw`。旧值 `claudecode` / `hermes` 会归一成 `openclaw` |
+| `agent_backend` | 默认 `openclaw`。对话后端统一为 `openclaw`（历史旧值如 `custom` / `claudecode` / `hermes` 均自动归一） |
 | `openclaw_ws_timeout_seconds` | OpenClaw 等待秒数，默认 `600` |
 | `chat_mode` | WebUI 会话：`cards`（卡片列表）和 `draw`（抽卡对话） |
 
@@ -72,7 +72,7 @@
 | `scene_library_weights` | 子库抽样权重，键名带 `_scenes`：`school_scenes` / `general_scenes` / `medical_scenes` / `workplace_scenes` / `sm_scenes` / `special_scenes` / `perspective_scenes` |
 | `scene_registry` | 场景库注册（enabled / 中文名 / 文件名）。WebUI 权重面板依赖它 |
 | `resolution_presets` | 版式像素。常见键 `vertical` 512×768、`horizontal` 768×512、`square` 640×640、`widescreen` 1088×464 |
-| `perspective_metrics_enabled` | 默认 `true`。PerspectiveContract P1 指标打点（`perspective_metrics.py`）；也可被环境变量 `AMAZING_DRAW_PERSPECTIVE_METRICS` 覆盖。**不**写完整 prompt。见 [PERSPECTIVE_CONTRACT.md](./PERSPECTIVE_CONTRACT.md) |
+| `perspective_metrics_enabled` | 默认 `true`。特殊视角指标打点统计（可在环境变量通过 `AMAZING_DRAW_PERSPECTIVE_METRICS` 覆盖），不记录完整 prompt |
 
 ---
 
