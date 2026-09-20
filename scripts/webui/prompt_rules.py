@@ -41,7 +41,7 @@ def _resolve_cards_dir() -> str:
         from card_config import CARDS_DIR
         return str(Path(CARDS_DIR).expanduser().resolve())
     except Exception:
-        return str(Path.home() / ".openclaw" / "draw-cards" / "cards")
+        return str(CARDS_DIR)
 
 
 _CARDS_DIR = _resolve_cards_dir()

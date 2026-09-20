@@ -20,8 +20,20 @@ cu-draw-card.py — GPU 渲染执行脚本
 - `python3 cu-draw-card.py --prompt-file /tmp/p.txt --amateur`
 """
 
+import sys
+from pathlib import Path as _Path
+for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
+    _native = _p / 'card_engine_core' / 'native'
+    if _native.is_dir() and (
+        list(_native.glob('card_asset_loader*.so'))
+        or list(_native.glob('card_asset_loader*.pyd'))
+    ):
+        if str(_native) not in sys.path:
+            sys.path.insert(0, str(_native))
+        break
 import hashlib, json, os, random, re, sys, time, argparse
 from pathlib import Path
+from card_config import TMP_DIR, CARDS_DIR
 import requests
 import logging
 import logging.handlers
@@ -29,11 +41,11 @@ from collections import deque
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SYSTEM_CONFIG_PATH = SCRIPT_DIR.parent / "config.json"
-STATE_DIR = Path("/tmp/cu-card")
+STATE_DIR = TMP_DIR
 RANDOM_HISTORY_FILE = STATE_DIR / "random-history.json"
 RECENT_CELEBRITY_WINDOW = 3
 API = "http://127.0.0.1:8188"
-LOG_FILE = "/tmp/cu-card/cu-draw-card.log"
+LOG_FILE = str(TMP_DIR) + "/cu-draw-card.log"
 
 def load_global_config() -> dict:
     """加载 scripts/config.json（全局 + workflows 元数据）。"""
@@ -549,7 +561,7 @@ def detect_recent_output_dir_interrupt(output_dir: str) -> bool:
     )
 
 
-def wait_for_result(pid: str, output_dir: str, filename_prefix: str, timeout: int = 3600, done_file: str = "/tmp/cu-card/cu-draw-card-done.json"):
+def wait_for_result(pid: str, output_dir: str, filename_prefix: str, timeout: int = 3600, done_file: str = str(TMP_DIR) + "/cu-draw-card-done.json"):
     """轮询 ComfyUI history，等待出图结果写入磁盘。失败时抛异常，由上层决定是否重试。"""
     start = time.time()
     last_progress_mark = 0
@@ -811,7 +823,7 @@ def main():
         print(f"🔗 LoRA: {lora_file}")
     print(f"📝 prompt: {prompt_text[:100]}{'...' if len(prompt_text)>100 else ''}\n")
 
-    done_file = os.environ.get("DONE_FILE", "/tmp/cu-card/cu-draw-card-done.json")
+    done_file = os.environ.get("DONE_FILE", str(TMP_DIR) + "/cu-draw-card-done.json")
     output_dir = os.path.expanduser(GLOBAL_CONFIG.get("output_dir") or cfg.get("output_dir") or "~/Downloads/draw_things")
     prefix = cfg.get("filename_prefix", "Moody")
 

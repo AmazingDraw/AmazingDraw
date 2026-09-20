@@ -1,4 +1,6 @@
 #!/bin/bash
+CARD_ENGINE_TMP="${CARD_ENGINE_TMP:-/tmp/cu-card}"
+mkdir -p "$CARD_ENGINE_TMP"
 # cu-worker.sh — 单张渲染+交付 worker（前台运行，由 detached_spawn.py 拉到后台）
 set -euo pipefail
 

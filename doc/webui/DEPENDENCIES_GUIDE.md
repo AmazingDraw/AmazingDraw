@@ -86,7 +86,7 @@ python3 -m pip install fastapi uvicorn requests websockets cryptography httpx
 - **默认根路径**：`~/ComfyUI`（Windows 在 Git Bash 下 `~` 映射到 `C:\Users\<用户名>`，即 `C:\Users\<用户名>\ComfyUI`）
 - **默认监听端口**：`http://127.0.0.1:8188`
 - **配置文件**：修改 `scripts/config.json` 中的 `comfyui_dir` 与 `comfyui_host`。
-- **Windows 路径提示**：`config.json` 中所有 POSIX 风格路径（`~/...`、`/tmp/...`）在 Git Bash 内由 `os.path.expanduser` 解析为 Windows 用户目录；`cryptography`/模型路径建议显式写 Windows 绝对路径（`C:/Users/xxx/...`）避免歧义。
+- **Windows 路径提示**：`config.json` 中所有 POSIX 风格路径（`~/...`、`/tmp/...`）在 Git Bash 内由 `os.path.expanduser` 解析为 Windows 用户目录；`cryptography`/模型路径建议显式写 Windows 绝对路径（`C:${HOME}/...`）避免歧义。
 - **本机模型清单**（命名与下载页）：`~/ComfyUI/models/README.md`
 
 ### 自带启停与管理脚本

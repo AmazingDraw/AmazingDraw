@@ -1,4 +1,6 @@
 #!/bin/bash
+CARD_ENGINE_TMP="${CARD_ENGINE_TMP:-/tmp/cu-card}"
+mkdir -p "$CARD_ENGINE_TMP"
 # cu-deliver.sh — 自动交付：读 done.json + meta.json → 发 Telegram
 # 由 cu-draw-card.py && cu-deliver.sh 链式调用，画完自动发图
 # 环境变量：META_FILE / DONE_FILE / JOB_ID / LEASE_TOKEN（必传）
@@ -31,7 +33,7 @@ show_help() {
   CARD_ID    关联卡片 ID (可选，通常由 worker 透传)
   WORKFLOW   本任务工作流别名 (可选，通常由 worker 透传)
   REQUESTED_SEED  提交时指定的 Seed；实际 Seed 仍以 DONE_FILE 为准 (可选)
-  GPU_LOCK   GPU 排队排他锁路径，交付完成后脚本会自动释放此锁 (可选，默认 /tmp/cu-card/cu-gpu.lock)
+  GPU_LOCK   GPU 排队排他锁路径，交付完成后脚本会自动释放此锁 (可选，默认 $CARD_ENGINE_TMP/cu-gpu.lock)
   CU_BETWEEN_CARDS  连抽卡间策略（仅队列非空时生效；单张跳过）:
                     restart（默认）| free | off
   CU_FREE_BETWEEN   仅当 CU_BETWEEN_CARDS=free 时生效；=0 可关 /free

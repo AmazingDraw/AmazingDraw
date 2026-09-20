@@ -920,7 +920,7 @@ def cmd_patch(args):
                 )
                 if entry and entry.get('targets'):
                     primary = entry['targets'][0]
-                    tf = f"/tmp/cu-card/patch_{card['card_id']}_{direction}.json"
+                    tf = fstr(TMP_DIR) + "/patch_{card['card_id']}_{direction}.json"
                     with open(tf, 'w') as f:
                         if isinstance(pv, dict):
                             json.dump(pv, f)
@@ -1987,39 +1987,45 @@ def cmd_search(args):
         else:
             print(f"🔍 正在检索场景库，关键字: '{q}' ...\n")
         
-        # 扫描 libraries/ 目录下的所有 json 文件
-        lib_dir = SCRIPT_DIR / "libraries"
+        # 场景搜索：优先加密资产加载器，回退扫 libraries/ 明文
         matches = []
-        if lib_dir.exists():
-            for p in lib_dir.glob("*.json"):
-                if p.name == "registry.json":
-                    continue
-                try:
-                    data = json.loads(p.read_text(encoding="utf-8"))
-                    items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                    for item in items:
-                        if not isinstance(item, dict):
-                            continue
-                        label = item.get("label") or item.get("scene") or ""
-                        theme = item.get("scene_theme") or item.get("prompt") or ""
-                        tags = item.get("tags", [])
-                        moods = item.get("moods", [])
-                        notes = item.get("notes") or ""
-                        contrast = item.get("contrast_anchor") or ""
+        try:
+            from card_asset_loader import search_scenes as _search_scenes
+            matches = _search_scenes(q, limit=15)
+        except Exception:
+            matches = []
+        if not matches:
+                    if lib_dir.exists():
+                        for p in lib_dir.glob("*.json"):
+                            if p.name == "registry.json":
+                                continue
+                            try:
+                                data = json.loads(p.read_text(encoding="utf-8"))
+                                items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                                for item in items:
+                                    if not isinstance(item, dict):
+                                        continue
+                                    label = item.get("label") or item.get("scene") or ""
+                                    theme = item.get("scene_theme") or item.get("prompt") or ""
+                                    tags = item.get("tags", [])
+                                    moods = item.get("moods", [])
+                                    notes = item.get("notes") or ""
+                                    contrast = item.get("contrast_anchor") or ""
                         
-                        # Match label, theme, tags, moods, notes, contrast_anchor
-                        match_text = " ".join([label, theme, notes, contrast] + tags + moods).lower()
-                        tag_match = extra_tags and any(t in tags or t in moods for t in extra_tags)
-                        if q in match_text or tag_match:
-                            matches.append({
-                                "label": label,
-                                "library": p.stem,
-                                "tags": tags,
-                                "theme": theme[:80] + "..." if len(theme) > 80 else theme
-                            })
-                except Exception:
-                    pass
+                                    # Match label, theme, tags, moods, notes, contrast_anchor
+                                    match_text = " ".join([label, theme, notes, contrast] + tags + moods).lower()
+                                    tag_match = extra_tags and any(t in tags or t in moods for t in extra_tags)
+                                    if q in match_text or tag_match:
+                                        matches.append({
+                                            "label": label,
+                                            "library": p.stem,
+                                            "tags": tags,
+                                            "theme": theme[:80] + "..." if len(theme) > 80 else theme
+                                        })
+                            except Exception:
+                                pass
         
+
         # 去重
         seen = set()
         dedup_matches = []
@@ -2047,25 +2053,32 @@ def cmd_search(args):
         
         presets_path = SCRIPT_DIR / "config" / "amateurs.json"
         matches = []
-        if presets_path.exists():
-            try:
-                data = json.loads(presets_path.read_text(encoding="utf-8"))
-                profiles = data.get("profiles", {}) or {}
-                for key, val in profiles.items():
-                    disp = val.get("display_name") or ""
-                    desc = val.get("description") or ""
-                    body = val.get("body_shape") or ""
+        try:
+            from card_asset_loader import search_person as _search_person
+            matches = _search_person(q, limit=15)
+        except Exception:
+            matches = []
+        if not matches:
+                    if presets_path.exists():
+                        try:
+                            data = json.loads(presets_path.read_text(encoding="utf-8"))
+                            profiles = data.get("profiles", {}) or {}
+                            for key, val in profiles.items():
+                                disp = val.get("display_name") or ""
+                                desc = val.get("description") or ""
+                                body = val.get("body_shape") or ""
                     
-                    match_text = " ".join([key, disp, desc, body]).lower()
-                    if q in match_text:
-                        matches.append({
-                            "key": key,
-                            "display_name": disp,
-                            "description": desc
-                        })
-            except Exception:
-                pass
+                                match_text = " ".join([key, disp, desc, body]).lower()
+                                if q in match_text:
+                                    matches.append({
+                                        "key": key,
+                                        "display_name": disp,
+                                        "description": desc
+                                    })
+                        except Exception:
+                            pass
                 
+
         if matches:
             print(f"✨ 找到 {len(matches)} 个匹配角色/身份 (最多展示前 15 条)：")
             print("-" * 80)
