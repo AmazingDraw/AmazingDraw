@@ -4,18 +4,6 @@
 # =====================================================================
 # ─── SECTION 1: SYSTEM IMPORTS & LOGGER INITIALIZATION ───────────────
 # =====================================================================
-import sys
-from pathlib import Path as _Path
-for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
-    _native = _p / 'card_engine_core' / 'native'
-    if _native.is_dir() and (
-        list(_native.glob('card_asset_loader*.so'))
-        or list(_native.glob('card_asset_loader*.pyd'))
-    ):
-        if str(_native) not in sys.path:
-            sys.path.insert(0, str(_native))
-        break
-
 
 import io
 import json
@@ -37,6 +25,16 @@ import uvicorn
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(SCRIPT_DIR.parent / "card-engine"))
+
+# 发行版：接入 native（.so / .pyd）
+for _p in [SCRIPT_DIR] + list(SCRIPT_DIR.parents):
+    _native = _p / 'card_engine_core' / 'native'
+    if _native.is_dir() and (
+        list(_native.glob('card_asset_loader*.so'))
+        or list(_native.glob('card_asset_loader*.pyd'))
+    ):
+        sys.path.insert(0, str(_native))
+        break
 
 # 兼容 `python3 web_server.py` 直跑：预登记 __main__ 为 web_server，
 # 否则 api_cards 等子模块 `from web_server import ...` 会二次执行本文件，造成循环导入

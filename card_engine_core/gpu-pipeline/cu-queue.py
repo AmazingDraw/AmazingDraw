@@ -39,17 +39,6 @@ cu-queue.py — GPU 渲染队列管理器（JSON v2）
 损坏 JSON: fail closed，不自动用旧快照覆盖现场。
 """
 
-import sys
-from pathlib import Path as _Path
-for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
-    _native = _p / 'card_engine_core' / 'native'
-    if _native.is_dir() and (
-        list(_native.glob('card_asset_loader*.so'))
-        or list(_native.glob('card_asset_loader*.pyd'))
-    ):
-        if str(_native) not in sys.path:
-            sys.path.insert(0, str(_native))
-        break
 import hashlib
 import json
 import os
@@ -62,7 +51,6 @@ import uuid
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-from card_config import TMP_DIR, CARDS_DIR
 from typing import Iterator, Optional, Union
 import fcntl
 
@@ -125,7 +113,7 @@ ZOMBIE_LOCK_THRESHOLD = 1800
 # DONE 已落盘后交付阶段卡死阈值（外置盘 cp / Telegram 僵死等）
 DELIVER_STUCK_THRESHOLD = 600
 CARDS_DIR = Path(os.path.expanduser(os.environ.get("CU_CARDS_DIR") or str(
-    _cfg_path("cards_dir", str(CARDS_DIR))
+    _cfg_path("cards_dir", str(Path.home() / ".openclaw" / "draw-cards" / "cards"))
 ))).resolve()
 # 与 cu-submit.sh 提交提示一致：取最近 N 次成功交付的 elapsed 均值（分钟）
 ETA_HISTORY_N = 5

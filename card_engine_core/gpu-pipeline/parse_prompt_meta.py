@@ -10,6 +10,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parent / 'card-engine'))
 
 from card_llm_client import chat_completion, extract_json_object
 from card_validation import has_cjk
+from card_config import load_system_config
 
 SYSTEM_PROMPT = """You are a Stable Diffusion / Midjourney metadata parser.
 Given an English prompt, extract or infer the scene metadata and translate them to Chinese.
@@ -129,10 +130,14 @@ def main():
     quote_parts = [x for x in [final["narrative"], final["lighting"], final["style"]] if x]
     quote = '<blockquote>' + ' | '.join(quote_parts) + '</blockquote>' if quote_parts else ''
 
+    cfg = load_system_config()
+    group_url = str(cfg.get('telegram_group_url') or '').strip()
+    seed_label = f'<a href="{group_url}">{{SEED}}</a>' if group_url else '{SEED}'
+
     caption = title
     if quote:
         caption += '\n\n' + quote
-    caption += '\n\nSeed: {SEED} | {ELAPSED}分钟'
+    caption += f'\n\nSeed: {seed_label} | {{ELAPSED}}分钟'
 
     # Build meta dict
     meta = {

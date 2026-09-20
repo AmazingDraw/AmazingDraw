@@ -1,6 +1,4 @@
 #!/bin/bash
-CARD_ENGINE_TMP="${CARD_ENGINE_TMP:-/tmp/cu-card}"
-mkdir -p "$CARD_ENGINE_TMP"
 # cu-progress.sh — CU 抽卡进度面板（适配新工作流）
 set -euo pipefail
 

@@ -32,7 +32,7 @@ bash scripts/gpu-pipeline/comfyui-start.sh start|stop|status
 输出目录见 `config.json`：
 
 * `output_dir` — Comfy 本地实时落盘（例：macOS `~/ComfyUI/output` · Windows `C:\ComfyUI\output`）
-* `output_dir_archive` — 外置归档（例：macOS `~/Downloads/card-engine-out` · Windows `D:\amazing_draw`）；交付优先拷贝
+* `output_dir_archive` — 外置归档（例：macOS `/Volumes/<盘名>/amazing_draw` · Windows `D:\amazing_draw`）；交付优先拷贝
 
 日志：macOS / Linux / Git Bash：`/tmp/comfyui-headless.log` · Windows cmd/PowerShell：`%TEMP%\comfyui-headless.log`
 

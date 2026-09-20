@@ -1,6 +1,4 @@
 #!/bin/bash
-CARD_ENGINE_TMP="${CARD_ENGINE_TMP:-/tmp/cu-card}"
-mkdir -p "$CARD_ENGINE_TMP"
 # cu-deliver.sh — 自动交付：读 done.json + meta.json → 发 Telegram
 # 由 cu-draw-card.py && cu-deliver.sh 链式调用，画完自动发图
 # 环境变量：META_FILE / DONE_FILE / JOB_ID / LEASE_TOKEN（必传）
@@ -33,7 +31,7 @@ show_help() {
   CARD_ID    关联卡片 ID (可选，通常由 worker 透传)
   WORKFLOW   本任务工作流别名 (可选，通常由 worker 透传)
   REQUESTED_SEED  提交时指定的 Seed；实际 Seed 仍以 DONE_FILE 为准 (可选)
-  GPU_LOCK   GPU 排队排他锁路径，交付完成后脚本会自动释放此锁 (可选，默认 $CARD_ENGINE_TMP/cu-gpu.lock)
+  GPU_LOCK   GPU 排队排他锁路径，交付完成后脚本会自动释放此锁 (可选，默认 /tmp/cu-card/cu-gpu.lock)
   CU_BETWEEN_CARDS  连抽卡间策略（仅队列非空时生效；单张跳过）:
                     restart（默认）| free | off
   CU_FREE_BETWEEN   仅当 CU_BETWEEN_CARDS=free 时生效；=0 可关 /free
@@ -338,7 +336,7 @@ def convert_markdown_tables_to_lists(text):
     return '\n'.join(out).strip()
 
 
-def normalize_caption(raw_caption, seed, elapsed):
+def normalize_caption(raw_caption, seed, elapsed, group_url=''):
     text = (raw_caption or '').replace('{SEED}', str(seed)).replace('{ELAPSED}', str(elapsed)).strip()
     text = re.sub(r'\n\s*Seed:\s*.*$', '', text, flags=re.S).strip()
     text = convert_markdown_tables_to_lists(text)
@@ -370,12 +368,22 @@ def normalize_caption(raw_caption, seed, elapsed):
         parts.append(body)
     if not parts:
         parts.append('🎬 图片已生成 主人请检阅')
-    parts.append(f'Seed: {seed} | {elapsed}分钟')
+    q = chr(34)
+    seed_display = f'<a href={q}{group_url}{q}>{seed}</a>' if group_url else str(seed)
+    parts.append(f'Seed: {seed_display} | {elapsed}分钟')
     return '\n\n'.join(parts)
+
+config = {}
+try:
+    with open('${CONFIG_FILE}', encoding='utf-8') as cf:
+        config = json.load(cf)
+except Exception:
+    pass
+group_url = str(config.get('telegram_group_url') or '').strip()
 
 with open('$META_FILE') as f:
     meta = json.load(f)
-print(normalize_caption(meta.get('caption', ''), $SEED, $ELAPSED))
+print(normalize_caption(meta.get('caption', ''), $SEED, $ELAPSED, group_url))
 ")
     REPLY_ID=$(python3 -c "
 import json,sys
@@ -388,7 +396,13 @@ except:
     print('')
 " 2>/dev/null)
 else
-    CAPTION=$(printf "🎬 图片已生成 主人请检阅\n\nSeed: %s | %s分钟" "$SEED" "${ELAPSED}")
+    GROUP_URL=$(python3 -c "import json; print(json.load(open('${CONFIG_FILE}')).get('telegram_group_url', '').strip())" 2>/dev/null || echo "")
+    if [ -n "$GROUP_URL" ]; then
+        SEED_DISPLAY="<a href=\"${GROUP_URL}\">${SEED}</a>"
+    else
+        SEED_DISPLAY="${SEED}"
+    fi
+    CAPTION=$(printf "🎬 图片已生成 主人请检阅\n\nSeed: %s | %s分钟" "$SEED_DISPLAY" "${ELAPSED}")
     REPLY_ID=""
 fi
 

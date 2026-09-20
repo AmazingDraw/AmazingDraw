@@ -2,18 +2,6 @@
 """Chat sessions, numeric quick commands, and POST /api/chat SSE routes."""
 
 from __future__ import annotations
-import sys
-from pathlib import Path as _Path
-for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
-    _native = _p / 'card_engine_core' / 'native'
-    if _native.is_dir() and (
-        list(_native.glob('card_asset_loader*.so'))
-        or list(_native.glob('card_asset_loader*.pyd'))
-    ):
-        if str(_native) not in sys.path:
-            sys.path.insert(0, str(_native))
-        break
-
 
 import argparse
 import asyncio
@@ -26,7 +14,6 @@ import re
 import time
 import uuid
 from pathlib import Path
-from card_config import TMP_DIR, CARDS_DIR
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -469,7 +456,7 @@ def get_gateway_info():
         return 18789, ""
 
 
-CHAT_MAP_PATH = Path(str(TMP_DIR) + "/webui-chat/chat_map.json")
+CHAT_MAP_PATH = Path("/tmp/cu-card/webui-chat/chat_map.json")
 
 def resolve_card_id_by_chat_id(chat_id: str) -> str:
     """根据 Open WebUI 的 chat_id 寻找或自动生成本地卡片 ID"""

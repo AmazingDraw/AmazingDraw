@@ -1,6 +1,4 @@
 #!/bin/bash
-CARD_ENGINE_TMP="${CARD_ENGINE_TMP:-/tmp/cu-card}"
-mkdir -p "$CARD_ENGINE_TMP"
 # ============================================
 # cu-submit.sh — 抽卡提交脚本
 # 封装提交全流程：写 meta/prompt → GPU锁 → 入队/提交
