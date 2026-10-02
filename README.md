@@ -16,7 +16,7 @@
 
 解决**不会写提示词的问题**：内置场景库、角色库，想抽什么只需简单一句话，不必自己攒 prompt。
 
-**macOS** 是主要使用平台；**Windows** 可用 Git Bash 安装运行。另有 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎使用。
+**macOS** 是主要使用平台；**Windows** 可双击 `install.bat` 安装运行。另有 [提示词反推 bot](https://t.me/PromptReverseBot)，欢迎使用。
 
 ## Skill
 
@@ -28,11 +28,21 @@
 
 1. 到 **[GitHub Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载对应压缩包。
 2. 解压到一个**固定目录**（例如 macOS `~/AmazingDraw`，Windows `C:\\AmazingDraw`）。这就是运行时目录（WebUI / CLI / skill），不要拆散文件，也不要解压进 ComfyUI。
-3. 在解压后的根目录执行：
+3. 在解压后的根目录安装：
+
+**macOS**：
 
 ```bash
 bash install.sh
 ```
+
+**Windows**：解压后双击 `install.bat`。若缺少 Git Bash 或与 zip 标签一致的 **64 位** Python，脚本会用命令行尝试安装（优先 winget，否则静默下载官方安装包；默认不打开浏览器），然后交给 `install.sh`。在 cmd / PowerShell 里也可运行 `install.bat`（同样支持 `-Yes`）。
+
+免确认（并跳过结束暂停）：`install.bat -Yes`，或环境变量 `AMAZINGDRAW_INSTALL_YES=1`。只打开官网下载页（安装失败时）：加 `-OpenDownloadPage`。
+
+**WebUI 可选**：Skill / CLI / Agent 不需要它。`install.bat` 在匹配 Python 就绪后会询问是否现在安装；选是则对该解释器执行 `python -m pip install fastapi uvicorn`（只为 WebUI 进程；pip 失败只警告，不中断）。这**不会**安装 OpenClaw：对话抽卡 / AI 连抽还须本机自备 OpenClaw（`install.sh` 可能探测路径，或之后在 WebUI「配置」填 `openclaw_home` / `openclaw_bin`）。出图仍须自备 ComfyUI 与模型。`-Yes` 默认跳过 WebUI pip；需要时装 `-WithWebUI` 或设 `AMAZINGDRAW_WITH_WEBUI=1`。
+
+若已装好 Git Bash 与匹配 Python，仍可用 Git Bash 直接跑 `bash install.sh`（PowerShell 不能直接跑 `install.sh`）。
 
 | 包 | 系统 | Python |
 | --- | --- | --- |
@@ -43,11 +53,11 @@ bash install.sh
 
 跑 WebUI / CLI 的 Python **必须和 zip 标签一致**。不要把 `.so` 和 `.pyd` 混放，也不要混用 3.9 / 3.12 的内核。
 
-**Windows**：请安装对应版本的 Python（勾选 Add to PATH），并用 **Git Bash** 跑 `install.sh`（PowerShell 不能直接跑）。脚本在需要时会补 `python3` 别名；若 ComfyUI 装在其它盘，可先设环境变量 `COMFYUI_DIR` 再安装。
+**Windows**：引导层只补 Git Bash 与匹配的 x64 Python，**不会**自动安装 ComfyUI 或模型。ARM64 电脑请仍用 x64 Git/Python（内核是 `win_amd64` `.pyd`，走 Windows on ARM 模拟）。脚本在需要时会补 `python3` 别名；若 ComfyUI 装在其它盘，可先设环境变量 `COMFYUI_DIR` 再安装。
 
 安装时会尽量**自动探测**本机 ComfyUI、OpenClaw，并在配置为空或无效时写入路径；已有有效配置不会被覆盖。找不到也不影响装完——可之后在 WebUI「配置」里填写。
 
-安装会按 `config.example.json` 生成 `~/.openclaw/draw-cards/config.json`（已有则不覆盖）。
+安装以包内 `scripts/config.json` 为权威配置（缺省时由 `config.example.json` 生成；已有则不覆盖）。cards 等数据目录仍默认在 `~/.openclaw/draw-cards/`。
 
 ## 推荐模型
 
@@ -82,7 +92,7 @@ python3 card_cli.py create -h   # 单卡
 python3 card_cli.py chain -h    # 连抽
 ```
 
-`install.sh` 会把工作流拷到 ComfyUI 的 `workflows/`（探测到的安装根下），并把 `ComfyUI-Card-Engine/` 装进 `custom_nodes`。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
+`install.sh` 会把工作流拷到 ComfyUI 的 `workflows/`（探测到的安装根下）。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
 
 ## 目录请保持完整
 
@@ -91,7 +101,7 @@ python3 card_cli.py chain -h    # 连抽
 ## 配置
 
 - 示例：`config.example.json`
-- 安装后：`~/.openclaw/draw-cards/config.json`
+- 安装后权威配置：包内 `scripts/config.json`
 - 自定义预设：`user_presets/`
 - Windows 若自动探测失败：可在 WebUI 填写 `comfyui_dir`、`openclaw_home`、`openclaw_bin`
 

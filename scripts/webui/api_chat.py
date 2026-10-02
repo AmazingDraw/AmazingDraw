@@ -440,7 +440,7 @@ def cancel_render_reply() -> Dict[str, Any]:
     result = cancel_current_render()
     status = result.get("status")
     if status == "cancelled":
-        return {"reply": "🛑 已发送取消：ComfyUI 已中断，worker/锁已清理。", "action": "cancel", "refresh": True}
+        return {"reply": "✋ 已发送取消：ComfyUI 已中断，worker/锁已清理。", "action": "cancel", "refresh": True}
     if status == "no_active_task":
         return {"reply": "ℹ️ 当前没有检测到正在渲染的任务。", "action": "none", "refresh": True}
     return {

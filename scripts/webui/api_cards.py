@@ -296,7 +296,11 @@ def post_settings(settings: Dict[str, Any]):
     # 归一化 chat_mode：仅 cards | draw
     if "chat_mode" in settings:
         settings["chat_mode"] = normalize_chat_mode(settings.get("chat_mode"), "cards")
-    save_system_config(settings)
+    try:
+        save_system_config(settings)
+    except Exception as exc:
+        # safe_write_config 写盘失败会抛；不可再返回 status=ok
+        raise HTTPException(status_code=500, detail=f"配置写入失败：{exc}") from exc
     update_images_mount()
     return {"status": "ok", "settings": settings}
 
@@ -1011,7 +1015,6 @@ def extract_card_info_via_llm(prompt: str) -> dict:
         res_text = chat_completion(
             messages=messages,
             max_tokens=150,
-            temperature=0.1,
             timeout=30
         )
         
@@ -1118,6 +1121,16 @@ def direct_submit_api(req: Dict[str, Any]):
         pass
 
     save_card(card)
+
+    from card_config import (
+        cloud_draw_blocks_comfy_enqueue,
+        cloud_draw_enqueue_refusal_text,
+        persist_cloud_draw_meta,
+    )
+    if cloud_draw_blocks_comfy_enqueue(card=card):
+        persist_cloud_draw_meta(card)
+        save_card(card)
+        raise HTTPException(status_code=400, detail=cloud_draw_enqueue_refusal_text())
 
     # 用户输入可以先落历史；成功提示必须等队列返回结构化 acceptance ACK。
     try:

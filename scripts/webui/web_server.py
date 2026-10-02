@@ -107,10 +107,35 @@ class DailyRotatingFile:
 # Redirect stdout and stderr to DailyRotatingFile with ThreadLocalStream proxy to prevent multi-threading race conditions in run_core_cmd
 import threading
 
+def _mirror_stream(stream):
+    """只在交互终端下回显；`isatty()` 为假（守护进程 / 管道 / 重定向）时返回 None。
+
+    2026-09-22 排查 `/api/system/environment` 时踩过的坑：`import web_server` 会把
+    stdout 换成写日志文件的代理，于是冒烟脚本打印的东西在终端里**一个字都看不到**，
+    看起来"什么都没发生"，排查无从下手。加上终端镜像后开发时能直接看到结果，
+    而守护进程（stdout 是文件/管道）行为与改动前完全一致。
+    """
+    try:
+        return stream if stream is not None and stream.isatty() else None
+    except (ValueError, OSError, AttributeError):
+        return None
+
+
 class ThreadLocalStream:
-    def __init__(self, default_stream):
+    def __init__(self, default_stream, mirror=None):
         self.default_stream = default_stream
+        self.mirror = _mirror_stream(mirror)
         self.local = threading.local()
+
+    def _mirror_write(self, data):
+        if self.mirror is None:
+            return
+        try:
+            self.mirror.write(data)
+            self.mirror.flush()
+        except (ValueError, OSError):
+            # 终端被关闭等异常场景：静默放弃镜像，绝不影响日志落盘
+            self.mirror = None
 
     def write(self, data):
         stream = getattr(self.local, 'stream', None)
@@ -118,6 +143,7 @@ class ThreadLocalStream:
             stream.write(data)
         else:
             self.default_stream.write(data)
+        self._mirror_write(data)
 
     def flush(self):
         stream = getattr(self.local, 'stream', None)
@@ -125,15 +151,22 @@ class ThreadLocalStream:
             stream.flush()
         else:
             self.default_stream.flush()
+        if self.mirror is not None:
+            try:
+                self.mirror.flush()
+            except (ValueError, OSError):
+                self.mirror = None
 
     def isatty(self):
+        # 保持 False：uvicorn 等依赖 isatty 的行为与改动前完全一致
         return False
 
 LOGS_DIR = SCRIPT_DIR / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 rotating_file = DailyRotatingFile(str(LOGS_DIR / "web_server.log"), backup_count=30)
-sys.stdout = ThreadLocalStream(rotating_file)
-sys.stderr = ThreadLocalStream(rotating_file)
+# mirror 取赋值前的原始终端流；守护进程里它是文件/管道，_mirror_stream 会判成 None
+sys.stdout = ThreadLocalStream(rotating_file, mirror=sys.stdout)
+sys.stderr = ThreadLocalStream(rotating_file, mirror=sys.stderr)
 
 
 from card_core import CARDS_DIR, save_card, load_card
@@ -228,7 +261,6 @@ def load_system_config() -> Dict[str, Any]:
                 "perspective_scenes": {"type": "scene", "enabled": True, "name": "视角场景", "file": "perspective_scenes.json"},
             }
         },
-        "llm_temperature": 0.7,
         "llm_retry_limit": 1,
         "auto_horizontal_for_multi": True,
         "lock_size_to_workflow": True,
@@ -254,6 +286,12 @@ def load_system_config() -> Dict[str, Any]:
         "restrict_roles": True,
         "disabled_celebrities": [],
         "enable_ai_check": False,
+        "cloud": {
+            "enabled": False,
+            "image_backend": "comfy",
+            "delivery": "telegram",
+            "exposure_allowed_modes": ["half_covered"],
+        },
         "default_workflow": "moody",
         "workflows_aliases": {
             "moody": "moody_zib_zit"
@@ -317,6 +355,11 @@ def load_system_config() -> Dict[str, Any]:
             user_config["chat_mode"] = normalize_chat_mode(user_config.get("chat_mode"), "cards")
             for key in DEPRECATED_CONFIG_KEYS:
                 user_config.pop(key, None)
+            try:
+                from card_config import normalize_cloud_config
+                user_config["cloud"] = normalize_cloud_config(user_config.get("cloud"))
+            except Exception:
+                pass
             
             # 展开用户目录路径
             config = user_config.copy()
@@ -430,7 +473,7 @@ def safe_write_config(file_path: Path, content: str, max_backups: int = 9):
                         pass
 
     except Exception:
-        # 最终安全降级：仍尽量原子写
+        # 最终安全降级：仍尽量原子写；全部失败必须向上抛，避免 API 误报成功
         try:
             real_path = file_path.resolve()
             tmp_path = real_path.with_name(real_path.name + f".tmp.{os.getpid()}")
@@ -439,8 +482,10 @@ def safe_write_config(file_path: Path, content: str, max_backups: int = 9):
         except Exception:
             try:
                 file_path.write_text(content, encoding="utf-8")
-            except Exception:
-                pass
+            except Exception as final_exc:
+                raise OSError(
+                    f"safe_write_config failed for {file_path}: {final_exc}"
+                ) from final_exc
 
 def save_system_config(config_data: Dict[str, Any]):
     """保存配置并合并已有字段"""
@@ -470,6 +515,13 @@ def save_system_config(config_data: Dict[str, Any]):
             
     for k, v in config_data.items():
         current_config[k] = v
+
+    if "cloud" in current_config:
+        try:
+            from card_config import normalize_cloud_config
+            current_config["cloud"] = normalize_cloud_config(current_config.get("cloud"))
+        except Exception:
+            pass
 
     for key in DEPRECATED_CONFIG_KEYS:
         current_config.pop(key, None)
@@ -796,9 +848,11 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 from api_cards import router as cards_router
 from api_queue import router as queue_router
 from api_chat import router as chat_router
+from api_system import router as system_router
 app.include_router(cards_router)
 app.include_router(queue_router)
 app.include_router(chat_router)
+app.include_router(system_router)
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 

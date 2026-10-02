@@ -317,9 +317,12 @@
                         <span class="help-text">对话模型与独立调用模型故障时，自动降级到该备用模型重试。</span>
                       </div>
                       <div class="form-row">
-                        <label>单模型重试次数 (llm_retry_limit)</label>
-                        <input type="number" name="llm_retry_limit" min="1" max="5" placeholder="1">
-                        <span class="help-text">每个模型最多尝试几次（含首次，1 = 不重试，上限 5）。仅超时/限流/5xx/空响应等瞬时故障会重试；密钥缺失等确定性错误直接降级到备用模型。</span>
+                        <label>渲染后端</label>
+                        <select name="render_backend" id="settings-render-backend">
+                          <option value="local" selected>本地</option>
+                          <option value="cloud">云端</option>
+                        </select>
+                        <span class="help-text">云端模式下不入本地 Comfy 队列，本地投递（如 Telegram）失效；出图走云端路径。</span>
                       </div>
                     </div>
 

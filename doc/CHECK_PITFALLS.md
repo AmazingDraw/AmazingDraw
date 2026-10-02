@@ -17,7 +17,7 @@
 | **§2-4 无扣假敞开**   | `camisole/tank/sports bra` + nipples，只写`hanging open`/`one shoulder`/`partially visible` | 删奶头细节；或写`topless`/`bare breasts`/`nipples visible`；或`camisole pulled down / aside`/`removed` | 有扣`shirt/blouse`不走本条；无扣衣弱敞开会穿模，不豁免                               |
 | **§11-3 单侧乳头分叉** | 侧面视角，或衣物只露一侧乳房，但仍写复数 `breasts` / `nipples` / `areolae`                 | 改为 `only one breast visible` / `one nipple visible` / `one areola visible`，并写明另一侧被衣物或身体角度遮挡                                     | 卡片渲染会自动单数化；门禁负责拦截绕过修正后的残留复数                              |
 | **阴毛姿势**          | `pubic hair` + 闭腿 (`legs closed`/`knees together`)（**非** half_covered 擦边）           | **normal/lower**：配 `legs spread` / `knees apart` + 锚点 `on mons pubis centered`。<br>**half_covered 例外（§1-4）**：闭腿 + panty-edge/mons peek（`panty edge` / `inner thigh` / `mons pubis`）→ **最多软警告**，勿强制分腿 | 闭腿露毛在露下场景属解剖冲突；半遮裤边偷看合法擦边，不 HARD                         |
-| **§17-13 站姿露下**   | `standing` + 露私处/露逼，但双腿完全并拢未分                                               | 在姿势中显式补充 `thighs parted` / `legs spread slightly` / `knees slightly apart`                                                                 | 站直并腿时解剖上私处自然闭合，硬写露阴会导致毛发撕裂成上下截怪异毛球与夹缝畸变      |
+| **§17-13 站姿露下**   | `standing` + 露私处/露逼，但双腿完全并拢未分                                               | 在姿势中显式补充 `thighs parted` / `legs spread slightly` / `knees slightly apart`                                                                 | 站直并腿时解剖上私处自然闭合，硬写露阴会导致毛发撕裂成上下截怪异毛球与夹缝畸变；**豁免**：低角度仰视/偷拍机位（`from below` / `upward` / `underneath` / `peep` 等）或自然步态（`feet planted` / `stride` / `tiptoes`）已自动放行，无需生硬追加分腿词 |
 | **精液规范**          | 喷射词 (`spraying`/`cumshot`)；附着在嘴/唇/鼻/下巴/睁眼；涂抹感/珠状 beads/从脸顺流到锁骨 | 颜射以`SAFE_CUMS` 为底本可微调：脸+锁骨/上胸同框、半透明软沉积/短贴肤流线（禁死白绳丝）；下巴下颌干净；脸上不跨区到锁骨，锁骨仅到上胸、不上乳房    | 静态附着+局部短流线。绝对拉黑嘴/舌/口内/睁眼；禁止整段自编跨区导流                  |
 | **构图冲突**          | 自拍且双手动 (`both hands`)；背面且露胸露私 (`from behind` + `nipples visible` + `vulva`)；埋脸直视镜头 | 自拍改单手动作；背面改侧身视角或纯背面（删看镜头）；埋脸删直视镜头                                                 | 避免AI生成逻辑冲突（如第三只手、身体180度扭曲或面部穿模）                           |
 | **床姿/镜前**         | 裸写`lying on bed` 或 `standing in front of mirror`                                       | 床姿加方向：`side-lying`/`on back knees bent`；镜前加视角：`from behind`                                                                           | 必须有明确动作方向和机位，避免被拦截                                                |
@@ -29,6 +29,7 @@
 
 * **自拍限制**：不要在 prompt 里用 `camera`（容易被判定为相机非自拍），用 `lens` / `phone` 代替。
 * **床上姿势**：如果在床上躺着，道具不要放在床上（容易被床姿正则误杀），道具位置写到 `nearby shelf` / `table surface`。
+* **状态矛盾族跨段误杀（2026-09 已修）**：同一卡面出现两处 `no panties`、衣物写 `buttoned`、远端又出现 `visible`（如纹身文案 `pores visible through ink`）时，旧版正则会从 `buttoned` 里切出 `but`，把三者跨 300 词串联，误判「未穿内裤却可见内裤」。现已给 `but` 加词边界（`\bbut\b`）并把该族跨段距离统一收窄到 `{0,60}`；真实矛盾（`no panties but panties visible`）仍照旧拦截。
 
 ## 💡 使用原则
 

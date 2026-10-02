@@ -3,7 +3,9 @@
 > **目标**：为全新的 macOS / Windows 机器提供从零搭建、环境依赖、模型下载、软件放置到一键绿线验证的完整指南。
 > **平台兼容**：内核按平台分发：macOS 在本机编译 `.so`，Windows 由 CI 编译 `.pyd`。Windows 用 [Git for Windows](https://git-scm.com/download/win) 提供 bash 层（见 §1.2 / §8）。**Windows 尚未实机测试。**
 >
-> **发行包放哪**：zip 解压到任意固定目录即可（例如 macOS `~/AmazingDraw`，Windows `C:\AmazingDraw`）。解压目录就是运行时（WebUI / CLI / skill），不要拆散、不要放进 ComfyUI，也不要把 `assets.bin` 从 `card_engine_core/native/` 拆走。`install.sh` 会把工作流拷到 `~/ComfyUI/workflows/`、自定义节点拷到 ComfyUI `custom_nodes/`；配置写到 `~/.openclaw/draw-cards/config.json`。
+> **发行包放哪**：zip 解压到任意固定目录即可（例如 macOS `~/AmazingDraw`，Windows `C:\AmazingDraw`）。解压目录就是运行时（WebUI / CLI / skill），不要拆散、不要放进 ComfyUI，也不要把 `assets.bin` 从 `card_engine_core/native/` 拆走。`install.sh` 只会把工作流拷到 `~/ComfyUI/workflows/`；发行包本身从固定解压目录运行。
+>
+> **配置权威路径**：本地 skill 与发行包都使用各自目录内的 `scripts/config.json`；发行包运行时直接读取包内该文件。
 
 ---
 

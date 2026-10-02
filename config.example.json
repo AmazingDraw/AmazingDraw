@@ -136,7 +136,14 @@
       "height": 464
     }
   },
-  "llm_temperature": 0.7,
   "llm_retry_limit": 3,
+  "cloud": {
+    "enabled": false,
+    "image_backend": "comfy",
+    "delivery": "telegram",
+    "exposure_allowed_modes": [
+      "half_covered"
+    ]
+  },
   "auto_horizontal_for_multi": true
 }

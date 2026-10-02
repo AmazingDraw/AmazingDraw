@@ -49,12 +49,43 @@ DEFAULT_WF_JSON = "Moody_ZIB_ZIT_20步_CFG3_512x768.json"
 DEFAULT_WF_ID = "moody_zib_zit"
 
 
+def _configure_stdio() -> None:
+    """Avoid UnicodeEncodeError on Windows consoles still on GBK/cp936."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if callable(reconf):
+            try:
+                reconf(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+def _safe_print(msg: str, *, stream) -> None:
+    try:
+        print(msg, file=stream, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(stream, "encoding", None) or "utf-8"
+        raw = (str(msg) + chr(10)).encode(enc, errors="replace")
+        buf = getattr(stream, "buffer", None)
+        if buf is not None:
+            buf.write(raw)
+            buf.flush()
+        else:
+            stream.write(raw.decode(enc, errors="replace"))
+            stream.flush()
+
+
 def _eprint(msg: str) -> None:
-    print(msg, file=sys.stderr, flush=True)
+    _safe_print(msg, stream=sys.stderr)
 
 
 def _out(msg: str) -> None:
-    print(msg, flush=True)
+    _safe_print(msg, stream=sys.stdout)
+
+
+_configure_stdio()
 
 
 def is_interactive(flag_non_interactive: bool = False) -> bool:
@@ -1407,8 +1438,7 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
     _eprint("下一步：")
     if comfy is None:
         _eprint("  · 无 ComfyUI CLI：请安装含 main.py 的 CLI（仅 Desktop App 不够），")
-        _eprint("    在 WebUI「配置」填写 comfyui_dir，或设 COMFYUI_DIR 再跑 ./install.sh；")
-        _eprint("    并把发行版 ComfyUI-Card-Engine 拷到 ComfyUI/custom_nodes/。")
+        _eprint("    在 WebUI「配置」填写 comfyui_dir，或设 COMFYUI_DIR 再跑 ./install.sh。")
         _eprint("  · 若 Comfy 不在默认端口，请设置 comfyui_host（完整 URL，如 http://127.0.0.1:8190）。")
         _eprint("  · 启动示例：bash '%s/scripts/gpu-pipeline/comfyui-start.sh' start" % root)
     if comfy is not None and not models_ok:

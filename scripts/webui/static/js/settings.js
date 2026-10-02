@@ -42,6 +42,37 @@ function findMatchingModel(currentModel, availableModels, fallbackToFirst = true
   return fallbackToFirst ? (availableModels[0] || "") : "";
 }
 
+function settingsRenderBackendValue(settings) {
+  const cloud = (settings && settings.cloud) || {};
+  if (cloud.enabled === true || cloud.enabled === "true" || cloud.enabled === 1) {
+    return "cloud";
+  }
+  if (String(cloud.image_backend || "").trim().toLowerCase() === "cloud") {
+    return "cloud";
+  }
+  return "local";
+}
+
+function cloudBlockFromRenderBackend(value, previous) {
+  const prev = (previous && typeof previous === "object") ? { ...previous } : {};
+  const enabled = String(value || "").trim().toLowerCase() === "cloud";
+  prev.enabled = enabled;
+  prev.image_backend = enabled ? "cloud" : "comfy";
+  prev.delivery = enabled ? "none" : (prev.delivery === "none" ? "telegram" : (prev.delivery || "telegram"));
+  if (enabled) {
+    prev.exposure_allowed_modes = ["half_covered"];
+  }
+  return prev;
+}
+
+function preserveLlmRetryLimit(settings) {
+  const n = parseInt(settings && settings.llm_retry_limit, 10);
+  if (Number.isFinite(n) && n >= 1) {
+    return Math.min(5, n);
+  }
+  return 1;
+}
+
 function updateModelDropdown() {
   const modelSelect = document.getElementById("settings-llm-model");
   const independentModelSelect = document.getElementById("settings-independent-llm-model");
@@ -272,9 +303,10 @@ async function loadSettings() {
       if (form.elements["telegram_bot_token"]) {
         form.elements["telegram_bot_token"].value = state.settings.telegram_bot_token || "";
       }
-      if (form.elements["llm_retry_limit"]) {
-        form.elements["llm_retry_limit"].value = state.settings.llm_retry_limit || 1;
+      if (form.elements["render_backend"]) {
+        form.elements["render_backend"].value = settingsRenderBackendValue(state.settings);
       }
+      // llm_retry_limit 仅保留在 config；不再从设置表单读写
       // llm_fallback_models 为下拉单选，选中值由 updateModelDropdown() 统一设置
       if (form.elements["webui_host"]) {
         form.elements["webui_host"].value = state.settings.webui_host || "0.0.0.0";
@@ -515,9 +547,11 @@ async function autoSaveSettings() {
     independent_llm_model: form.elements["independent_llm_model"] ? form.elements["independent_llm_model"].value : (state.settings.independent_llm_model || ""),
     telegram_chat_id: form.elements["telegram_chat_id"] ? form.elements["telegram_chat_id"].value.trim() : (state.settings.telegram_chat_id || ""),
     telegram_bot_token: form.elements["telegram_bot_token"] ? form.elements["telegram_bot_token"].value.trim() : (state.settings.telegram_bot_token || ""),
-    llm_retry_limit: form.elements["llm_retry_limit"]
-      ? Math.min(5, Math.max(1, parseInt(form.elements["llm_retry_limit"].value, 10) || 1))
-      : (state.settings.llm_retry_limit || 1),
+    llm_retry_limit: preserveLlmRetryLimit(state.settings),
+    cloud: cloudBlockFromRenderBackend(
+      form.elements["render_backend"] ? form.elements["render_backend"].value : "local",
+      state.settings && state.settings.cloud
+    ),
     llm_fallback_models: form.elements["llm_fallback_models"] ? form.elements["llm_fallback_models"].value.split(",").map(s => s.trim()).filter(Boolean) : (state.settings.llm_fallback_models || []),
     webui_host: form.elements["webui_host"] ? form.elements["webui_host"].value.trim() : (state.settings.webui_host || "0.0.0.0"),
     webui_port: form.elements["webui_port"] ? parseInt(form.elements["webui_port"].value, 10) || 8318 : 8318,
@@ -541,7 +575,6 @@ async function autoSaveSettings() {
       : false,
     auto_horizontal_for_multi: form.elements["auto_horizontal_for_multi"] ? form.elements["auto_horizontal_for_multi"].checked : true,
     lock_size_to_workflow: form.elements["lock_size_to_workflow"] ? form.elements["lock_size_to_workflow"].checked : true,
-    llm_temperature: form.elements["llm_temperature"] ? parseFloat(form.elements["llm_temperature"].value) : (state.settings.llm_temperature !== undefined ? state.settings.llm_temperature : 0.7),
     exposure_allowed_modes: (() => {
       const box = document.getElementById("settings-exposure-chips");
       if (!box) return (state.settings.exposure_allowed_modes || []);

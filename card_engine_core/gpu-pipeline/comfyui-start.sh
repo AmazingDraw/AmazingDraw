@@ -73,7 +73,7 @@ stop_all() {
     return 0
   fi
 
-  echo "🛑 停止 ComfyUI: $COMFY_PIDS"
+  echo "✋ 停止 ComfyUI: $COMFY_PIDS"
   # shellcheck disable=SC2086
   kill $COMFY_PIDS 2>/dev/null || true
 

@@ -34,7 +34,7 @@ bash scripts/gpu-pipeline/comfyui-start.sh start|stop|status
 * `output_dir` — Comfy 本地实时落盘（例：macOS `~/ComfyUI/output` · Windows `C:\ComfyUI\output`）
 * `output_dir_archive` — 外置归档（例：macOS `~/Downloads/card-engine-out` · Windows `D:\amazing_draw`）；交付优先拷贝
 
-日志：macOS / Linux / Git Bash：`/tmp/comfyui-headless.log` · Windows cmd/PowerShell：`%TEMP%\comfyui-headless.log`
+日志：macOS / Linux / Git Bash：`/tmp/comfyui-headless.log` · Windows cmd：`%TEMP%\comfyui-headless.log`
 
 ## ⚡️ WebUI (8318)
 
@@ -42,7 +42,7 @@ bash scripts/gpu-pipeline/comfyui-start.sh start|stop|status
 bash scripts/webui/webui-start.sh start|stop|status|restart
 ```
 
-日志：macOS / Linux / Git Bash：`/tmp/amazing-draw-webui.log` · Windows cmd/PowerShell：`%TEMP%\amazing-draw-webui.log` · 浏览器：`http://127.0.0.1:8318`
+日志：macOS / Linux / Git Bash：`/tmp/amazing-draw-webui.log` · Windows cmd：`%TEMP%\amazing-draw-webui.log` · 浏览器：`http://127.0.0.1:8318`
 
 ---
 
@@ -67,6 +67,10 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 | 🚀 直投模式 | `direct --prompt` | 英文 prompt 经 raw 直投 GPU，**零干预**（不经场景库 / 灵感原点）                                    | 已有完整英文 prompt，要求零修改 |
 | 🎲 精选模式 | `featured`        | 随机抽 Obsidian 灵感库词条；灵感原点**代码 meta** 原样旁路，无需输入                                | 随机灵感探索、经典重温          |
 
+### 出图策略
+
+本地默认 Comfy 入队 + Telegram 投递。**云端出图**是叠加策略（不是第五模式）：开启 `cloud.enabled`（或 WebUI「渲染后端=云端」）后只允许擦边档、禁止 submit 入 Comfy；AI 操作步骤与取 prompt 路径以 [CLOUD_DRAW.md](doc/CLOUD_DRAW.md) 为准（`doc cloud`），CLI help 不展开。
+
 ### Agent 铁律（help 不替代）
 
 * **通用**：优先级 `用户指定 > 库内命中 > 随机补全`；禁止通用词「素人」作 `--person`。库外 `--person`（amateur）自由发明；库外 `--scene`（非纯主题分类词）→ `manual-custom`，fill 必写英文 `scene.keywords`。纯主题词（如「校园」「办公室」）仍进主题池。`restrict_roles` 打开时，限制角色不进入角色库；关掉则恢复。
@@ -89,6 +93,7 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 | [PROMPT_TEMPLATE.md](doc/PROMPT_TEMPLATE.md)           | 导演决策链 / 提示词装配 |
 | [CHECK_PITFALLS.md](doc/CHECK_PITFALLS.md)             | 高频避坑                |
 | [CONFIG_GUIDE.md](doc/CONFIG_GUIDE.md)                 | config.json             |
+| [CLOUD_DRAW.md](doc/CLOUD_DRAW.md)                     | AI 云端出图指南（非第五模式） |
 
 ---
 
@@ -121,7 +126,15 @@ rm -f /tmp/cu-card/cu-gpu.lock            # Windows：%TEMP%\cu-card\cu-gpu.lock
 ```bash
 # 日常启停（skill 根目录）
 bash scripts/webui/webui-start.sh start|stop|status|restart
+```
 
+> ⚠️ **重启请用 login shell**，否则会丢 `CLIPROXY_API_KEY` 等环境变量，灯 1 假红（`test-llm` 报 api key not found）。
+>
+> ```bash
+> bash -lc 'cd <skill 根> && bash scripts/webui/webui-start.sh restart'
+> ```
+
+```bash
 # 开发自检（在 zip/仓库根目录执行后 cd；macOS / Linux：python3；Windows：python）
 cd scripts/webui
 python3 -m py_compile web_server.py api_cards.py api_queue.py api_chat.py

@@ -98,9 +98,10 @@ def main():
     for key in ["person", "scene", "theme", "narrative", "lighting", "style"]:
         final[key] = provided[key] if provided[key] else inferred.get(key, "").strip()
 
-    # Enforce CJK fallbacks to guarantee 100% Chinese caption and meta
+    # person: 非空即保留（含 OL 等拉丁缩写）；空才兜底。
+    # scene/theme/narrative 仍要求 CJK，避免英文脏缓存进中文 caption。
     final["person"] = final["person"].strip()
-    if not has_cjk(final["person"]):
+    if not final["person"]:
         final["person"] = "神秘女孩"
 
     final["scene"] = final["scene"].strip()

@@ -2,12 +2,12 @@
 
 `config.json` 不能写 `//` 注释。WebUI 保存设置会整文件重写，手动加的未知字段也会被擦掉。
 
-| 环境 | 实际读取 |
+| 环境 | 权威配置 |
 | :--- | :--- |
 | 本地 skill | `scripts/config.json`（本机文件，不进 git） |
-| 发行包 | 安装后 `~/.openclaw/draw-cards/config.json`（对照 `config.example.json` 生成；已有则不覆盖） |
+| 发行包 | 包内 `scripts/config.json`（发行包运行时直接读取） |
 
-引擎始终读 `scripts/config.json`。发行包安装时会把它和 `~/.openclaw/draw-cards/config.json` 同步。
+无论本地 skill 还是发行包，运行时权威配置均为对应目录内的 `scripts/config.json`。
 
 ---
 
@@ -50,7 +50,6 @@
 | `llm_model` | 主模型（导演填槽 / prompt） |
 | `independent_llm_model` | 独立会话 / 预检；不可用时走 fallback |
 | `llm_fallback_models` | 备用模型列表 |
-| `llm_temperature` | 默认 `0.7` |
 | `llm_retry_limit` | 失败重试。代码默认 `1` |
 | `agent_backend` | 默认 `openclaw`。对话后端统一为 `openclaw`（历史旧值如 `custom` / `claudecode` / `hermes` 均自动归一） |
 | `openclaw_ws_timeout_seconds` | OpenClaw 等待秒数，默认 `600` |
@@ -97,6 +96,25 @@
 | :--- | :--- |
 | `delivery_telegram` / `delivery_webui` | 是否推 Telegram / 控制台预览 |
 | `telegram_chat_id` / `telegram_bot_token` | 推送目标。Token 可空。真实 ID/Token 不要提交 git |
+
+---
+
+## 云端出图（可选，默认关）
+
+叠加在建卡流程上的**出图策略**，不是第五 CLI 模式。缺省 `enabled: false`，现网 Comfy + Telegram 不变。
+
+```json
+"cloud": {
+  "enabled": false,
+  "image_backend": "comfy",
+  "delivery": "telegram",
+  "exposure_allowed_modes": ["half_covered"]
+}
+```
+
+`enabled: true` 时强制 `image_backend=cloud`、`delivery=none`、裸露仅 `half_covered`（视角绑定不得绕过），且 `submit` / `chain --resume` / `direct` **拒绝**入 Comfy 队列。WebUI 设置「渲染后端」写入该开关（本地 / 云端）。`llm_retry_limit` 仍可写在 config.json，设置页不再展示。
+
+AI / bot：**不要**只靠 CLI help；开云端后的步骤、停在 check 后的 `reason=cloud_draw`、以及 `_render_output.prompt` 路径，一律以 [CLOUD_DRAW.md](./CLOUD_DRAW.md)（`doc cloud`）为准。
 
 ---
 

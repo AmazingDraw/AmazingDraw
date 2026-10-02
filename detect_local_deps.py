@@ -11,9 +11,35 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-def _eprint(msg: str) -> None:
-    print(msg, flush=True)
+def _configure_stdio() -> None:
+    """Avoid UnicodeEncodeError on Windows consoles still on GBK/cp936."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if callable(reconf):
+            try:
+                reconf(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
 
+
+def _eprint(msg: str) -> None:
+    try:
+        print(msg, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        raw = (str(msg) + chr(10)).encode(enc, errors="replace")
+        buf = getattr(sys.stdout, "buffer", None)
+        if buf is not None:
+            buf.write(raw)
+            buf.flush()
+        else:
+            sys.stdout.write(raw.decode(enc, errors="replace"))
+            sys.stdout.flush()
+
+
+_configure_stdio()
 
 def _load_cfg(path: Path) -> Dict[str, Any]:
     if not path.is_file():
@@ -421,7 +447,7 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
     else:
         result["comfyui_candidates"] = []
         tip = (
-            "ℹ 未侦测到 AmazingDraw 所需的 ComfyUI CLI（含 main.py 的 git/源码根目录）。"
+            "[i] 未侦测到 AmazingDraw 所需的 ComfyUI CLI（含 main.py 的 git/源码根目录）。"
             "仅安装 Comfy Desktop App 不够：请打开 Application Support/ComfyUI/config.json "
             "查看 basePath，或把 CLI 路径贴进安装向导 / WebUI「配置」，"
             "或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
@@ -467,7 +493,7 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
 
     if not found_any_oc:
         _eprint(
-            "ℹ 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。"
+            "[i] 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。"
             "需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
         )
 

@@ -45,7 +45,7 @@ from card_io import (
 from card_scene_router import (
     scene_requests_sm_theme, scene_requests_workplace_theme,
     scene_requests_school_theme, scene_requests_medical_theme, scene_requests_general_theme,
-    scene_requests_contrast_theme, scene_requests_special_theme, scene_requests_perspective_theme,
+    scene_requests_special_theme, scene_requests_perspective_theme,
     infer_semantic_route_flags,
     resolve_scene_by_label_from_libraries, resolve_library_fields, pick_scene_for_create,
     infer_multi_subject_layout,
@@ -554,10 +554,24 @@ def cmd_fill(args):
             status_lines = [
                 f"✅ slots 阶段完成 (12 槽位全部选填 · 已填 {filled}/{len(SLOT_RENDER_ORDER)} · 可选 {optional_filled}/{len(optional_slots)})",
             ]
-            # ── 统一取 render 同源裸露上下文（exposure_mode + context_text）──
-            from card_exposure import get_exposure_context
+            # ── 统一取 render 同源裸露上下文（exposure_mode + context_text + region）──
+            from card_exposure import get_exposure_context, resolve_half_nude_region_for_card
+            from perspective_runtime import resolve_perspective_key
             _ctx_exposure, _ctx_mode, _ctx_text = get_exposure_context(card, card["director"])
             ef_val = _ctx_mode or str(card["director"].get("exposure_mode", "auto")).strip().lower()
+            _half_nude_reg = resolve_half_nude_region_for_card(card, ef_val)
+            _perspective_key = resolve_perspective_key(
+                card,
+                scene=card.get("scene") or {},
+            )
+            def _preview_filter_tip(mode, region):
+                # 半裸带子约束时，删词往往来自 region，不是「改成 half_nude」能救回
+                if str(mode or "").strip().lower() == "half_nude" and region in ("upper", "lower"):
+                    return (
+                        f"   💡 当前半裸子约束 region={region}："
+                        "被移除的词与禁止区域冲突；改 mode 也救不回，除非换视角/去掉 region"
+                    )
+                return "   💡 如需保留被移除的词，请将 exposure_mode 改为 both（或确认未受半裸 region 子约束）"
             # ── clothing 预过滤：让 AI 当场看到哪些词会被删/加 ──
             exposure_raw = card["slots"].get("clothing", "").strip()
             if exposure_raw and ef_val != "auto":
@@ -570,12 +584,14 @@ def cmd_fill(args):
                     exposure_mode=ef_val,
                     context_text=_ctx_text,
                     lower_policy=lower_clothing_policy_for_card(card),
+                    perspective_key=_perspective_key,
+                    half_nude_region=_half_nude_reg,
                 )
                 if exposure_filtered != exposure_raw:
                     status_lines.append(f"📋 clothing 预过滤({ef_val}):")
                     status_lines.append(f"   原始: {exposure_raw}")
                     status_lines.append(f"   过滤: {exposure_filtered}")
-                    status_lines.append(f"   💡 如需保留被移除的词，请将 exposure_mode 改为 both 或 half_nude")
+                    status_lines.append(_preview_filter_tip(ef_val, _half_nude_reg))
                 else:
                     status_lines.append(f"📋 clothing 预过滤({ef_val}): 无变动")
             # ── body_shape 预过滤：clothing 已填后展示真实过滤结果（与 render 一致）──
@@ -585,20 +601,20 @@ def cmd_fill(args):
                     filter_body_shape_by_exposure,
                     split_prompt_items,
                 )
-                # 复用上方统一解析的 _ctx_exposure/_ctx_mode/_ctx_text，再补 pose_text，
-                # 确保展示与 render 过滤结果一致（auto 解析/后入视角均对齐）。
+                # 复用上方统一解析的 _ctx_* + half_nude_region + pose_text，与 render 同源。
                 filtered_bs = filter_body_shape_by_exposure(
                     body_shape_raw,
                     _ctx_exposure or exposure_raw,
                     exposure_mode=_ctx_mode,
                     context_text=_ctx_text,
                     pose_text=card["slots"].get("pose", "") or "",
+                    half_nude_region=_half_nude_reg,
                 )
                 removed = set(split_prompt_items(body_shape_raw)) - set(split_prompt_items(filtered_bs))
                 if removed:
                     status_lines.append(f"📋 body_shape 预过滤({ef_val}): 移除 [{', '.join(sorted(removed))}]")
                     status_lines.append(f"   保留: {filtered_bs}")
-                    status_lines.append(f"   💡 如需保留被移除的词，请将 exposure_mode 改为 both 或 half_nude")
+                    status_lines.append(_preview_filter_tip(ef_val, _half_nude_reg))
                 else:
                     status_lines.append(f"📋 body_shape 预过滤({ef_val}): 无变动")
             status_lines.extend([_progress_line(), _next_step_line()])
@@ -1463,6 +1479,15 @@ def cmd_render_silent(card):
 def _submit_card_unlocked(args):
     """提交核心逻辑；调用方自行决定是否已持有卡锁。"""
     card = load_card(args.card)
+    from card_config import (
+        abort_comfy_enqueue_if_cloud_draw,
+        cloud_draw_blocks_comfy_enqueue,
+        persist_cloud_draw_meta,
+    )
+    if cloud_draw_blocks_comfy_enqueue(card=card):
+        persist_cloud_draw_meta(card)
+        save_card(card)
+        abort_comfy_enqueue_if_cloud_draw(card=card)
     remember_user_input(card, getattr(args, 'user_input', None))
 
     prev_status = card.get('status')
@@ -1866,6 +1891,8 @@ def cmd_progress(args):
 
 def cmd_direct(args):
     """直投模式：绕过卡片引擎，直接投递 prompt 至 GPU 队列"""
+    from card_config import abort_comfy_enqueue_if_cloud_draw
+    abort_comfy_enqueue_if_cloud_draw()
     # 构造 submit_args，直投模式必须带 --raw
     submit_args = [
         str(SCRIPT_DIR.parent / "gpu-pipeline" / "cu-submit.sh"),
@@ -2010,10 +2037,9 @@ def cmd_search(args):
                                     tags = item.get("tags", [])
                                     moods = item.get("moods", [])
                                     notes = item.get("notes") or ""
-                                    contrast = item.get("contrast_anchor") or ""
                         
-                                    # Match label, theme, tags, moods, notes, contrast_anchor
-                                    match_text = " ".join([label, theme, notes, contrast] + tags + moods).lower()
+                                    # Match label, theme, tags, moods, notes
+                                    match_text = " ".join([label, theme, notes] + tags + moods).lower()
                                     tag_match = extra_tags and any(t in tags or t in moods for t in extra_tags)
                                     if q in match_text or tag_match:
                                         matches.append({

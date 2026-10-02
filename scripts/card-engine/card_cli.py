@@ -169,10 +169,26 @@ def add_shared_parsers(sub):
     c_mend.add_argument("--dry-run", action="store_true", help="预览 diff，不写入")
 
 
-PRIORITY_RULE_TEXT = """🎯 优先级规则：用户指定 > 库内命中 > 随机补全
+
+def _configure_stdio() -> None:
+    """Windows consoles often stay on GBK; help text may contain emoji."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconf = getattr(stream, "reconfigure", None)
+        if callable(reconf):
+            try:
+                reconf(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
+_configure_stdio()
+
+PRIORITY_RULE_TEXT = """[!] 优先级规则：用户指定 > 库内命中 > 随机补全
 * 基础属性（身份 / 体型 / 明星 / 场景 / 主题 / 视角 / 比例等）：用户指定则锁定（优先使用库项），未指定才随机。"""
 
-PERSPECTIVE_TIPS_TEXT = """💡 技巧：自带视角特定场景精准命中
+PERSPECTIVE_TIPS_TEXT = """[tip] 技巧：自带视角特定场景精准命中
 在 --scene 中包含以下关键词，可直接抽中全库原生视角特定机位：
   --scene "颜射视角"  -> 命中：诊室医生椅旁(颜射视角)、教室课桌旁(颜射视角)等
   --scene "后入视角"  -> 命中：器材室软垫(后入视角)、更衣室长凳旁(后入视角)等
@@ -181,7 +197,7 @@ PERSPECTIVE_TIPS_TEXT = """💡 技巧：自带视角特定场景精准命中
 CREATE_EPILOG = f"""
 {DOC_WARNING_TEXT}
 
-🏃 常规单卡交互流 (Normal Mode Workflow):
+常规单卡交互流 (Normal Mode Workflow):
   R0. [可选检索] search   -> 模糊搜索场景库/角色库 (如 python3 card_cli.py search --scene 走廊)
   R1. create --user-input "用户原始要求"  -> 创建卡面骨架（--user-input 必传，落卡供约束解析）
   R2. 导演决策            -> AI 先深读骨架信息，再进行 8 维创意决策
@@ -203,7 +219,7 @@ CREATE_EPILOG = f"""
 CHAIN_EPILOG = f"""
 {CHAIN_DOC_WARNING_TEXT}
 
-🏃 批量连抽导演流 (Chain Mode Workflow):
+批量连抽导演流 (Chain Mode Workflow):
   C0. [可选检索] search   -> 模糊搜索场景库/角色库 (如 python3 card_cli.py search --person jk)
   C1. chain --count N --person 神秘少女 --profile jc-shy --user-input "用户原始要求"  -> 创建 N 张卡骨架并返回 card_id（--person 锁身份，--profile 锁体型；--user-input 必传，落卡供约束解析）
   C2. 逐张决策             -> AI 先深读骨架信息，再逐张进行 8 维创意决策
@@ -327,7 +343,12 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
     c_check = sub.add_parser("check", help="双重校验卡面")
     c_check.add_argument("--card", required=True)
 
-    c_submit = sub.add_parser("submit", help="提交到 GPU 队列")
+    c_submit = sub.add_parser(
+        "submit",
+        help="提交到 GPU 队列",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="云端出图开启时禁止入 Comfy 队列（不是 --dry-run）；见 doc/CLOUD_DRAW.md。",
+    )
     c_submit.add_argument("--card", required=True)
     c_submit.add_argument("--user-input", help="用户原始输入 / 组合指令")
     c_submit.add_argument("--confirm", action="store_true", help="确认提交（必须传）")

@@ -85,7 +85,7 @@ stop_webui() {
     return 0
   fi
 
-  echo "🛑 停止 WebUI: $WEBUI_PIDS"
+  echo "✋ 停止 WebUI: $WEBUI_PIDS"
   # shellcheck disable=SC2086
   kill $WEBUI_PIDS 2>/dev/null || true
 

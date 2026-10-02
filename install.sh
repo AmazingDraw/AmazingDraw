@@ -7,7 +7,8 @@
 # Apple 自带 /usr/bin/python3 是 3.9，请下 cp39；本机 3.12 请下 cp312。
 # ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
 # 不要把 .so 和 .pyd 混放，也不要混 3.9/3.12 native。
-# Windows：用 Git Bash。PowerShell 直接跑本脚本不行。
+# Windows：可双击 install.bat 补齐 Git Bash / 匹配 Python 后再跑本脚本。
+# 仅 Git Bash 能直接执行本文件；PowerShell 不能直接跑。
 # ============================================================
 set -euo pipefail
 
@@ -26,7 +27,7 @@ for _a in "$@"; do
       echo ""
       echo "环境变量:"
       echo "  AMAZINGDRAW_INSTALL_NONINTERACTIVE=1   等同于 --non-interactive"
-      echo "  OPENCLAW_DIR=...                       指定 OpenClaw 数据目录（默认 ~/.openclaw/draw-cards）"
+      echo "  OPENCLAW_DIR=...                       指定 cards/自定义预设等数据目录（默认 ~/.openclaw/draw-cards；配置权威在包内 scripts/config.json）"
       echo "  COMFYUI_DIR=...                        指定 ComfyUI 本地根目录"
       exit 0
       ;;
@@ -86,6 +87,9 @@ fail_if_fatal() {
     done
     echo ""
     echo "  请按上面条目修好后重跑：bash install.sh"
+    if [ "$IS_WIN" = 1 ] && [ -f "$ROOT/install.bat" ]; then
+      echo "  Windows 也可双击 install.bat（缺 Git Bash 或匹配 Python 时会尝试命令行安装）"
+    fi
     echo "  Releases：https://github.com/AmazingDraw/AmazingDraw/releases"
     exit 1
   fi
@@ -380,9 +384,21 @@ fi
 
 OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw/draw-cards}"
 WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-$HOME/.openclaw/workspace}"
-CONFIG_SRC="$ROOT/scripts/config.json"
-CONFIG_DST="$OPENCLAW_DIR/config.json"
+# 权威配置：发行包内 scripts/config.json（引擎 / WebUI 亦读此路径）
+CONFIG_DST="$ROOT/scripts/config.json"
+CONFIG_EXAMPLE="$ROOT/config.example.json"
+LEGACY_CONFIG="$OPENCLAW_DIR/config.json"
+CORE_CONFIG="$ROOT/card_engine_core/config.json"
 NATIVE_DIR="$ROOT/card_engine_core/native"
+
+# 权威配置变更后，同步到闭源 native 旁路副本（card_engine_core/config.json）
+_sync_core_config() {
+  if [ -f "$CONFIG_DST" ] && [ -d "$(dirname "$CORE_CONFIG")" ]; then
+    if [ "$CONFIG_DST" != "$CORE_CONFIG" ]; then
+      cp "$CONFIG_DST" "$CORE_CONFIG" 2>/dev/null || true
+    fi
+  fi
+}
 
 echo "== AmazingDraw 安装引导 =="
 echo "  发行版: $ROOT"
@@ -390,6 +406,7 @@ echo "  平台: $UNAME_S  IS_WIN=$IS_WIN  python=${PY:-（未选定）}"
 echo "  HOME: $HOME"
 echo "  OpenClaw 数据目录: $OPENCLAW_DIR"
 echo "  OpenClaw 工作区:   $WORKSPACE_DIR"
+echo "  权威配置:          $CONFIG_DST"
 if [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixed" ]; then
   echo "  本包内核 Python: $WANT_PY"
 fi
@@ -409,16 +426,25 @@ mkdir -p "$OPENCLAW_DIR/custom_presets/roles"
 mkdir -p "$OPENCLAW_DIR/custom_presets/scenes"
 echo "✓ 目录就绪: $OPENCLAW_DIR/{cards,custom_presets/...}"
 
-# ── 2. 生成权威配置（仅当目标不存在；保留用户已有配置）──
-if [ ! -f "$CONFIG_DST" ]; then
-  if [ -f "$CONFIG_SRC" ]; then
-    cp "$CONFIG_SRC" "$CONFIG_DST"
-    echo "✓ 已从发行版默认配置生成 $CONFIG_DST"
-  else
-    echo "⚠ 未找到默认配置 ${CONFIG_SRC}，请手动创建 $CONFIG_DST"
+# ── 2. 权威配置 = 包内 scripts/config.json（保留已有；缺则种子/旧路径迁入）──
+# 数据目录仍用 OPENCLAW_DIR（cards / custom_presets）；配置权威不再落 ~/.openclaw/.../config.json
+CONFIG_MIGRATED_FROM_LEGACY=0
+if [ -f "$CONFIG_DST" ]; then
+  echo "✓ 保留已有权威配置 $CONFIG_DST"
+  if [ -f "$LEGACY_CONFIG" ]; then
+    echo "  [i] 检测到旧路径配置 ${LEGACY_CONFIG}（已不再是权威落点；如需沿用请手动合并到 ${CONFIG_DST}）"
   fi
+elif [ -f "$LEGACY_CONFIG" ]; then
+  mkdir -p "$(dirname "$CONFIG_DST")"
+  cp "$LEGACY_CONFIG" "$CONFIG_DST"
+  CONFIG_MIGRATED_FROM_LEGACY=1
+  echo "✓ 已从旧路径一次性迁入权威配置: $LEGACY_CONFIG → $CONFIG_DST"
+elif [ -f "$CONFIG_EXAMPLE" ]; then
+  mkdir -p "$(dirname "$CONFIG_DST")"
+  cp "$CONFIG_EXAMPLE" "$CONFIG_DST"
+  echo "✓ 已从 config.example.json 生成权威配置 $CONFIG_DST"
 else
-  echo "✓ 保留已有配置 $CONFIG_DST"
+  echo "⚠ 未找到 ${CONFIG_DST} / ${LEGACY_CONFIG} / ${CONFIG_EXAMPLE}，请手动创建包内 scripts/config.json"
 fi
 
 # ── 2.5 Windows：Unix 专属 /tmp 换成系统临时目录 ──
@@ -449,13 +475,10 @@ PY
   echo "✓ Windows tmp_dir: $WIN_TMP"
 fi
 
-# ── 3. 让发行版 config.json 指向权威配置（复制同步，避免 Windows 软链）──
-if [ -f "$CONFIG_DST" ]; then
-  SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
-  if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
-    cp "$CONFIG_DST" "$CONFIG_SRC"
-    echo "✓ $CONFIG_SRC 已同步为权威配置"
-  fi
+# ── 3. 同步权威配置 → card_engine_core/config.json（native .so 旁路读取）──
+_sync_core_config
+if [ -f "$CONFIG_DST" ] && [ -f "$CORE_CONFIG" ]; then
+  echo "✓ $CORE_CONFIG 已与权威配置对齐"
 fi
 
 # ── 3.6 默认工作流复制：推迟到侦测/向导之后（需有效 comfyui_dir）──
@@ -534,7 +557,7 @@ if [ -n "$PY" ]; then
     HAVE_WEBUI_DEPS=1
     echo "  ✓ WebUI 依赖: fastapi, uvicorn 已就绪"
   else
-    echo "  ℹ WebUI 依赖未就绪（若需运行 WebUI，请安装：${PY} -m pip install fastapi uvicorn）"
+    echo "  [i] WebUI 依赖未就绪（若需运行 WebUI，请安装：${PY} -m pip install fastapi uvicorn）"
   fi
 fi
 
@@ -566,12 +589,7 @@ PY
       AGENT_BACKEND_BEFORE="${AGENT_BACKEND_BEFORE%%:*}"
       AGENT_BACKEND_AFTER="openclaw"
       echo "✓ 已迁移 agent_backend: ${AGENT_BACKEND_BEFORE} → openclaw（旧 custom / claudecode / hermes 已废弃）"
-      if [ -f "$CONFIG_DST" ]; then
-        SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
-        if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
-          cp "$CONFIG_DST" "$CONFIG_SRC"
-        fi
-      fi
+      _sync_core_config
       ;;
     keep:*)
       AGENT_BACKEND_AFTER="${_mig_out#keep:}"
@@ -609,14 +627,9 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$DETECT_HELPER" ]; then
   if [ "$_detect_rc" -ne 0 ]; then
     echo "  ⚠ 本机依赖侦测脚本异常（已忽略，安装继续）"
   fi
-  # 侦测后同步权威配置 → 发行版 scripts/config.json（既有行为）
-  if [ -f "$CONFIG_DST" ]; then
-    SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
-    if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
-      cp "$CONFIG_DST" "$CONFIG_SRC"
-    fi
-  fi
-  # 读回 comfyui_dir 供插件拷贝
+  # 侦测写入权威配置后，同步 native 旁路副本
+  _sync_core_config
+  # 读回 comfyui_dir 供工作流复制与安装报告
   COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; v=json.load(open(p,encoding='utf-8')).get('comfyui_dir') or ''; print(os.path.expanduser(v) if v else '')" "$CFG_PY" 2>/dev/null || true)
   [ -n "$COMFYUI_DIR" ] && COMFYUI_DIR="$(bash_path "$COMFYUI_DIR")"
 elif [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
@@ -633,12 +646,12 @@ elif [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
   if [ -n "$COMFYUI_DIR" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
     echo "✓ 已找到本机 ComfyUI：$COMFYUI_DIR"
   else
-    echo "ℹ 本机还没侦测到 ComfyUI（可选）。装好后可在 WebUI「配置」里填写 ComfyUI 本地根目录；或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
+    echo "[i] 本机还没侦测到 ComfyUI（可选）。装好后可在 WebUI「配置」里填写 ComfyUI 本地根目录；或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
   fi
   if [ -d "$WORKSPACE_DIR" ]; then
     echo "✓ OpenClaw 工作区：$WORKSPACE_DIR"
   else
-    echo "ℹ 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
+    echo "[i] 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
   fi
 fi
 
@@ -679,7 +692,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
 
   # B. ComfyUI 缺失则粘贴
   set +e
-  "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-comfyui --config "$CFG_PY"
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-comfyui --config "$CFG_PY"
   _wiz_rc=$?
   set -e
   case "$_wiz_rc" in
@@ -690,7 +703,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
 
   # C. OpenClaw 缺失则粘贴
   set +e
-  "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-openclaw --config "$CFG_PY"
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-openclaw --config "$CFG_PY"
   _wiz_rc=$?
   set -e
   case "$_wiz_rc" in
@@ -699,13 +712,13 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
     *) echo "  ⚠ OpenClaw 向导步骤异常（已忽略）" ;;
   esac
 
-  # 向导可能刚写入路径：读回 COMFYUI_DIR 供插件拷贝
+  # 向导可能刚写入路径：读回 COMFYUI_DIR 供工作流复制与安装报告
   COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; v=json.load(open(p,encoding='utf-8')).get('comfyui_dir') or ''; print(os.path.expanduser(v) if v else '')" "$CFG_PY" 2>/dev/null || true)
   [ -n "$COMFYUI_DIR" ] && COMFYUI_DIR="$(bash_path "$COMFYUI_DIR")"
 
   # D. 工作流：复制默认 Moody + 模型清单 + 可选自定义（自定义≠一键接好）
   set +e
-  "$PY" "$WIZ_PY" ${WIZARD_NI} workflow-step --config "$CFG_PY" --root "$ROOT_PY"
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} workflow-step --config "$CFG_PY" --root "$ROOT_PY"
   _wiz_rc=$?
   set -e
   case "$_wiz_rc" in
@@ -716,7 +729,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
 
   # E. Telegram 可选
   set +e
-  "$PY" "$WIZ_PY" ${WIZARD_NI} telegram-step --config "$CFG_PY"
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} telegram-step --config "$CFG_PY"
   _wiz_rc=$?
   set -e
   case "$_wiz_rc" in
@@ -726,11 +739,11 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
   esac
 
   # F. WebUI 说明
-  "$PY" "$WIZ_PY" ${WIZARD_NI} webui-blurb || true
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} webui-blurb || true
 
   # G. 可选路径：output_dir / comfyui_host / openclaw_workspace / obsidian（须在 readiness-summary 之前）
   set +e
-  "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-extras --config "$CFG_PY"
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-extras --config "$CFG_PY"
   _wiz_rc=$?
   set -e
   case "$_wiz_rc" in
@@ -739,42 +752,16 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
     *) echo "  ⚠ 可选路径向导步骤异常（已忽略）" ;;
   esac
 
-  # 同步权威配置 → 发行版 scripts/config.json
-  if [ -f "$CONFIG_DST" ]; then
-    SRC_LINK="$(readlink "$CONFIG_SRC" 2>/dev/null || true)"
-    if [ "$SRC_LINK" != "$CONFIG_DST" ]; then
-      cp "$CONFIG_DST" "$CONFIG_SRC"
-    fi
-  fi
+  # 向导写入权威配置后，同步 native 旁路副本
+  _sync_core_config
 elif [ -z "$WIZARD_HELPER" ]; then
-  echo "ℹ 未找到 install_wizard.py，跳过交互向导（旧包兼容）。"
+  echo "[i] 未找到 install_wizard.py，跳过交互向导（旧包兼容）。"
   # 旧行为回退：若已有有效 ComfyUI，直接拷 workflows
   if [ -n "${COMFYUI_DIR:-}" ] && [ -f "$COMFYUI_DIR/main.py" ] && [ -d "$ROOT/workflows" ]; then
     mkdir -p "$COMFYUI_DIR/workflows"
     cp -R "$ROOT/workflows/"* "$COMFYUI_DIR/workflows/" 2>/dev/null && echo "✓ 默认工作流已复制到 $COMFYUI_DIR/workflows" || true
     REPORT_WORKFLOW="旧包回退复制"
   fi
-fi
-
-# ComfyUI 插件拷贝（找到有效根目录时）
-if [ -n "$COMFYUI_DIR" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
-  PLUGIN_SRC="$ROOT/ComfyUI-Card-Engine"
-  if [ -d "$PLUGIN_SRC" ]; then
-    PLUGIN_DST="$COMFYUI_DIR/custom_nodes/ComfyUI-Card-Engine"
-    # 自删防护：发行版若被解压进 ComfyUI/custom_nodes/ 内，源==目标，rm -rf 会先删源
-    _src_real="$(cd "$PLUGIN_SRC" && pwd -P)"
-    _dst_parent="$(cd "$COMFYUI_DIR/custom_nodes" 2>/dev/null && pwd -P)"
-    if [ -n "$_dst_parent" ] && [ "$_src_real" = "$_dst_parent/ComfyUI-Card-Engine" ]; then
-      echo "✓ ComfyUI 节点源即目标（发行版位于 custom_nodes 内），跳过拷贝"
-    else
-      mkdir -p "$COMFYUI_DIR/custom_nodes"
-      rm -rf "$PLUGIN_DST"
-      cp -R "$PLUGIN_SRC" "$PLUGIN_DST"
-      echo "✓ ComfyUI 节点已安装到 $PLUGIN_DST"
-    fi
-  fi
-elif [ -d "$ROOT/ComfyUI-Card-Engine" ]; then
-  echo "  （装好 ComfyUI 后，把 $ROOT/ComfyUI-Card-Engine 拷到 ComfyUI/custom_nodes/）"
 fi
 
 fail_if_fatal
@@ -817,7 +804,8 @@ if [ -f "$ROOT/scripts/card-engine/card_cli.py" ] && [ -n "$PY" ]; then
     cd "$ROOT/scripts/card-engine"
     # 相对路径：Git Bash 下绝对 POSIX 路径不会自动转给 Windows python.exe；
     # card_cli 自带 _path_bootstrap 兜底，这里仅作冗余
-    PYTHONPATH="../../card_engine_core/native" "$PY" card_cli.py -h 2>&1
+    # Windows 控制台常为 GBK：强制 UTF-8，避免 -h 里符号触发 UnicodeEncodeError 假失败
+    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 PYTHONPATH="../../card_engine_core/native" "$PY" card_cli.py -h 2>&1
   ); then
     SMOKE_CLI=1
     echo "  ✓ smoke: card_cli.py -h 通过"
@@ -829,7 +817,7 @@ if [ -f "$ROOT/scripts/card-engine/card_cli.py" ] && [ -n "$PY" ]; then
   fi
 else
   SMOKE_CLI="skip"
-  echo "  ℹ smoke: 未找到 scripts/card-engine/card_cli.py，跳过 CLI 自检"
+  echo "  [i] smoke: 未找到 scripts/card-engine/card_cli.py，跳过 CLI 自检"
 fi
 
 fail_if_fatal
@@ -953,7 +941,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "${WIZARD_HELPER:-}" ]; then
   CFG_PY="$(py_path "$CONFIG_DST")"
   WIZ_PY="$(py_path "$WIZARD_HELPER")"
   ROOT_PY="$(py_path "$ROOT")"
-  "$PY" "$WIZ_PY" readiness-summary --config "$CFG_PY" --root "$ROOT_PY" || true
+  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" readiness-summary --config "$CFG_PY" --root "$ROOT_PY" || true
 fi
 
 # 报告 URL：Comfy 来自 config.comfyui_host（缺省标注默认 8188）；
