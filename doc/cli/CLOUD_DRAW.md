@@ -5,7 +5,7 @@
 
 开启 `cloud.enabled`（或 WebUI「渲染后端=云端」）后：裸露强制仅 `half_covered`；`submit` / `chain --resume` / `direct` **拒绝** Comfy 入队（失败关闭）。
 
-相关：[CONFIG_GUIDE.md](./CONFIG_GUIDE.md)
+相关：[CONFIG_GUIDE.md](../webui/CONFIG_GUIDE.md)
 
 ---
 

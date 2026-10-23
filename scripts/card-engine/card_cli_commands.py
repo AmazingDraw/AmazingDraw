@@ -185,6 +185,58 @@ def cmd_create(args):
     print(f"\ncard_id={card['card_id']}")
     return card['card_id']
 
+def _apply_director_exposure(card):
+    """fill 的 exposure_mode 合法性校验 / 视角绑定 / limit 钳制 / 用户指令直通，并落盘。
+
+    与 render / check / preflight 共用 resolve_card_exposure（同一输入、同一顺序）。
+    非法值或「无视角绑定却为空/auto」时打印错误并退出。返回最终模式。
+    """
+    from card_exposure import (
+        VALID_EXPOSURE_MODE,
+        persist_perspective_exposure_meta,
+        resolve_card_exposure,
+    )
+    ef = str(card["director"].get("exposure_mode", "")).strip().lower()
+    if ef and ef not in VALID_EXPOSURE_MODE and ef != "auto":
+        print(f"❌ exposure_mode 值非法: '{ef}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
+        sys.exit(1)
+    hnr = str(card["director"].get("half_nude_region") or "").strip().lower()
+    if hnr and hnr not in ("upper", "lower", "both"):
+        print(f"❌ half_nude_region 值非法: '{hnr}'，可选值: both, lower, upper（仅 half_nude 生效）")
+        sys.exit(1)
+    if hnr:
+        card["director"]["half_nude_region"] = hnr
+    final, exp_meta = resolve_card_exposure(card, ef or "auto")
+    pre_override = exp_meta.get("pre_override_mode")
+    if exp_meta.get("source") == "invalid" or pre_override not in VALID_EXPOSURE_MODE:
+        # 无视角绑定时仍要求显式合法值（用户指令不替 AI 补空值）
+        print(f"❌ exposure_mode 值非法: '{ef or '空'}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
+        sys.exit(1)
+    if exp_meta.get("user_override"):
+        print(f"💡 用户指令裸露直通: {pre_override} -> {final}")
+    if final != ef:
+        reasons = []
+        if exp_meta.get("allowed") and exp_meta.get("source") in (
+            "perspective_binding", "explicit_clamped_to_binding"
+        ):
+            key = exp_meta.get("perspective_key") or "视角"
+            reasons.append(f"视角绑定 {key}: {'/'.join(exp_meta.get('allowed') or [])}")
+        if exp_meta.get("bypass"):
+            reasons.append("绑定场景绕过 exposure_limit")
+        elif exp_meta.get("source") == "limit_only" and pre_override != ef:
+            reasons.append("exposure_limit 配置")
+        reason_txt = "；".join(reasons) if reasons else "自动归一化"
+        print(f"💡 自动钳制裸露模式: {ef or '空'} -> {final} ({reason_txt})")
+    card["director"]["exposure_mode"] = final
+    persist_perspective_exposure_meta(
+        card,
+        exp_meta,
+        scene=card.get("scene") or {},
+        seed=card.get("card_id"),
+    )
+    return final
+
+
 def cmd_fill(args):
     """填充卡面槽位(AI 导演链输出 → card.json)"""
 
@@ -366,7 +418,7 @@ def cmd_fill(args):
             })
 
         director_fields = [
-            "intent", "exposure_mode", "style_recipe", "lighting_palette",
+            "intent", "exposure_mode", "half_nude_region", "style_recipe", "lighting_palette",
             "pose_direction", "makeup_direction", "expression_gaze",
             "focus_detail",
         ]
@@ -471,68 +523,8 @@ def cmd_fill(args):
             if missing:
                 print(f"❌ director 阶段必填字段为空: {', '.join(missing)}")
                 sys.exit(1)
-            # ── exposure_mode 合法性校验 / 视角绑定 / 全局 limit 钳制 ──
-            from card_exposure import clamp_exposure_mode, resolve_perspective_exposure, apply_user_explicit_exposure_override
-            ef = str(card["director"].get("exposure_mode", "")).strip().lower()
-            if ef and ef not in VALID_EXPOSURE_MODE and ef != "auto":
-                print(f"❌ exposure_mode 值非法: '{ef}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
-                sys.exit(1)
-            ef_resolved, exp_meta = resolve_perspective_exposure(
-                ef,
-                scene=card.get("scene") or {},
-                seed=card.get("card_id"),
-                force_pick=False,
-            )
-            if exp_meta.get("source") == "invalid" or (
-                ef_resolved and ef_resolved not in VALID_EXPOSURE_MODE
-            ):
-                print(f"❌ exposure_mode 值非法: '{ef}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
-                sys.exit(1)
-            if not ef_resolved or ef_resolved == "auto":
-                # 无视角绑定时仍要求显式合法值
-                if not exp_meta.get("allowed"):
-                    print(f"❌ exposure_mode 值非法: '{ef or '空'}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
-                    sys.exit(1)
-                ef_resolved, exp_meta = resolve_perspective_exposure(
-                    ef,
-                    scene=card.get("scene") or {},
-                    seed=card.get("card_id"),
-                    force_pick=True,
-                )
-            limit_range = exp_meta.get("limit_range")
-            ef_clamped = clamp_exposure_mode(
-                ef_resolved, limit_range=limit_range,
-                allowed_set=exp_meta.get("allowed_set"),
-            )
-            _user_over = apply_user_explicit_exposure_override(card, ef_clamped)
-            if _user_over != ef_clamped:
-                print(f"💡 用户指令裸露直通: {ef_clamped} -> {_user_over}")
-                ef_clamped = _user_over
-            if ef_clamped != ef:
-                reasons = []
-                if exp_meta.get("allowed") and exp_meta.get("source") in (
-                    "perspective_binding", "explicit_clamped_to_binding"
-                ):
-                    key = exp_meta.get("perspective_key") or "视角"
-                    reasons.append(f"视角绑定 {key}: {'/'.join(exp_meta.get('allowed') or [])}")
-                if exp_meta.get("bypass"):
-                    reasons.append("绑定场景绕过 exposure_limit")
-                elif ef_clamped != ef_resolved or (
-                    exp_meta.get("source") not in ("perspective_binding", "explicit_clamped_to_binding")
-                    and ef_clamped != ef
-                ):
-                    reasons.append("exposure_limit 配置")
-                reason_txt = "；".join(reasons) if reasons else "自动归一化"
-                print(f"💡 自动钳制裸露模式: {ef or '空'} -> {ef_clamped} ({reason_txt})")
-            card["director"]["exposure_mode"] = ef_clamped
-            from card_exposure import persist_perspective_exposure_meta
-            persist_perspective_exposure_meta(
-                card,
-                exp_meta,
-                scene=card.get("scene") or {},
-                seed=card.get("card_id"),
-            )
-            ef = ef_clamped
+            # ── exposure_mode 合法性校验 / 视角绑定 / 全局 limit 钳制（与 render/check 同源）──
+            ef = _apply_director_exposure(card)
             progress['director'] = True
             if director_changed:
                 progress['slots'] = False
@@ -555,11 +547,10 @@ def cmd_fill(args):
                 f"✅ slots 阶段完成 (12 槽位全部选填 · 已填 {filled}/{len(SLOT_RENDER_ORDER)} · 可选 {optional_filled}/{len(optional_slots)})",
             ]
             # ── 统一取 render 同源裸露上下文（exposure_mode + context_text + region）──
-            from card_exposure import get_exposure_context, resolve_half_nude_region_for_card
+            from card_exposure import get_exposure_context_with_region
             from perspective_runtime import resolve_perspective_key
-            _ctx_exposure, _ctx_mode, _ctx_text = get_exposure_context(card, card["director"])
+            _ctx_exposure, _ctx_mode, _ctx_text, _half_nude_reg = get_exposure_context_with_region(card, card["director"])
             ef_val = _ctx_mode or str(card["director"].get("exposure_mode", "auto")).strip().lower()
-            _half_nude_reg = resolve_half_nude_region_for_card(card, ef_val)
             _perspective_key = resolve_perspective_key(
                 card,
                 scene=card.get("scene") or {},
@@ -662,66 +653,8 @@ def cmd_fill(args):
                     print(f"   - elevation: {', '.join(missing_elevation)}")
                 sys.exit(1)
 
-            # ── exposure_mode 合法性校验 / 视角绑定 / 全局 limit 钳制 ──
-            from card_exposure import clamp_exposure_mode, resolve_perspective_exposure, apply_user_explicit_exposure_override
-            ef = str(card["director"].get("exposure_mode", "")).strip().lower()
-            if ef and ef not in VALID_EXPOSURE_MODE and ef != "auto":
-                print(f"❌ exposure_mode 值非法: '{ef}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
-                sys.exit(1)
-            ef_resolved, exp_meta = resolve_perspective_exposure(
-                ef,
-                scene=card.get("scene") or {},
-                seed=card.get("card_id"),
-                force_pick=False,
-            )
-            if exp_meta.get("source") == "invalid" or (
-                ef_resolved and ef_resolved not in VALID_EXPOSURE_MODE and ef_resolved != "auto"
-            ):
-                print(f"❌ exposure_mode 值非法: '{ef}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
-                sys.exit(1)
-            if not ef_resolved or ef_resolved == "auto":
-                if not exp_meta.get("allowed"):
-                    print(f"❌ exposure_mode 值非法: '{ef or '空'}'，可选值: {', '.join(sorted(VALID_EXPOSURE_MODE))}")
-                    sys.exit(1)
-                ef_resolved, exp_meta = resolve_perspective_exposure(
-                    ef,
-                    scene=card.get("scene") or {},
-                    seed=card.get("card_id"),
-                    force_pick=True,
-                )
-            limit_range = exp_meta.get("limit_range")
-            ef_clamped = clamp_exposure_mode(
-                ef_resolved, limit_range=limit_range,
-                allowed_set=exp_meta.get("allowed_set"),
-            )
-            _user_over = apply_user_explicit_exposure_override(card, ef_clamped)
-            if _user_over != ef_clamped:
-                print(f"💡 用户指令裸露直通: {ef_clamped} -> {_user_over}")
-                ef_clamped = _user_over
-            if ef_clamped != ef:
-                reasons = []
-                if exp_meta.get("allowed") and exp_meta.get("source") in (
-                    "perspective_binding", "explicit_clamped_to_binding"
-                ):
-                    key = exp_meta.get("perspective_key") or "视角"
-                    reasons.append(f"视角绑定 {key}: {'/'.join(exp_meta.get('allowed') or [])}")
-                if exp_meta.get("bypass"):
-                    reasons.append("绑定场景绕过 exposure_limit")
-                elif ef_clamped != ef_resolved or (
-                    exp_meta.get("source") not in ("perspective_binding", "explicit_clamped_to_binding")
-                    and ef_clamped != ef
-                ):
-                    reasons.append("exposure_limit 配置")
-                reason_txt = "；".join(reasons) if reasons else "自动归一化"
-                print(f"💡 自动钳制裸露模式: {ef or '空'} -> {ef_clamped} ({reason_txt})")
-            card["director"]["exposure_mode"] = ef_clamped
-            from card_exposure import persist_perspective_exposure_meta
-            persist_perspective_exposure_meta(
-                card,
-                exp_meta,
-                scene=card.get("scene") or {},
-                seed=card.get("card_id"),
-            )
+            # ── exposure_mode 合法性校验 / 视角绑定 / 全局 limit 钳制（与 render/check 同源）──
+            _apply_director_exposure(card)
 
             # ── 硬性中文校验（elevation 字段） ──
             zh_errors = []
@@ -1170,18 +1103,17 @@ def cmd_patch(args):
                     ("CHECK_PROMPT_EXPOSURE", "CHECK_CLOTHING")
                 )
             ]
+            # 与 check / render 同一份执行计划（解析后的 mode / region / context）
+            from card_exposure import resolve_exposure_plan
+            _plan = resolve_exposure_plan(card)
             consistency = validate_exposure_consistency(
                 exposure_text=str((card.get("slots") or {}).get("clothing") or ""),
                 body_shape=str((card.get("slots") or {}).get("body_shape") or ""),
                 pose_text=str((card.get("slots") or {}).get("pose") or ""),
-                exposure_mode=selected_mode,
-                context_text=str(
-                    (card.get("director") or {}).get("pose_direction") or ""
-                ),
-                lower_policy=lower_clothing_policy_for_card(card),
-                half_nude_region=resolve_half_nude_region_for_card(
-                    card, exposure_mode=selected_mode
-                ),
+                exposure_mode=_plan["mode"],
+                context_text=_plan["context_text"],
+                lower_policy=_plan["lower_policy"],
+                half_nude_region=_plan["half_nude_region"],
             )
             if consistency.get("missing_signals"):
                 exposure_errors.append(
@@ -1966,19 +1898,19 @@ def cmd_queue(args):
 
 
 DOC_MAP = {
-    "prompt": "PROMPT_TEMPLATE.md",
-    "draw": "DRAW_GUIDE.md",
-    "pitfalls": "CHECK_PITFALLS.md",
-    "commands": "CARD_ENGINE_COMMANDS.md",
-    "config": "CONFIG_GUIDE.md",
+    "prompt": "cli/PROMPT_TEMPLATE.md",
+    "draw": "cli/DRAW_GUIDE.md",
+    "pitfalls": "cli/CHECK_PITFALLS.md",
+    "commands": "webui/CARD_ENGINE_COMMANDS.md",
+    "config": "webui/CONFIG_GUIDE.md",
 }
 
 def cmd_doc(args):
     """打印指定的设计与维护手册文档的全部内容。"""
     doc_name = getattr(args, "name", "prompt")
-    filename = DOC_MAP.get(doc_name, "PROMPT_TEMPLATE.md")
-        
-    doc_path = SCRIPT_DIR.parent.parent / "doc" / filename
+    filename = DOC_MAP.get(doc_name, "cli/PROMPT_TEMPLATE.md")
+
+    doc_path = SCRIPT_DIR.parent.parent / "doc" / Path(filename)
     if not doc_path.exists():
         print(f"❌ 未找到对应文档：{doc_path}")
         sys.exit(1)

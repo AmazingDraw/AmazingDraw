@@ -160,6 +160,11 @@ WebUI 通过 WebSocket 连本机网关，握手用设备私钥签名。Python �
 
 WebUI 设置页的模型下拉直接读 OpenClaw 的可用模型。OpenClaw 里有什么，WebUI 里就能选什么。
 
+**独立调用**（`card_llm_client.chat_completion`）同样只认 OpenClaw 已配置的模型；列表里出现 `cli-proxy/…` 是 OpenClaw provider 命名空间，不是本仓再直连本地 cliproxy。本仓已退役对该端口与 `CLIPROXY_*` 的硬编码发现路径。
+
+> **完整独立节点清单、超时与失败行为**：见 [LLM_AND_PROMPTS.md](../engine/llm/LLM_AND_PROMPTS.md) **A.1**（勿在本页维护残缺枚举）。  
+> 无「关掉全部独立调用」的总开关；仅 `enable_ai_check`（默认 `false`）跳过 AI 语义门禁。
+
 ### 5.3 ⏱️ 两处超时，分属不同层
 
 出问题时先分清是哪一层在喊停，两者互相独立：

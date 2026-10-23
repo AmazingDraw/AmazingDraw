@@ -78,7 +78,7 @@
 
 | 区块 | 常见项 |
 | :--- | :--- |
-| 模型 | 主聊 / 独立 / fallback（影响 Draw 对话，不替代出图模型） |
+| 模型 | 对话（`llm_model`）/ 独立调用（空则跟随）/ fallback；均来自 OpenClaw。无 OpenClaw 时 Draw 不可用。不替代出图模型 |
 | 路径 | `output_dir`、归档、灵感库、ComfyUI 目录 |
 | 工作流 | 默认 Comfy workflow（现默认 Moody ZIB+ZIT） |
 | 画幅 | 竖 / 横 / 方 / 宽屏 |

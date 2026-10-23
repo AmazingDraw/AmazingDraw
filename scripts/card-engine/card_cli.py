@@ -50,16 +50,16 @@ DRAW_GUIDE_PATH = SCRIPT_DIR.parent.parent / "doc" / "DRAW_GUIDE.md"
 DOC_WARNING_TEXT = """
 ⚠️ [AI 必读契约]：
   在进行导演策划与槽位填充前，必须查阅相对路径下的核心文档（或使用 python3 card_cli.py doc <名称>）：
-  1) 提示词装配手册: doc/PROMPT_TEMPLATE.md
-  2) 绘图修改指南: doc/DRAW_GUIDE.md
-  3) 高频报错避坑指南: doc/CHECK_PITFALLS.md
+  1) 提示词装配手册: doc/cli/PROMPT_TEMPLATE.md
+  2) 绘图修改指南: doc/cli/DRAW_GUIDE.md
+  3) 高频报错避坑指南: doc/cli/CHECK_PITFALLS.md
 """
 
 CHAIN_DOC_WARNING_TEXT = """
 ⚠️ [AI 必读契约]：
   在进行导演策划与槽位填充前，必须查阅相对路径下的核心文档（或使用 python3 card_cli.py doc <名称>）：
-  1) 提示词装配手册: doc/PROMPT_TEMPLATE.md
-  2) 高频报错避坑指南: doc/CHECK_PITFALLS.md
+  1) 提示词装配手册: doc/cli/PROMPT_TEMPLATE.md
+  2) 高频报错避坑指南: doc/cli/CHECK_PITFALLS.md
 """
 
 
@@ -201,8 +201,8 @@ CREATE_EPILOG = f"""
   R0. [可选检索] search   -> 模糊搜索场景库/角色库 (如 python3 card_cli.py search --scene 走廊)
   R1. create --user-input "用户原始要求"  -> 创建卡面骨架（--user-input 必传，落卡供约束解析）
   R2. 导演决策            -> AI 先深读骨架信息，再进行 8 维创意决策
-  R3. fill+options      -> AI 用 fill 填导演及槽位字段 + options --auto 映射动态方向位
-  R4. 渲染与展示          -> render 渲染生成 -> present --json 取结构化数据，AI 严格按 DRAW_GUIDE.md 格式输出
+  R3. fill→options→描述  -> 先 fill 导演/槽位；再 options --auto 抽动态方向；再为 2–8/9 写 direction_descriptions（见 options --help）
+  R4. 渲染与展示          -> render → present --json 取结构化数据，AI 严格按 DRAW_GUIDE.md 格式输出
   R5. 交互修改循环        -> 依据用户指令进行 AI 动作响应（注：精修中统一使用 text_template 输出选项，出图时才使用 compact_template）：
       * 说「画」或「1」      => 先单独发骚话 → 再提交画图（使用 compact_template 终结展示）
       * 说「数字 2-8 / 9」   => 2-8 动态方向或 9 纹身固定位应用修改，随后 options --auto 轮转动态位并重新设计选项（使用 text_template）
@@ -249,7 +249,7 @@ def add_single_parsers(sub):
     c_create.add_argument("--aspect", choices=["portrait", "landscape", "square", "widescreen"], help=aspect_help)
     c_create.add_argument("--seed", type=int, help="固定 seed")
     c_create.add_argument("--profile", default="default", help="预设配置名（见 amateurs.json profiles；用户指定优先，未指定才随机）")
-    c_create.add_argument("--user-input", help="用户原始要求（必传，落卡供约束解析）")
+    c_create.add_argument("--user-input", help="用户原始要求（运行时强制必传，落卡供约束解析；不传则报错）")
     c_create.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="启用场景词库参考（默认关闭）。不带值：智能加载纹身/宠物/道具/饰品四类词库常用章节；带值：按指定章节加载，格式同 cu-template-bundle.py --sections，如 --bundle \"tattoo:图案速查|皮肤融合,props:振动棒\"")
 
     c_fill = sub.add_parser(
@@ -264,7 +264,7 @@ def add_single_parsers(sub):
     for slot in SLOT_RENDER_ORDER:
         c_fill.add_argument(f"--{slot.replace('_', '-')}", dest=slot, default=None)
     for d in [
-        "intent", "exposure_mode", "style_recipe", "lighting_palette",
+        "intent", "exposure_mode", "half_nude_region", "style_recipe", "lighting_palette",
         "pose_direction", "makeup_direction", "expression_gaze",
         "focus_detail", "story_elevation",
     ]:
@@ -320,6 +320,7 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
 方向 9（纹身）的必须步骤：
   → 必须为方向 9（纹身）设计具体的修改方案（严禁偷懒使用“已有纹身/保持现状/重新设计”等占位词）。
   → 如果是首次生成：先运行词库工具设计具体图案，填入 slots 并更新方向 9 描述：
+    # cwd=skill 根：scripts/gpu-pipeline/...；cwd=scripts/card-engine：../gpu-pipeline/...
     python3 scripts/gpu-pipeline/cu-template-bundle.py --sections "tattoo:图案速查|皮肤融合|锁定表"
     card_cli.py fill --card <id> --tattoo "<英文具体纹身描述>"
     card_cli.py patch --card <id> --set direction_descriptions.9 --value "<具体中文描述（如：在锁骨下方设计一个极简的黑线描小蝴蝶纹身，翅膀边缘带着微红，汗湿后显得特别妖艳）>"
@@ -347,7 +348,7 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
         "submit",
         help="提交到 GPU 队列",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="云端出图开启时禁止入 Comfy 队列（不是 --dry-run）；见 doc/CLOUD_DRAW.md。",
+        epilog="云端出图开启时禁止入 Comfy 队列（不是 --dry-run）；见 doc/cli/CLOUD_DRAW.md。",
     )
     c_submit.add_argument("--card", required=True)
     c_submit.add_argument("--user-input", help="用户原始输入 / 组合指令")
@@ -380,7 +381,7 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
                      - display        展示给主人的中文标签（直接体现在 text_template 里）
                      - description    AI 之前写下的改法意图（本次修改主目标）
                      - targets        本次 patch 要修改的字段路径列表
-                     - current_values 各 target 字段 of 当前英文值
+                     - current_values 各 target 字段的当前英文值
 
   interaction_guide.how_to_patch   : AI 收到数字 N 时的完整执行流程，含双场景示例。
   interaction_guide.tattoo_workflow: 选项 9 的专属强制执行链路（mandatory=true）。
@@ -409,7 +410,7 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
 
 主人发送数字 9（纹身）后 — 必须执行，严禁跳过:
 
-  Step 1 - 加载纹身词库:
+  Step 1 - 加载纹身词库（cwd=skill 根用下方路径；cwd=scripts/card-engine 则改为 ../gpu-pipeline/...）:
     python3 scripts/gpu-pipeline/cu-template-bundle.py --sections "tattoo:图案速查|皮肤融合|锁定表"
   Step 2 - 设计纹身:    根据词库返回内容，结合 context.person 和 context.scene，用英文设计纹身（图案/位置/颜色/风格）
   Step 3 - 写入 slot:   card_cli.py fill --card <id> --tattoo "<英文纹身描述>"
@@ -479,7 +480,7 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
     c_direct.add_argument("--workflow", help="强制指定 ComfyUI 工作流")
     c_direct.add_argument("--reply-id", type=int, help="Telegram 引用回复消息 ID")
     c_direct.add_argument("--user-input", help="用户原始输入")
-    c_direct.add_argument("--dry-run", action="store_true", help="模拟提交，仅输出最终构建 of 命令行，不进行实际入队渲染")
+    c_direct.add_argument("--dry-run", action="store_true", help="模拟提交，仅输出最终构建的命令行，不进行实际入队渲染")
 
 
 # ── parser builders: chain-only ───────────────────────────────────────────────
@@ -501,7 +502,7 @@ def add_chain_parsers(sub):
     c_chain.add_argument("--resume", metavar="CARD_ID", help="已 fill 的卡 ID，直接走 render→check→autofix→submit")
     c_chain.add_argument("--dry-run", action="store_true", help="配合 --resume 使用：仅跑 render→check→autofix 全流程校验，不提交 GPU 队列（测试/审查用）")
 
-    c_chain.add_argument("--user-input", help="用户原始要求（必传，落卡供约束解析）")
+    c_chain.add_argument("--user-input", help="用户原始要求（运行时强制必传，落卡供约束解析；chain --resume 豁免；不传则报错）")
     c_chain.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="启用场景词库参考（默认关闭）。不带值：智能加载纹身/宠物/道具/饰品四类词库常用章节；带值：按指定章节加载，格式同 cu-template-bundle.py --sections，如 --bundle \"tattoo:图案速查|皮肤融合,props:振动棒\"")
 
 
@@ -544,15 +545,16 @@ def build_parser(command_set, description):
   ⭐ [AI 契约] 主人未指定特定模式时，AI 应默认执行②批量连抽模式（chain 流程）。
 
   ① 常规单抽模式 (Normal Single Mode):
-    $ python3 card_cli.py create [--person <角色>] [--scene <场景>]
-    → 根据建卡骨架，AI导演深读并进行 8 维创意决策 
-    → $ python3 card_cli.py fill --card <id> --json '{"subject":..., "director":..., "slots":..., "direction_descriptions":...}'
-    → $ python3 card_cli.py options --card <id> --auto
-    → $ python3 card_cli.py render --card <id> && python3 card_cli.py present --card <id>
+    $ python3 card_cli.py create --user-input "<用户原始要求>" [--person <角色>] [--scene <场景>]
+    → 根据建卡骨架，AI导演深读并进行 8 维创意决策
+    → $ python3 card_cli.py fill --card <id> --json '{"subject":..., "director":..., "slots":...}'   # 先填导演/槽位
+    → $ python3 card_cli.py options --card <id> --auto                                         # 再抽动态方向
+    → 为方向 2–8/9 写 direction_descriptions（patch/fill，见 options --help）
+    → $ python3 card_cli.py render --card <id> && python3 card_cli.py present --card <id> --json
     → 通过快捷数字或口头指令进行交互式微调修改（输入「1」或「画」提交出图）
 
   ② 批量连抽模式 (Chain Batch Mode):
-    $ python3 card_cli.py chain --count <数量> [--person <角色>]
+    $ python3 card_cli.py chain --count <数量> --user-input "<用户原始要求>" [--person <角色>]
     → AI 导演逐张深读骨架 JSON，做 8 维创意决策
     → 逐张一次 fill 导入槽位（--json-file 一次写齐，勿拆 --phase）
     → $ python3 card_cli.py chain --resume <id> (自动 render -> check -> autofix -> submit)
@@ -566,8 +568,8 @@ def build_parser(command_set, description):
     → `--dry-run` 停在提交前：写卡 + 打印 submit 命令，不入队
 
   ④ 英文直投模式 (Direct Raw Mode):
-    $ python3 card_cli.py direct --prompt "<英文提示词>" --person "<中文人物>" --scene "<中文场景>" --theme "<中文主题>" --narrative "<中文叙事>" --lighting "<中文光影>" --style "<中文风格>"
-    → 绕过卡片引擎所有的繁复校验，直接以 raw prompt 形式投递至 GPU 生图管道。`--prompt` 为唯一技术必填，但必须提供 6 个中文元数据参数以生成完整归档文件名。
+    $ python3 card_cli.py direct --prompt "<英文提示词>" [--person <中文人物>] [--scene <中文场景>] [--theme <中文主题>] [--narrative <中文叙事>] [--lighting <中文光影>] [--style <中文风格>]
+    → 绕过卡片引擎校验，以 raw prompt 投递 GPU。`--prompt` 为唯一技术必填；6 个中文元数据推荐提供（可省略，由 LLM 提取），详见 direct --help。
 """
     )
     sub = p.add_subparsers(dest="command", required=True)

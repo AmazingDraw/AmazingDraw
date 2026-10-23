@@ -409,31 +409,72 @@ else
 fi
 
 # ── 4. 发送 Telegram（最多重试 3 次，成功才继续队列） ──
+# 防重复：只有"请求确定没送到 Telegram"才重试；照片已完整上传后超时/断连
+# （回执丢失）则不重发，记为 delivered_uncertain（可能已送达）。
 RESP=''
 SEND_OK='0'
+SEND_UNCERTAIN='0'
+ALREADY_DELIVERED='0'
+CURL_RC=''
+CURL_STATS=''
 CURL_MAX_TIME="${CURL_MAX_TIME:-120}"
 CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-15}"
+TELEGRAM_API_BASE="${CU_TELEGRAM_API_BASE:-https://api.telegram.org}"
+SEND_RETRY_SLEEP="${CU_SEND_RETRY_SLEEP:-10}"
+RESP_BODY_FILE="$TMP_DIR/cu-deliver-resp_${JOB_ID:-nojob}_$$.json"
+
+# 该 job 是否已有成功交付记录（或"可能已送达"记录）；有则绝不再发
+job_already_delivered() {
+    [ -n "${JOB_ID:-}" ] || return 1
+    JOB_ID="$JOB_ID" SUCCESS_DIR="$SUCCESS_DIR" FAILED_DIR="$FAILED_DIR" python3 - <<'PY'
+import glob, json, os, sys
+job = os.environ['JOB_ID']
+paths = glob.glob(os.path.join(os.environ['SUCCESS_DIR'], 'delivery_success_*.json'))
+paths += glob.glob(os.path.join(os.environ['FAILED_DIR'], 'delivery_uncertain_*.json'))
+for path in paths:
+    try:
+        d = json.load(open(path, encoding='utf-8'))
+    except Exception:
+        continue
+    if d.get('job_id') == job and d.get('mode') in ('success', 'delivered_uncertain'):
+        sys.exit(0)
+sys.exit(1)
+PY
+}
 
 if [ "${DELIVERY_TELEGRAM:-1}" = "1" ]; then
+    FILE_BYTES=$(wc -c < "$FILE" | tr -d ' ')
     for ATTEMPT in 1 2 3; do
+        if job_already_delivered; then
+            echo "🛑 job ${JOB_ID} 已有成功/可能已送达记录，跳过发送 (attempt $ATTEMPT/3)"
+            ALREADY_DELIVERED='1'
+            SEND_OK='1'
+            break
+        fi
+        rm -f "$RESP_BODY_FILE"
+        CURL_RC=0
         if [ -n "$REPLY_ID" ]; then
             echo "↩️  Reply to: $REPLY_ID (attempt $ATTEMPT/3)"
-            RESP=$(curl -sS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto" \
+            CURL_STATS=$(curl -sS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -X POST "${TELEGRAM_API_BASE}/bot${BOT_TOKEN}/sendPhoto" \
+              -o "$RESP_BODY_FILE" -w '%{http_code} %{size_upload} %{time_pretransfer}' \
               -F "chat_id=${CHAT_ID}" \
               -F "photo=@${FILE}" \
               -F "has_spoiler=true" \
               -F "parse_mode=HTML" \
               -F "caption=${CAPTION}" \
-              -F "reply_to_message_id=${REPLY_ID}" ) || RESP=''
+              -F "reply_to_message_id=${REPLY_ID}" ) || CURL_RC=$?
         else
             echo "📤 Sending (no reply) attempt $ATTEMPT/3"
-            RESP=$(curl -sS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto" \
+            CURL_STATS=$(curl -sS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -X POST "${TELEGRAM_API_BASE}/bot${BOT_TOKEN}/sendPhoto" \
+              -o "$RESP_BODY_FILE" -w '%{http_code} %{size_upload} %{time_pretransfer}' \
               -F "chat_id=${CHAT_ID}" \
               -F "photo=@${FILE}" \
               -F "has_spoiler=true" \
               -F "parse_mode=HTML" \
-              -F "caption=${CAPTION}" ) || RESP=''
+              -F "caption=${CAPTION}" ) || CURL_RC=$?
         fi
+        RESP=$(cat "$RESP_BODY_FILE" 2>/dev/null || true)
+        rm -f "$RESP_BODY_FILE"
 
         SEND_OK=$(echo "$RESP" | python3 -c "
 import json,sys
@@ -445,11 +486,27 @@ except Exception:
 ")
 
         [ "$SEND_OK" = "1" ] && break
-        [ "$ATTEMPT" -lt 3 ] && sleep 10
+
+        # 超时/断连（28 超时、52 空回复、56 接收失败）：照片已完整上传或无法判断 → 不重发
+        case "$CURL_RC" in
+            28|52|56)
+                UPLOADED=$(echo "$CURL_STATS" | awk '{print $2}')
+                case "$UPLOADED" in ''|*[!0-9]*) UPLOADED='' ;; esac
+                if [ -z "$UPLOADED" ] || [ "$UPLOADED" -ge "$FILE_BYTES" ]; then
+                    SEND_UNCERTAIN='1'
+                    echo "⚠️ delivered_uncertain: curl rc=$CURL_RC 照片已上传(size_upload=${UPLOADED:-unknown}/${FILE_BYTES})但回执丢失，可能已送达，不重发 (attempt $ATTEMPT/3)" >&2
+                    break
+                fi
+                echo "🔁 curl rc=$CURL_RC 照片未完整上传(size_upload=${UPLOADED}/${FILE_BYTES})，可安全重试" >&2
+                ;;
+            0) ;;
+            *) echo "🔁 curl rc=$CURL_RC 请求未送达 Telegram，可安全重试" >&2 ;;
+        esac
+        [ "$ATTEMPT" -lt 3 ] && sleep "$SEND_RETRY_SLEEP"
     done
 
     # ── 5. 解析发送结果 ──
-    echo "$RESP" | python3 -c "
+    [ "$ALREADY_DELIVERED" = "1" ] || [ "$SEND_UNCERTAIN" = "1" ] || echo "$RESP" | python3 -c "
 import json,sys
 try:
     d=json.load(sys.stdin)
@@ -469,7 +526,7 @@ fi
 write_delivery_summary() {
     local OUT_FILE="$1"
     local MODE="$2"
-    OUT_FILE="$OUT_FILE" MODE="$MODE" META_FILE="$META_FILE" DONE_FILE="$DONE_FILE" FILE="$FILE" REPLY_ID="$REPLY_ID" SEED="$SEED" ELAPSED="$ELAPSED" CAPTION="$CAPTION" RESP="$RESP" JOB_ID="$JOB_ID" CARD_ID="$CARD_ID" WORKFLOW="$WORKFLOW" REQUESTED_SEED="$REQUESTED_SEED" \
+    OUT_FILE="$OUT_FILE" MODE="$MODE" META_FILE="$META_FILE" DONE_FILE="$DONE_FILE" FILE="$FILE" REPLY_ID="$REPLY_ID" SEED="$SEED" ELAPSED="$ELAPSED" CAPTION="$CAPTION" RESP="$RESP" CURL_RC="$CURL_RC" CURL_STATS="$CURL_STATS" JOB_ID="$JOB_ID" CARD_ID="$CARD_ID" WORKFLOW="$WORKFLOW" REQUESTED_SEED="$REQUESTED_SEED" \
     python3 - <<'PY'
 import json, os, re
 
@@ -535,6 +592,8 @@ payload = {
     'elapsed': os.environ.get('ELAPSED'),
     'caption': caption,
     'telegram_response': telegram,
+    'curl_rc': os.environ.get('CURL_RC') or None,
+    'curl_stats': os.environ.get('CURL_STATS') or None,
     'telegram_message_id': ((telegram.get('result') or {}).get('message_id')) if isinstance(telegram, dict) else None,
     'person': meta.get('person') or parsed['person'],
     'scene': meta.get('scene') or parsed['scene'],
@@ -552,7 +611,14 @@ PY
 
 # ── 7. 发送成功/失败后的处理（默认失败不中断批量连抽） ──
 DELIVERY_STATUS="success"
-if [ "$SEND_OK" = "1" ]; then
+if [ "$ALREADY_DELIVERED" = "1" ]; then
+    echo "ℹ️  已有交付记录，本次不重复写摘要"
+elif [ "$SEND_UNCERTAIN" = "1" ]; then
+    DELIVERY_STATUS="uncertain"
+    UNCERTAIN_FILE="$FAILED_DIR/delivery_uncertain_$(date +%s).json"
+    write_delivery_summary "$UNCERTAIN_FILE" "delivered_uncertain"
+    echo "⚠️ 可能已送达（回执丢失，未重发），现场已保存: $UNCERTAIN_FILE" >&2
+elif [ "$SEND_OK" = "1" ]; then
     SUCCESS_STAMP=$(date +%s)
     SUCCESS_FILE="$SUCCESS_DIR/delivery_success_${SUCCESS_STAMP}.json"
     write_delivery_summary "$SUCCESS_FILE" "success"

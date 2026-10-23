@@ -1011,7 +1011,7 @@ def extract_card_info_via_llm(prompt: str) -> dict:
             {"role": "user", "content": f"Prompt: {prompt}"}
         ]
         
-        # 设为 8s 超时，防止网络阻塞且留有充足代理重试时间
+        # 超时与代码 timeout=30 对齐（直投提炼；防网络阻塞并留代理重试余量）
         res_text = chat_completion(
             messages=messages,
             max_tokens=150,

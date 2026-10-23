@@ -47,10 +47,10 @@
 
 | 键 | 说明 |
 | :--- | :--- |
-| `llm_model` | 主模型（导演填槽 / prompt） |
-| `independent_llm_model` | 独立会话 / 预检；不可用时走 fallback |
-| `llm_fallback_models` | 备用模型列表 |
-| `llm_retry_limit` | 失败重试。代码默认 `1` |
+| `llm_model` | **AI 对话模型**：Draw 页导演助手；灯 1（`test-llm`）默认也测它。模型 id 来自 OpenClaw（可含 `cli-proxy/…` 等 provider 命名空间） |
+| `independent_llm_model` | **独立调用 AI 模型**：归档/直投提炼/场景路由等后台短调用；**空 = 跟随** `llm_model` |
+| `llm_fallback_models` | 备用模型列表（Draw 对话与独立调用共用） |
+| `llm_retry_limit` | 单个候选的最大尝试次数（含首次）。代码默认 `1` |
 | `agent_backend` | 默认 `openclaw`。对话后端统一为 `openclaw`（历史旧值如 `custom` / `claudecode` / `hermes` 均自动归一） |
 | `openclaw_ws_timeout_seconds` | OpenClaw 等待秒数，默认 `600` |
 | `chat_mode` | WebUI 会话：`cards`（卡片列表）和 `draw`（抽卡对话） |
@@ -114,7 +114,7 @@
 
 `enabled: true` 时强制 `image_backend=cloud`、`delivery=none`、裸露仅 `half_covered`（视角绑定不得绕过），且 `submit` / `chain --resume` / `direct` **拒绝**入 Comfy 队列。WebUI 设置「渲染后端」写入该开关（本地 / 云端）。`llm_retry_limit` 仍可写在 config.json，设置页不再展示。
 
-AI / bot：**不要**只靠 CLI help；开云端后的步骤、停在 check 后的 `reason=cloud_draw`、以及 `_render_output.prompt` 路径，一律以 [CLOUD_DRAW.md](./CLOUD_DRAW.md)（`doc cloud`）为准。
+AI / bot：**不要**只靠 CLI help；开云端后的步骤、停在 check 后的 `reason=cloud_draw`、以及 `_render_output.prompt` 路径，一律以 [CLOUD_DRAW.md](../cli/CLOUD_DRAW.md)（`doc cloud`）为准。
 
 ---
 

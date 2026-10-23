@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """System environment probing + ComfyUI selection API routes.
 
-Implements the four-light readiness gate described in
-`doc/ops/AMAZING_DRAW_DESKTOP_DELIVERY_PLAN.md` §6.
+Implements the four-light readiness gate for environment and model readiness.
 
 Design contract (prototype stage):
   * MOSTLY READ-ONLY. `GET /api/system/environment` and `/api/system/test-llm`
@@ -351,19 +350,20 @@ def _classify_llm_error(message: str) -> str:
     """把底层异常话术翻成小白能懂的结论（§9「API 失败」一行）。"""
     text = (message or "").lower()
     if "api key not found" in text or "401" in text or "unauthorized" in text:
-        return "Key 或中转不可用（鉴权失败）"
+        return "OpenClaw 鉴权失败或模型 Key 不可用"
     if (
         "curl failed" in text
         or "timed out" in text
         or "timeout" in text
         or "connection refused" in text
         or "could not resolve" in text
+        or "openclaw failed" in text
     ):
-        return "无法连接中转 / 网络不通"
+        return "无法连接 OpenClaw / 模型端点或网络不通"
     if "is empty" in text:
         return "模型有响应但内容为空（模型 ID 可能不对）"
     if "not json" in text:
-        return "中转返回的不是标准 JSON（中转地址可能填错）"
+        return "返回的不是标准 JSON（OpenClaw 路由或模型配置可能有误）"
     return "调用失败"
 
 
@@ -444,7 +444,7 @@ def get_environment():
     llm_model = str(cfg.get("llm_model") or "").strip()
     probed = dict(_LAST_LLM_PROBE)
     if not llm_model:
-        api_green, api_reason = False, "未配置导演模型（llm_model 为空）"
+        api_green, api_reason = False, "未配置 AI 对话模型（llm_model 为空；灯 1 门槛键）"
     elif not probed:
         api_green, api_reason = False, "尚未实测连通，请点「测试连通」"
     elif not probed.get("ok"):
@@ -572,11 +572,11 @@ def get_environment():
 
 @router.post("/api/system/test-llm")
 def test_llm(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """真实打一枪探测导演模型连通性（§5）。
+    """真实打一枪探测 AI 对话模型连通性（§5 / 灯 1）。
 
-    只读契约不变：不写配置、不改任何状态文件；唯一副作用是一次按需的出站探测请求。
-    入参可给 `{"model": "..."}` 覆盖本次探测的模型（面板「先测后存」用）；不给则用
-    当前生效配置。结果缓存供 §6 灯 1 引用。
+    门槛键为配置里的 `llm_model`（可用 body.model 覆盖本次）；探测栈复用
+    `card_llm_client.chat_completion`（与独立调用同路由，经 OpenClaw）。
+    只读契约不变：不写配置；结果缓存供 §6 灯 1 引用。字段非空不算绿。
     """
     body = payload if isinstance(payload, dict) else {}
     result = _probe_llm(body.get("model"))

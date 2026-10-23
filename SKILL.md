@@ -17,7 +17,7 @@ triggers:
 
 本地绘图核心控制台。**Card Engine** 将绘画拆为「导演决策」与「渲染执行」。
 
-> **参数与步骤以 CLI `--help` 为准**；本文只保留 Agent 契约、入口路径与文档索引。
+> **抽卡必须严格按 CLI 流程执行**：先看并遵循 `card_cli.py <命令> --help`（及当前模式的 help 步骤），再动手；不要凭记忆跳步、合步或自创顺序。本文只保留 Agent 契约、入口路径与文档索引，**参数与步骤以 CLI help 为唯一真相源**。
 >
 > **路径约定**：下文路径均相对本文件所在目录（zip / 仓库根）。正斜杠 `/` 在 macOS 与 Windows 通用。解释器必须和发行包文件名里的 Python 标签一致：`cp39` → Python 3.9，`cp312` → Python 3.12。Apple 自带 `/usr/bin/python3` 是 3.9，请下 cp39；本机 3.12 请下 cp312。不要把 `.so` 和 `.pyd` 混放，也不要混 3.9/3.12 native。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。启动脚本：`bash scripts/...`（Windows 请用 Git Bash）。先 `cd` 到 skill 根再执行。
 
@@ -49,7 +49,7 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 ## 1. 工作模式总览
 
 > [!IMPORTANT]
-> 进入任意模式前，**必须先**执行对应 `--help`。`argparse` 帮助是参数/流程真相源。
+> 抽卡时**严格按流程**：进入任意模式前先跑对应 `--help`，按 help 里的步骤与参数执行；禁止跳过 create/fill/options/render/check 等既定环节或擅自改序。`argparse` 帮助是参数与流程的唯一真相源。
 >
 > ```bash
 > python3 scripts/card-engine/card_cli.py <命令> --help
@@ -69,17 +69,17 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 
 ### 出图策略
 
-本地默认 Comfy 入队 + Telegram 投递。**云端出图**是叠加策略（不是第五模式）：开启 `cloud.enabled`（或 WebUI「渲染后端=云端」）后只允许擦边档、禁止 submit 入 Comfy；AI 操作步骤与取 prompt 路径以 [CLOUD_DRAW.md](doc/CLOUD_DRAW.md) 为准（`doc cloud`），CLI help 不展开。
+本地默认 Comfy 入队 + Telegram 投递。**云端出图**是叠加策略（不是第五模式）：开启 `cloud.enabled`（或 WebUI「渲染后端=云端」）后只允许擦边档、禁止 submit 入 Comfy；AI 操作步骤与取 prompt 路径以 [CLOUD_DRAW.md](doc/cli/CLOUD_DRAW.md) 为准（`doc cloud`），CLI help 不展开。
 
 ### Agent 铁律（help 不替代）
 
 * **通用**：优先级 `用户指定 > 库内命中 > 随机补全`；禁止通用词「素人」作 `--person`。库外 `--person`（amateur）自由发明；库外 `--scene`（非纯主题分类词）→ `manual-custom`，fill 必写英文 `scene.keywords`。纯主题词（如「校园」「办公室」）仍进主题池。`restrict_roles` 打开时，限制角色不进入角色库；关掉则恢复。
-* **🎴 single**：`workflow_mode=single`；**必** `options --auto`；`present` 只替换 `__dirtytalk__`，禁止自排版/泄露 `card_id`；交互前读 [DRAW_GUIDE.md](doc/DRAW_GUIDE.md)。
+* **🎴 single**：`workflow_mode=single`；**必** `options --auto`；`present` 只替换 `__dirtytalk__`，禁止自排版/泄露 `card_id`；交互前读 [DRAW_GUIDE.md](doc/cli/DRAW_GUIDE.md)。
 * **🚄 chain**：**不要** `options --auto`；中途**不停问**；每张卡 **一次** `fill --json-file`（勿拆 `--phase`）；语义冲突看 `💡 [自愈建议]` 再 fill。
 * **🚀 direct**：**禁止**改/扩/删 prompt 或追加画质词；元数据中文参数见 `direct --help`。
 * **🎲 featured**：原样渲染灵感库词条；与 CLI `direct` 无关。
 
-填槽/避坑：先 `view` [PROMPT_TEMPLATE.md](doc/PROMPT_TEMPLATE.md) · [CHECK_PITFALLS.md](doc/CHECK_PITFALLS.md)。
+填槽/避坑：先 `view` [PROMPT_TEMPLATE.md](doc/cli/PROMPT_TEMPLATE.md) · [CHECK_PITFALLS.md](doc/cli/CHECK_PITFALLS.md)。
 
 ---
 
@@ -88,22 +88,24 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 
 | 文档                                                                                                                                         | 用途                    |
 | :--------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------ |
-| [CARD_ENGINE_COMMANDS.md](doc/CARD_ENGINE_COMMANDS.md) | CLI 速查                |
-| [DRAW_GUIDE.md](doc/DRAW_GUIDE.md)                     | 常规模式交互            |
-| [PROMPT_TEMPLATE.md](doc/PROMPT_TEMPLATE.md)           | 导演决策链 / 提示词装配 |
-| [CHECK_PITFALLS.md](doc/CHECK_PITFALLS.md)             | 高频避坑                |
-| [CONFIG_GUIDE.md](doc/CONFIG_GUIDE.md)                 | config.json             |
-| [CLOUD_DRAW.md](doc/CLOUD_DRAW.md)                     | AI 云端出图指南（非第五模式） |
+| [CARD_ENGINE_COMMANDS.md](doc/webui/CARD_ENGINE_COMMANDS.md) | CLI 速查                |
+| [DRAW_GUIDE.md](doc/cli/DRAW_GUIDE.md)                     | 常规模式交互            |
+| [PROMPT_TEMPLATE.md](doc/cli/PROMPT_TEMPLATE.md)           | 导演决策链 / 提示词装配 |
+| [CHECK_PITFALLS.md](doc/cli/CHECK_PITFALLS.md)             | 高频避坑                |
+| [CONFIG_GUIDE.md](doc/webui/CONFIG_GUIDE.md)                 | config.json             |
+| [CLOUD_DRAW.md](doc/cli/CLOUD_DRAW.md)                     | AI 云端出图指南（非第五模式） |
 
 ---
 
 ## 3. ⚙️ 配置与维护
 
 * **归档**：命名 `人物·场景·主题`（`·` 分隔）；`python3 scripts/card-engine/card_cli.py archive --card <id>`
-* **常用命令**（在 zip/仓库根目录执行）：
+* **自检（按需，不必全跑）**（skill 根目录）：
+  * 连抽前快测：`python3 tests/smoke_test_fast.py`
+  * 全量：`python3 -m pytest -q`（或按改动范围只跑相关 `tests/`）
+* **队列**：
 
 ```bash
-
 python3 scripts/card-engine/card_cli.py queue status
 python3 scripts/card-engine/card_cli.py queue remove --position N
 python3 scripts/card-engine/card_cli.py queue clear --force           # 谨慎
@@ -128,14 +130,12 @@ rm -f /tmp/cu-card/cu-gpu.lock            # Windows：%TEMP%\cu-card\cu-gpu.lock
 bash scripts/webui/webui-start.sh start|stop|status|restart
 ```
 
-> ⚠️ **重启请用 login shell**，否则会丢 `CLIPROXY_API_KEY` 等环境变量，灯 1 假红（`test-llm` 报 api key not found）。
+> ⚠️ **重启请用 login shell**，否则 PATH / OpenClaw 相关环境可能不完整，灯 1 易假红（`test-llm` 报 OpenClaw 鉴权失败、模型未配置或尚未点「测试连通」）。
 >
 > ```bash
 > bash -lc 'cd <skill 根> && bash scripts/webui/webui-start.sh restart'
 > ```
 
 ```bash
-# 开发自检（在 zip/仓库根目录执行后 cd；macOS / Linux：python3；Windows：python）
-cd scripts/webui
-python3 -m py_compile web_server.py api_cards.py api_queue.py api_chat.py
+# WebUI 改动后按需自检（zip / 仓库根）
 ```

@@ -109,5 +109,5 @@ python3 card_cli.py chain -h    # 连抽
 
 - `doc/webui/DEPENDENCIES_GUIDE.md` — 依赖与装机（装不起来优先看）
 - `doc/webui/USER_GUIDE.md` — WebUI
-- `doc/CARD_ENGINE_COMMANDS.md` — CLI
-- `doc/CONFIG_GUIDE.md` — 配置
+- `doc/webui/CARD_ENGINE_COMMANDS.md` — CLI
+- `doc/webui/CONFIG_GUIDE.md` — 配置

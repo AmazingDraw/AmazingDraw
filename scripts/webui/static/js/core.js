@@ -14,7 +14,6 @@ let state = {
   settings: {},
   lastSlots: {}, // 用于比对并触发闪烁效果
   openclawModels: [],
-  cliproxyModels: [],
   activeFilter: "all",
   timeFilter: "all",     // all / today / 7d / 30d / YYYY-MM
   cardsLimit: 100,

@@ -108,6 +108,7 @@ python3 card_cli.py patch --card <id> --direction 2 --targets-json '{
 ## 5. 展示 `present`
 
 ```bash
+python3 card_cli.py present --card <id> --json    # 常规 R4：结构化 JSON（含 text_template）
 python3 card_cli.py present --card <id>          # 展示卡片与菜单
 python3 card_cli.py present --card <id> --compact # 精简展示
 ```
@@ -184,7 +185,7 @@ python3 card_cli.py direct \
   [--width 512 --height 768] [--dry-run]
 ```
 
-> `--prompt` 为唯一技术必填，6 个中文元数据参数生成归档文件名。
+> `--prompt` 为唯一技术必填；6 个中文元数据推荐提供（可省略，由 LLM 提取），用于归档文件名与展示。
 > **CLI `direct`** 走 `cu-submit --raw`，**不**经过卡引擎场景库 / 灵感原点 meta。
 > **WebUI 直投**仍会先提取人物、场景和叙事并生成卡片，再提交原始 Prompt；其卡号使用
 > 并发安全的唯一 ID。所有入口统一拒绝含路径分隔符、控制字符或越出卡片目录的 `card_id`。
@@ -195,6 +196,7 @@ python3 card_cli.py direct \
 
 ```bash
 python3 card_cli.py featured [--workflow moody_zib_zit] [--width 512] [--height 768]
+python3 card_cli.py featured --dry-run   # 只建卡并模拟 submit 命令，不入 GPU 队列
 ```
 
 > 从 Obsidian `vault/灵感库/` 随机抽已归档词条；卡片写死 **灵感原点 meta**（`special-ethereal-origin`，代码内建，**不在** `special_scenes.json`），原样旁路渲染。
@@ -220,7 +222,8 @@ python3 card_cli.py mend --card <id> --set slots.pose --value "..." --dry-run
 python3 card_cli.py doc prompt   # 查阅提示词装配手册
 python3 card_cli.py doc pitfalls # 高频报错避坑指南
 python3 card_cli.py search --person jk    # 模糊搜索场景/角色库
-python3 card_cli.py resolve --person OL --scene 办公室  # 解析 fill-ready 字段
+python3 card_cli.py resolve --scene-library general_scenes --include-tags office --exposure-focus auto
+python3 card_cli.py resolve --scene-id some-scene-id --mood 暧昧   # 精确场景 id；见 resolve --help
 ```
 
 ---

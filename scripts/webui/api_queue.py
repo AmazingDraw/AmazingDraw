@@ -722,6 +722,7 @@ def get_logs(lines: int = 80):
 _MODELS_CACHE = {
     "scanned": True,
     "openclaw_models": [],
+    # 退役占位：旧前端曾读 cliproxy_models；现恒为空，UI 只消费 openclaw_models
     "cliproxy_models": []
 }
 _MODELS_SCANNING = False
@@ -793,6 +794,7 @@ def _bg_scan_models():
     _MODELS_CACHE = {
         "scanned": True,
         "openclaw_models": openclaw_models,
+        # 退役占位（恒空）；勿再暗示独立连 cliproxy
         "cliproxy_models": []
     }
     _LAST_SCAN_TIME = time.time()
@@ -862,17 +864,14 @@ def get_doc(doc_name: str):
     # 其余工程文档仍在 doc/，不默认挂 WebUI
     skill_root = SCRIPT_DIR.parent.parent
     webui_doc_dir = skill_root / "doc" / "webui"
-    config_path = skill_root / "doc" / "CONFIG_GUIDE.md"
-    if not config_path.exists():
-        config_path = webui_doc_dir / "CONFIG_GUIDE.md"
 
     allowed_docs = {
         "user_guide": webui_doc_dir / "USER_GUIDE.md",
         "dependencies": webui_doc_dir / "DEPENDENCIES_GUIDE.md",
         "skill": skill_root / "SKILL.md",
-        "config": config_path,
+        "config": webui_doc_dir / "CONFIG_GUIDE.md",
         "sponsor": webui_doc_dir / "COMMUNITY_SPONSOR.md",
-        "commands": skill_root / "doc" / "CARD_ENGINE_COMMANDS.md",
+        "commands": webui_doc_dir / "CARD_ENGINE_COMMANDS.md",
     }
     
     doc_path = allowed_docs.get(doc_name)

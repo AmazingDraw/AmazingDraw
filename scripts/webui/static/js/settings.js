@@ -8,10 +8,9 @@ async function loadModels() {
     
     if (data.scanned) {
       state.openclawModels = data.openclaw_models || [];
-      state.cliproxyModels = data.cliproxy_models || [];
+      // cliproxy_models 已退役（API 仍可能返回空数组兼容字段，忽略）
     } else {
       state.openclawModels = [];
-      state.cliproxyModels = [];
     }
     
     updateModelDropdown();
