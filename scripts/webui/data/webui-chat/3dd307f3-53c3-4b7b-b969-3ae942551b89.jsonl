@@ -1,0 +1,6 @@
+{"operation_id": "19eed66a-cb2f-44d5-ac37-d3797fedabd4", "role": "user", "content": "只回复两个字：复测", "time": 1793021895, "operation_state": "queued"}
+{"operation_id": "19eed66a-cb2f-44d5-ac37-d3797fedabd4", "role": "assistant", "content": "复测", "time": 1793021896, "operation_state": "completed"}
+{"operation_id": "c13ea4fe-7ca5-4457-8881-fed5653dd705", "role": "user", "content": "怎么去拥有一道彩虹", "time": 1793021954, "operation_state": "queued"}
+{"operation_id": "c13ea4fe-7ca5-4457-8881-fed5653dd705", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793021959, "operation_state": "completed"}
+{"operation_id": "61cfab32-72a4-47fa-aa34-775302c13a77", "role": "user", "content": "QAQ", "time": 1793021969, "operation_state": "queued"}
+{"operation_id": "61cfab32-72a4-47fa-aa34-775302c13a77", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793021971, "operation_state": "completed"}

@@ -1,0 +1,2 @@
+{"operation_id": "dfbbf2a6-d108-41ee-bb41-138030e12693", "role": "user", "content": "你好", "time": 1793021585, "operation_state": "queued"}
+{"operation_id": "dfbbf2a6-d108-41ee-bb41-138030e12693", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793021588, "operation_state": "completed"}

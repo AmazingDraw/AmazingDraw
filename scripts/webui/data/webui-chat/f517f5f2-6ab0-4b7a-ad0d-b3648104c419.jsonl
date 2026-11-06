@@ -1,0 +1,2 @@
+{"operation_id": "60b66a32-18fd-434d-9657-80ab2219a05e", "role": "user", "content": "只回复两个字：你好", "time": 1793025593, "operation_state": "queued"}
+{"operation_id": "60b66a32-18fd-434d-9657-80ab2219a05e", "role": "assistant", "content": "你好", "time": 1793025595, "operation_state": "completed"}

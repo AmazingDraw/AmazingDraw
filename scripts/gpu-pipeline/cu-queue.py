@@ -39,17 +39,6 @@ cu-queue.py — GPU 渲染队列管理器（JSON v2）
 损坏 JSON: fail closed，不自动用旧快照覆盖现场。
 """
 
-import sys
-from pathlib import Path as _Path
-for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
-    _native = _p / 'card_engine_core' / 'native'
-    if _native.is_dir() and (
-        list(_native.glob('card_asset_loader*.so'))
-        or list(_native.glob('card_asset_loader*.pyd'))
-    ):
-        if str(_native) not in sys.path:
-            sys.path.insert(0, str(_native))
-        break
 import hashlib
 import json
 import os
@@ -62,7 +51,6 @@ import uuid
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
-from card_config import TMP_DIR, CARDS_DIR
 from typing import Iterator, Optional, Union
 import fcntl
 
@@ -75,6 +63,12 @@ def load_config() -> dict:
         except Exception:
             pass
     return {}
+
+
+_SCRIPTS_ROOT = str(Path(__file__).resolve().parent.parent)
+if _SCRIPTS_ROOT not in sys.path:
+    sys.path.insert(0, _SCRIPTS_ROOT)
+import amazingdraw_paths  # noqa: E402  自有数据目录唯一解析入口（固定 ~/.amazingdraw）
 
 
 def _cfg_path(key: str, default: str) -> Path:
@@ -125,7 +119,7 @@ ZOMBIE_LOCK_THRESHOLD = 1800
 # DONE 已落盘后交付阶段卡死阈值（外置盘 cp / Telegram 僵死等）
 DELIVER_STUCK_THRESHOLD = 600
 CARDS_DIR = Path(os.path.expanduser(os.environ.get("CU_CARDS_DIR") or str(
-    _cfg_path("cards_dir", str(CARDS_DIR))
+    amazingdraw_paths.cards_dir(load_config())
 ))).resolve()
 # 与 cu-submit.sh 提交提示一致：取最近 N 次成功交付的 elapsed 均值（分钟）
 ETA_HISTORY_N = 5
@@ -345,10 +339,10 @@ def heal_deliver_stuck(threshold_sec: float = DELIVER_STUCK_THRESHOLD) -> dict:
 
 
 GLOBAL_CONFIG = load_config()
+# 仅作后台分离进程的 --cwd；旧键 openclaw_workspace_dir 存在则沿用，否则 ~/.amazingdraw
 WORKSPACE = Path(os.path.expanduser(
     os.environ.get("CU_WORKSPACE")
-    or GLOBAL_CONFIG.get("openclaw_workspace_dir")
-    or "~/.openclaw/workspace"
+    or str(amazingdraw_paths.workspace_dir(GLOBAL_CONFIG))
 )).resolve()
 _GPU_DIR = Path(__file__).resolve().parent
 DETACHED_SPAWN = Path(os.environ.get("CU_DETACHED_SPAWN") or (_GPU_DIR / "detached_spawn.py")).resolve()
@@ -898,6 +892,37 @@ class QueueStore:
             job["updated_at"] = now
             self._save_unlocked(snapshot)
             return {"ok": True, "status": "paused", "job_id": job_id, "state": "paused"}
+
+    def release_to_pending(self, job_id: str, token: str, error: str = "terminated_soft") -> dict:
+        """Drop a live lease and put the same job back on the queue.
+
+        Must happen before the worker is killed. The worker exit trap nacks
+        with the old token; once the lease is gone that nack cannot mark the
+        job failed.
+        """
+        with self.locked():
+            snapshot = self._load_maintained_unlocked()
+            job = self._find_unlocked(snapshot, job_id)
+            if not job:
+                return {"ok": False, "status": "not_found", "job_id": job_id}
+            if job.get("state") == "pending" and not job.get("lease"):
+                return {"ok": True, "status": "already_pending", "job_id": job_id, "state": "pending"}
+            # State first: a completed / paused / failed job has no live lease,
+            # so checking the lease first would report lease_mismatch and hide
+            # the real reason. Callers (cu-control terminate) branch on state.
+            if job.get("state") not in self.ACTIVE_LEASE_STATES:
+                return {"ok": False, "status": "invalid_state", "state": job.get("state"), "job_id": job_id}
+            if not self._lease_matches(job, token):
+                return {"ok": False, "status": "lease_mismatch", "job_id": job_id, "state": job.get("state")}
+            now = self._now()
+            job["state"] = "pending"
+            job["lease"] = None
+            job["last_lease_token"] = token
+            job["error"] = str(error or "terminated_soft")
+            job["updated_at"] = now
+            job.pop("retry_at", None)
+            self._save_unlocked(snapshot)
+            return {"ok": True, "status": "pending", "job_id": job_id, "state": "pending"}
 
     def resume_paused(self, job_id: Optional[str] = None) -> dict:
         with self.locked():
@@ -1668,45 +1693,106 @@ def cmd_clean_stale():
     return ack
 
 
+def _active_queue_card_ids() -> set[str]:
+    """Card ids that still belong to the queue. Draft cleanup must not delete them."""
+    keep_states = {"pending", "leased", "running", "paused", "retry_wait"}
+    snap = QUEUE_STORE.snapshot()
+    found = set()
+    for job in snap.get("jobs") or []:
+        if job.get("state") not in keep_states:
+            continue
+        card_id = str(job.get("card_id") or "").strip()
+        if card_id:
+            found.add(card_id)
+    return found
+
+
 def cmd_drafts():
-    """列出 / 清理孤儿草稿卡"""
+    """列出 / 清理孤儿草稿卡。最后一行是 JSON，供 terminate 确认清理数量。"""
     from datetime import datetime
-    
-    CARD_DIR = CARDS_DIR
+
     clean = "--clean" in sys.argv
     drafts = []
-    
-    for fp in sorted(CARD_DIR.glob("*.json")):
+    kept_queued = 0
+    try:
+        active_ids = _active_queue_card_ids()
+    except Exception as exc:
+        payload = {
+            "ok": False,
+            "status": "queue_unreadable",
+            "count": 0,
+            "kept_queued": 0,
+            "error": str(exc),
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        return payload
+
+    if not CARDS_DIR.is_dir():
+        payload = {"ok": True, "status": "none", "count": 0, "kept_queued": 0}
+        print("✅ 无孤儿草稿")
+        print(json.dumps(payload, ensure_ascii=False))
+        return payload
+
+    for fp in sorted(CARDS_DIR.glob("*.json")):
         try:
             card = json.loads(fp.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, IOError):
+        except (json.JSONDecodeError, OSError):
             continue
-        
-        if card.get("status") != "draft":
+        if not isinstance(card, dict) or card.get("status") != "draft":
             continue
-        
-        cid = card.get("card_id", fp.stem)[-4:]
-        scene = card.get("scene", {}).get("name", "?")
-        mtime = datetime.fromtimestamp(fp.stat().st_mtime).strftime("%m-%d %H:%M")
-        slots_filled = sum(1 for v in card.get("slots", {}).values() if v and v.strip())
-        drafts.append({"cid": cid, "scene": scene, "mtime": mtime, "slots": slots_filled, "path": str(fp)})
-    
+        card_id = str(card.get("card_id") or fp.stem)
+        if card_id in active_ids:
+            kept_queued += 1
+            continue
+        scene_raw = card.get("scene")
+        scene = scene_raw.get("name", "?") if isinstance(scene_raw, dict) else "?"
+        slots = card.get("slots")
+        if isinstance(slots, dict):
+            slots_filled = sum(1 for value in slots.values() if isinstance(value, str) and value.strip())
+        else:
+            slots_filled = 0
+        try:
+            mtime = datetime.fromtimestamp(fp.stat().st_mtime).strftime("%m-%d %H:%M")
+        except OSError:
+            mtime = "?"
+        drafts.append({
+            "cid": card_id[-4:],
+            "card_id": card_id,
+            "scene": scene,
+            "mtime": mtime,
+            "slots": slots_filled,
+            "path": str(fp),
+        })
+
+    removed = 0
     if not drafts:
         print("✅ 无孤儿草稿")
-        return
-    
-    print(f"📋 孤儿草稿 ({len(drafts)} 张):")
-    print(f"  {'ID':6s}  {'时间':12s}  {'场景':30s}  {'槽位'}")
-    print(f"  {'-'*60}")
-    for d in drafts:
-        print(f"  {d['cid']:6s}  {d['mtime']:12s}  {d['scene']:30s}  {d['slots']}/14")
-    
-    if clean:
-        for d in drafts:
-            Path(d["path"]).unlink(missing_ok=True)
-        print(f"\n🧹 已清理 {len(drafts)} 张草稿")
     else:
-        print(f"\n→ 加 --clean 参数执行清理")
+        print(f"📋 孤儿草稿 ({len(drafts)} 张):")
+        print(f"  {'ID':6s}  {'时间':12s}  {'场景':30s}  {'槽位'}")
+        print(f"  {'-'*60}")
+        for item in drafts:
+            print(f"  {item['cid']:6s}  {item['mtime']:12s}  {item['scene']:30s}  {item['slots']}/14")
+        if clean:
+            for item in drafts:
+                Path(item["path"]).unlink(missing_ok=True)
+                if not Path(item["path"]).exists():
+                    removed += 1
+            print(f"\n🧹 已清理 {removed} 张草稿")
+        else:
+            print("\n→ 加 --clean 参数执行清理")
+
+    incomplete = clean and removed != len(drafts)
+    status = "cleaned" if clean and removed else "none" if not drafts else "listed"
+    payload = {
+        "ok": not incomplete,
+        "status": "partial" if incomplete else status,
+        "count": removed if clean else len(drafts),
+        "removed": removed,
+        "kept_queued": kept_queued,
+    }
+    print(json.dumps(payload, ensure_ascii=False))
+    return payload
 
 
 def send_zombie_alert(lock_age: int, queue: list, old_done: list):
@@ -1904,7 +1990,7 @@ def main() -> int:
           [--workflow NAME] [--seed N] [--lora X] [--width W] [--height H]
   resume [--job-id ID]       持久化 lease 后启动 worker
   claim [--job-id ID]        仅 claim，不启动 worker
-  ready|heartbeat|ack|nack|pause --job-id ID --lease-token TOKEN
+  ready|heartbeat|ack|nack|pause|release --job-id ID --lease-token TOKEN
   reap                       回收过期 lease
   remove --job-id ID         推荐；兼容 --position/--fingerprint
   clear --force
@@ -1975,7 +2061,7 @@ def main() -> int:
             ack = cmd_resume(job_id=_cli_option("--job-id"))
             return 0 if ack.get("ok") else 1
 
-        if cmd in {"ready", "heartbeat", "ack", "nack", "pause"}:
+        if cmd in {"ready", "heartbeat", "ack", "nack", "pause", "release"}:
             job_id = str(_cli_option("--job-id", "") or "")
             token = str(_cli_option("--lease-token", "") or "")
             if not job_id or not token:
@@ -2004,8 +2090,14 @@ def main() -> int:
                     str(_cli_option("--error", "worker_nack")),
                     retry="--no-retry" not in sys.argv,
                 )
-            else:
+            elif cmd == "pause":
                 ack = QUEUE_STORE.pause(job_id, token)
+            else:
+                ack = QUEUE_STORE.release_to_pending(
+                    job_id,
+                    token,
+                    str(_cli_option("--error", "terminated_soft")),
+                )
             return _print_ack(ack)
 
         if cmd == "reap":
@@ -2038,8 +2130,9 @@ def main() -> int:
             return 0 if ack.get("ok") else 1
 
         if cmd == "drafts":
-            cmd_drafts()
-            return 0
+            # ok:false (queue unreadable / partial clean) must not look like success.
+            payload = cmd_drafts()
+            return 0 if payload.get("ok") else 1
 
         if cmd == "remove":
             raw_position = _cli_option("--position")

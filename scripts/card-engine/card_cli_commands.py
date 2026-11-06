@@ -38,14 +38,28 @@ from card_core import (
 # Sibling utility imports
 from card_io import (
     ts_id, card_path as resolve_card_path, load_card, save_card,
-    set_nested, get_nested, sync_scene_metadata_from_slots,
+    set_nested, get_nested, normalize_field_path, sync_scene_metadata_from_slots,
     set_scene_keywords_preserve_name, is_manual_custom_scene_card,
     invalidate_render_cache, card_lock,
+)
+from card_blind_body import (
+    BODY_PLACEHOLDER,
+    format_blind_summary_inline,
+    format_blind_summary_multiline,
+    is_blind_card,
+    is_multi_blind_card,
+    mask_text,
+    render_multi_blind_body,
+    reroll_card_blind_body,
+    reveal_body,
+    reveal_render_prompt,
+    strip_unauthorized_body_words,
 )
 from card_scene_router import (
     scene_requests_sm_theme, scene_requests_workplace_theme,
     scene_requests_school_theme, scene_requests_medical_theme, scene_requests_general_theme,
-    scene_requests_special_theme, scene_requests_perspective_theme,
+    scene_requests_special_theme, scene_requests_perspective_theme, scene_requests_ancient_theme,
+    is_pure_scene_theme_classifier,
     infer_semantic_route_flags,
     resolve_scene_by_label_from_libraries, resolve_library_fields, pick_scene_for_create,
     infer_multi_subject_layout,
@@ -134,25 +148,33 @@ def cmd_create(args):
     print(f"  模式: {args.mode}")
     print(f"  场景: {card['scene']['name']}")
     print(f"  人物: {card['subject']['display_name']}")
+    if is_blind_card(card):
+        if is_multi_blind_card(card):
+            n_subj = len((card.get('blind_body') or {}).get('subjects') or [])
+            print(f"  体型盲盒 (多人 · {n_subj} 人):")
+            for line in format_blind_summary_multiline(card).splitlines():
+                print(f"    {line}")
+        else:
+            print(f"  体型盲盒: {format_blind_summary_inline(card)}")
     if card['subject'].get('lora'):
         print(f"  LoRA: {card['subject']['lora']}")
-    if getattr(args, 'bundle', False):
-        secs = card.get('_bundle_sections') or {}
+    secs = card.get('_bundle_sections') or {}
+    if secs:
         n_libs = len(secs)
         n_secs = sum(len(v) if isinstance(v, list) else 0 for v in secs.values())
-        print(f"  词库参考: {n_libs} 库 / {n_secs} 章")
+        print(f"  词库参考: {n_libs} 库 / {n_secs} 条可选")
         for lib, names in secs.items():
             if isinstance(names, list) and names:
                 print(f"    · {lib}: {', '.join(names[:6])}{'…' if len(names) > 6 else ''}")
         if card.get('_bundle_sidecar'):
             print(f"  词库旁路: {card['_bundle_sidecar']}")
-        print("  → fill 模板将自动注入 guidance.library_bundle")
+        print("  → fill 可将 guidance.library_bundle 的 1 条写入对应槽，也可留空")
     else:
-        print("  词库参考: 关闭")
+        print("  词库参考: 无")
     if is_custom_scene:
-        print(f"\n  💡 [SYSTEM TIPS] 场景「{card['scene']['name']}」为库外自定义，请在 fill 写入英文 scene.keywords，自由大胆发明机位与环境，禁止留空。")
+        print(f"\n  💡 [SYSTEM TIPS] 场景「{card['scene']['name']}」为库外场景，请在 fill 写入英文 scene.keywords，尽情发挥，禁止留空。")
     if is_custom_person:
-        print(f"\n  💡 [SYSTEM TIPS] 人物「{args.person}」为库外词，请根据角色特质，尽情发挥，自由大胆无下限。")
+        print(f"\n  💡 [SYSTEM TIPS] 人物「{args.person}」为库外角色，请根据角色特质，尽情发挥，自由大胆。")
         # 多人角色提示：检测是否包含多人关键词
         multi_person_keywords = [
             # 家庭关系（明确包含两人）
@@ -179,6 +201,8 @@ def cmd_create(args):
             else:
                 # 双人纯女性场景
                 print("  💡 [SYSTEM TIPS] 检测到多人角色，请在 body_shape 中为每个人物分别描述体型、年龄、外貌特征（格式如：TWO GIRLS: (1) 角色A描述; (2) 角色B描述）。")
+    print("  🔒 [AI 提示] 严禁 grep 扫库检索配置！体型已由盲盒托管，直接按模板进行 fill 填槽即可。")
+    print("  🎬 [摘要展示] present 顶部芯片排除标点后 ≤36 字；theme_zh 4~6 字，各 director *_zh 4~8 字短标签。")
     print(f"{'='*50}")
 
     # 返回 card_id 便于管道
@@ -310,7 +334,7 @@ def cmd_fill(args):
         VALID_EXPOSURE_MODE = {"upper", "lower", "both", "half_nude", "half_covered", "none"}
         required_slots = []
         optional_slots = ['lighting', 'clothing', 'pose', 'expression_gaze', 'style_quality', 'makeup_hair', 'accessories', 'imperfections', 'tattoo', 'props', 'pet', 'liquids']
-        required_elevation_director = ['story_elevation', 'story_elevation_zh', 'lighting_palette_zh', 'style_recipe_zh']
+        required_elevation_director = ['story_elevation_zh', 'lighting_palette_zh', 'style_recipe_zh']
 
         def _validate_story_elevation_zh(story_zh, errors):
             if not has_cjk(story_zh):
@@ -358,14 +382,32 @@ def cmd_fill(args):
                 sys.exit(1)
 
         # 逐槽填充:JSON 先作为基础,显式 CLI 再覆盖
+        # 首轮 fill (was_slots_filled=False) 保护创卡预注入槽位不被模板空串意外抹除；
+        # 二次重填 (was_slots_filled=True) 或 CLI 显式传空串 (--tattoo "") 则允许清空可选槽位。
         slot_fields = {}
         slots_changed = False
+        was_slots_filled = bool(progress.get('slots'))
+        clearable_optional_slots = {
+            'tattoo', 'accessories', 'imperfections', 'props', 'pet', 'makeup_hair', 'liquids'
+        }
         for k in SLOT_RENDER_ORDER:
             val = payload_slots.get(k, None)
             cli_val = getattr(args, k, None)
             slot_fields[k] = cli_val if cli_val is not None else val
         for slot, val in slot_fields.items():
-            if val is not None and val != "":
+            cli_val = getattr(args, slot, None)
+            if is_blind_card(card) and slot in ("clothing", "pose") and val:
+                cleaned_val, stripped_words = strip_unauthorized_body_words(str(val))
+                if stripped_words:
+                    print(f"💡 体型由引擎托管，已从 slots.{slot} 剥离越权体型词: {', '.join(stripped_words[:5])}")
+                    val = cleaned_val
+            allow_clear = (
+                slot in clearable_optional_slots
+                and val == ""
+                and bool(card["slots"].get(slot))
+                and (cli_val == "" or (was_slots_filled and slot in payload_slots))
+            )
+            if (val is not None and val != "") or allow_clear:
                 if card["slots"].get(slot) != val:
                     slots_changed = True
                     changed_targets.add(f"slots.{slot}")
@@ -377,9 +419,27 @@ def cmd_fill(args):
                     "changes": {slot: str(val)[:80] + ("..." if len(str(val)) > 80 else "")}
                 })
 
-        # body_shape：create 身份注入为默认；fill 显式提供则覆盖（不进 SLOT_RENDER_ORDER，避免 render 双重拼装）
-        body_shape_val = payload_slots.get("body_shape", None)
-        if body_shape_val is not None and str(body_shape_val).strip() != "":
+        # 额外支持 exposure_clothing 反向泄露剥离（若存在）
+        if is_blind_card(card) and payload_slots.get("exposure_clothing"):
+            ec_clean, ec_stripped = strip_unauthorized_body_words(str(payload_slots.get("exposure_clothing")))
+            if ec_stripped:
+                print(f"💡 体型由引擎托管，已从 slots.exposure_clothing 剥离越权体型词: {', '.join(ec_stripped[:5])}")
+                card["slots"]["exposure_clothing"] = ec_clean
+
+        # body_shape：create 身份注入为默认；盲盒卡锁定为 {{BODY}} 写保护；非盲盒卡 fill 显式提供则覆盖
+        cli_bs_val = getattr(args, "body_shape", None)
+        body_shape_val = cli_bs_val if cli_bs_val is not None else payload_slots.get("body_shape", None)
+        if is_blind_card(card):
+            if is_multi_blind_card(card):
+                if not card["slots"].get("body_shape") or "{{BODY" not in str(card["slots"]["body_shape"]):
+                    card["slots"]["body_shape"] = render_multi_blind_body(card)
+            else:
+                card["slots"]["body_shape"] = BODY_PLACEHOLDER
+            if body_shape_val is not None:
+                bs_str = str(body_shape_val).strip()
+                if bs_str and bs_str != card["slots"].get("body_shape"):
+                    print("💡 体型由引擎托管，已忽略 fill 传入的 body_shape。")
+        elif body_shape_val is not None and str(body_shape_val).strip() != "":
             body_shape_val = str(body_shape_val).strip()
             if card["slots"].get("body_shape") != body_shape_val:
                 slots_changed = True
@@ -585,29 +645,34 @@ def cmd_fill(args):
                     status_lines.append(_preview_filter_tip(ef_val, _half_nude_reg))
                 else:
                     status_lines.append(f"📋 clothing 预过滤({ef_val}): 无变动")
-            # ── body_shape 预过滤：clothing 已填后展示真实过滤结果（与 render 一致）──
-            body_shape_raw = card["slots"].get("body_shape", "").strip()
-            if body_shape_raw:
-                from card_exposure import (
-                    filter_body_shape_by_exposure,
-                    split_prompt_items,
+            # ── body_shape 预过滤：盲盒卡只展示托管档位，绝不回显真实体型 ──
+            if is_blind_card(card):
+                status_lines.append(
+                    f"📋 body_shape 预过滤({ef_val}): 体型由引擎托管 · {format_blind_summary_inline(card)}"
                 )
-                # 复用上方统一解析的 _ctx_* + half_nude_region + pose_text，与 render 同源。
-                filtered_bs = filter_body_shape_by_exposure(
-                    body_shape_raw,
-                    _ctx_exposure or exposure_raw,
-                    exposure_mode=_ctx_mode,
-                    context_text=_ctx_text,
-                    pose_text=card["slots"].get("pose", "") or "",
-                    half_nude_region=_half_nude_reg,
-                )
-                removed = set(split_prompt_items(body_shape_raw)) - set(split_prompt_items(filtered_bs))
-                if removed:
-                    status_lines.append(f"📋 body_shape 预过滤({ef_val}): 移除 [{', '.join(sorted(removed))}]")
-                    status_lines.append(f"   保留: {filtered_bs}")
-                    status_lines.append(_preview_filter_tip(ef_val, _half_nude_reg))
-                else:
-                    status_lines.append(f"📋 body_shape 预过滤({ef_val}): 无变动")
+            else:
+                body_shape_raw = card["slots"].get("body_shape", "").strip()
+                if body_shape_raw:
+                    from card_exposure import (
+                        filter_body_shape_by_exposure,
+                        split_prompt_items,
+                    )
+                    # 复用上方统一解析的 _ctx_* + half_nude_region + pose_text，与 render 同源。
+                    filtered_bs = filter_body_shape_by_exposure(
+                        body_shape_raw,
+                        _ctx_exposure or exposure_raw,
+                        exposure_mode=_ctx_mode,
+                        context_text=_ctx_text,
+                        pose_text=card["slots"].get("pose", "") or "",
+                        half_nude_region=_half_nude_reg,
+                    )
+                    removed = set(split_prompt_items(body_shape_raw)) - set(split_prompt_items(filtered_bs))
+                    if removed:
+                        status_lines.append(f"📋 body_shape 预过滤({ef_val}): 移除 [{', '.join(sorted(removed))}]")
+                        status_lines.append(f"   保留: {filtered_bs}")
+                        status_lines.append(_preview_filter_tip(ef_val, _half_nude_reg))
+                    else:
+                        status_lines.append(f"📋 body_shape 预过滤({ef_val}): 无变动")
             status_lines.extend([_progress_line(), _next_step_line()])
         elif phase == 'elevation':
             missing_zh = _missing_fields(card.get("director", {}), required_elevation_director)
@@ -1108,7 +1173,7 @@ def cmd_patch(args):
             _plan = resolve_exposure_plan(card)
             consistency = validate_exposure_consistency(
                 exposure_text=str((card.get("slots") or {}).get("clothing") or ""),
-                body_shape=str((card.get("slots") or {}).get("body_shape") or ""),
+                body_shape=str(reveal_body(card) or ""),
                 pose_text=str((card.get("slots") or {}).get("pose") or ""),
                 exposure_mode=_plan["mode"],
                 context_text=_plan["context_text"],
@@ -1132,8 +1197,21 @@ def cmd_patch(args):
                 sys.exit(1)
 
     elif args.set:
+        norm_set = normalize_field_path(args.set)
+        if is_blind_card(card) and (
+            norm_set == "slots.body_shape"
+            or norm_set.startswith("_private")
+            or norm_set.startswith("blind_body")
+        ):
+            print("❌ 盲盒卡体型由引擎托管，禁止手动修改 body_shape（如需重抽体型请执行 mend --card <ID> --reroll-body）")
+            sys.exit(1)
         old_val = get_nested(card, args.set, "")
         val = args.value or ""
+        if is_blind_card(card) and norm_set in ("slots.clothing", "slots.pose", "slots.exposure_clothing") and val:
+            cleaned_val, stripped_words = strip_unauthorized_body_words(str(val))
+            if stripped_words:
+                print(f"💡 体型由引擎托管，已剥离越权体型词: {', '.join(stripped_words[:5])}")
+                val = cleaned_val
         set_nested(card, args.set, val)
         card["history"].append({
             "timestamp": datetime.now().isoformat(),
@@ -1160,14 +1238,58 @@ def cmd_mend(args):
     undo = getattr(args, 'undo', False)
     history = getattr(args, 'history', False)
     dry_run = getattr(args, 'dry_run', False)
+    reroll_body = getattr(args, 'reroll_body', None)
     with card_lock(card_id, owner='mend', timeout=20.0):
         card = load_card(card_id, default=None)
         if not card:
             print(f"❌ 卡片不存在: {card_id}")
             return {'ok': False, 'reason': 'not_found'}
 
+        # ── 重抽盲盒体型 ──
+        if reroll_body is not None and reroll_body is not False:
+            if not is_blind_card(card):
+                print("❌ 当前卡片不是盲盒卡，不支持 --reroll-body")
+                return {'ok': False, 'reason': 'not_blind_card'}
+            target_id = "all" if reroll_body is True else str(reroll_body)
+            stage_arg = getattr(args, "stage", None) or getattr(args, "stages", None)
+            reroll_info = reroll_card_blind_body(card, target_id=target_id, stage=stage_arg)
+            summary_txt = format_blind_summary_inline(card)
+            card.setdefault('history', []).append({
+                'timestamp': datetime.now().isoformat(),
+                'action': 'mend_reroll_body',
+                'target': target_id,
+                'changes': {'blind_body': summary_txt},
+            })
+            invalidate_render_cache(card, reason='mend-reroll-body')
+            save_card(card)
+            if is_multi_blind_card(card):
+                print(f"🎲 已重抽多人盲盒体型 (目标: {target_id}):")
+                for line in format_blind_summary_multiline(card).splitlines():
+                    print(f"  {line}")
+            else:
+                print(f"🎲 已重抽盲盒体型: {summary_txt}")
+            if str(card.get('status') or '') not in ('draft', ''):
+                print("🔄 rechecking...")
+                cmd_check(argparse.Namespace(card=card_id, chain_mode=True))
+                refreshed = load_card(card_id)
+                status = refreshed.get('status', '')
+            else:
+                status = str(card.get('status') or 'draft')
+            return {
+                'ok': True,
+                'action': 'reroll_body',
+                'target': target_id,
+                'tiers': reroll_info.get('tiers'),
+                'status': status,
+            }
+
         # ── 查看当前值 ──
         if get_field:
+            norm_get = normalize_field_path(get_field)
+            if is_blind_card(card) and (norm_get == "slots.body_shape" or norm_get.startswith("_private")):
+                val_display = card.get("slots", {}).get("body_shape") or BODY_PLACEHOLDER
+                print(f"📋 {get_field} = {val_display} ({format_blind_summary_inline(card)})")
+                return {'ok': True, 'action': 'get', 'field': get_field, 'value': val_display}
             val = get_nested(card, get_field, "")
             print(f"📋 {get_field} = {val}")
             return {'ok': True, 'action': 'get', 'field': get_field, 'value': val}
@@ -1221,12 +1343,27 @@ def cmd_mend(args):
 
         # ── 修改字段 ──
         if not field:
-            print("❌ 需要 --field 或 --get 或 --undo 或 --history 参数")
+            print("❌ 需要 --field 或 --get 或 --undo 或 --history 或 --reroll-body 参数")
             return {'ok': False, 'reason': 'missing_args'}
+
+        norm_field = normalize_field_path(field)
+        if is_blind_card(card) and (
+            norm_field == "slots.body_shape"
+            or norm_field.startswith("_private")
+            or norm_field.startswith("blind_body")
+        ):
+            print("❌ 盲盒卡体型由引擎托管，禁止手动修改 body_shape（如需重抽请使用: mend --card <ID> --reroll-body）")
+            return {'ok': False, 'reason': 'blind_body_protected'}
 
         if value is None:
             print(f"❌ 需要 --value 参数")
             return {'ok': False, 'reason': 'missing_value'}
+
+        if is_blind_card(card) and norm_field in ("slots.clothing", "slots.pose", "slots.exposure_clothing") and value:
+            cleaned_val, stripped_words = strip_unauthorized_body_words(str(value))
+            if stripped_words:
+                print(f"💡 体型由引擎托管，已从 {norm_field} 剥离越权体型词: {', '.join(stripped_words[:5])}")
+                value = cleaned_val
 
         old_val = get_nested(card, field, "")
 
@@ -1488,7 +1625,11 @@ def _submit_card_unlocked(args):
             sys.exit(1)
 
     render = card.get("_render_output", {})
-    prompt = render.get("prompt", "")
+    masked_prompt = render.get("prompt", "")
+    prompt = reveal_render_prompt(card)
+    if is_blind_card(card) and (not prompt or "{{BODY" in prompt):
+        print("❌ 盲盒卡缺少有效还原后的真实 Prompt，禁止入队。请重新执行 check --card <card_id>")
+        sys.exit(1)
     director = card.get("director", {})
     subject = card.get("subject", {})
     scene_obj = card.get("scene", {})
@@ -1544,13 +1685,20 @@ def _submit_card_unlocked(args):
 
     if getattr(args, "dry_run", False):
         import shlex
+        display_args = list(submit_args)
+        if is_blind_card(card):
+            for idx_arg in range(len(display_args) - 1):
+                if display_args[idx_arg] == "--prompt":
+                    display_args[idx_arg + 1] = masked_prompt or mask_text(prompt, card)
+                    break
         print("✨ [DRY-RUN] Submit simulation successful.")
-        print(f"  Command: bash {shlex.join(submit_args)}")
+        print(f"  Command: bash {shlex.join(display_args)}")
         return
 
     print(f"🚀 提交 {card['card_id']} ...")
     result = subprocess.run(["bash"] + submit_args, capture_output=True, text=True, timeout=30)
-    print(result.stdout)
+    out_stdout = mask_text(result.stdout, card) if is_blind_card(card) else result.stdout
+    print(out_stdout)
     ack = {}
     for line in reversed((result.stdout or "").splitlines()):
         try:
@@ -1731,9 +1879,10 @@ def cmd_chain(args):
         print(f'🧩 fill 批量模板: {template_info["batch_path"]}')
         if template_info.get('per_card_paths'):
             print(f'🧾 单卡模板示例: {template_info["per_card_paths"][0]}')
-        print('→ AI 可直接按模板填 theme_zh / director / slots / story_elevation*，再用 fill --json-file 一次导入（连抽勿拆 --phase）')
+        print('→ AI 可直接按模板填 theme_zh / director / slots / story_elevation_zh，再用 fill --json-file 一次导入（连抽勿拆 --phase）')
         print('→ 骨架不贴合时,可在 fill 阶段原地改造,或重抽;展示用场景名须与 scene.keywords 一致')
         print('→ fill 完成后,用 chain --resume <id> 逐个提交')
+        print('🔒 [AI 提示] 严禁 grep 扫库检索配置！体型已由盲盒托管，直接按上方模板 fill 填槽即可。')
     if bad:
         for idx, r in enumerate(results, start=1):
             if not r.get('ok'):
@@ -1905,10 +2054,56 @@ DOC_MAP = {
     "config": "webui/CONFIG_GUIDE.md",
 }
 
+# 短名之外的别名与关键词归一化：让 doc 也认文件名、doc 相对路径和常见叫法
+_DOC_ALIASES = {
+    "prompt_template": "prompt",
+    "draw_guide": "draw",
+    "check_pitfalls": "pitfalls",
+    "card_engine_commands": "commands",
+    "config_guide": "config",
+    "cloud_draw": "cloud",
+}
+_DOC_KEYWORDS = [
+    ("pitfall", "pitfalls"), ("避坑", "pitfalls"),
+    ("draw_guide", "draw"), ("draw", "draw"), ("绘图", "draw"),
+    ("command", "commands"), ("速查", "commands"),
+    ("config", "config"), ("配置", "config"),
+    ("cloud", "cloud"), ("云端", "cloud"),
+    ("prompt", "prompt"), ("template", "prompt"), ("装配", "prompt"),
+]
+
+
+def _resolve_doc_name(raw):
+    """把任意输入归一化为 DOC_MAP 短名：短名/文件名/相对路径/关键词均可。"""
+    key = str(raw or "").strip().lower()
+    if key in DOC_MAP:
+        return key
+    base = key.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+    if base.endswith(".md"):
+        base = base[:-3]
+    if base in _DOC_ALIASES:
+        return _DOC_ALIASES[base]
+    for kw, name in _DOC_KEYWORDS:
+        if kw in base:
+            return name
+    return None
+
+
 def cmd_doc(args):
     """打印指定的设计与维护手册文档的全部内容。"""
-    doc_name = getattr(args, "name", "prompt")
-    filename = DOC_MAP.get(doc_name, "cli/PROMPT_TEMPLATE.md")
+    import difflib
+
+    raw = getattr(args, "name", "prompt") or "prompt"
+    doc_name = _resolve_doc_name(raw)
+    if doc_name is None:
+        pool = list(DOC_MAP) + [Path(v).name.lower() for v in DOC_MAP.values()]
+        close = difflib.get_close_matches(str(raw).strip().lower(), pool, n=1, cutoff=0.4)
+        print(f"❌ 未知文档：{raw}")
+        print(f"   可用短名：{' / '.join(DOC_MAP)}（也接受 doc 下的文件名或路径，如 PROMPT_TEMPLATE.md）")
+        if close:
+            print(f"   💡 你是不是想要：{close[0]}")
+        sys.exit(2)
+    filename = DOC_MAP[doc_name]
 
     doc_path = SCRIPT_DIR.parent.parent / "doc" / Path(filename)
     if not doc_path.exists():
@@ -1922,10 +2117,105 @@ def cmd_doc(args):
         sys.exit(1)
 
 
+_PERSPECTIVE_SHORT = ("颜射", "后入", "丝袜", "鱼眼", "偷拍")
+_PERSPECTIVE_FULL = ("颜射视角", "后入视角", "丝袜视角", "鱼眼视角", "偷拍视角")
+_PERSPECTIVE_GENERIC = frozenset({
+    "特殊视角", "视角库", "perspective", "perspective_scenes",
+})
+
+
+def _load_scene_catalog():
+    catalog = []
+    lib_dir = SCRIPT_DIR / "libraries"
+    if not lib_dir.exists():
+        return catalog
+    for p in sorted(lib_dir.glob("*.json")):
+        if p.name == "registry.json":
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            theme = item.get("scene_theme") or item.get("prompt") or ""
+            catalog.append({
+                "label": item.get("label") or item.get("scene") or "",
+                "library": p.stem,
+                "tags": item.get("tags", []) or [],
+                "moods": item.get("moods", []) or [],
+                "notes": item.get("notes") or "",
+                "theme": theme[:80] + "..." if len(theme) > 80 else theme,
+                "theme_full": theme,
+            })
+    return catalog
+
+
+def _dedupe_scene_matches(matches):
+    seen = set()
+    out = []
+    for m in matches:
+        if m["label"] not in seen:
+            seen.add(m["label"])
+            out.append(m)
+    return out
+
+
+def _print_scene_matches(matches, miss_as_custom=False):
+    if matches:
+        print(f"✨ 找到 {len(matches)} 个匹配场景 (最多展示前 15 条)：")
+        print("-" * 80)
+        for idx, m in enumerate(matches[:15], 1):
+            tags_str = f" | 标签: {','.join(m['tags'])}" if m["tags"] else ""
+            print(f"  {idx}. 🎬 \033[32m{m['label']}\033[0m ({m['library']}){tags_str}")
+            print(f"     💡 描述: {m['theme']}")
+        print("-" * 80)
+    else:
+        print("❌ 未在场景库中找到匹配场景")
+        if miss_as_custom:
+            print("💡 库外场景：原词传 create/chain --scene 即可（manual-custom），fill 必写英文 scene.keywords。")
+    print()
+
+
+def _search_scene_pool(raw):
+    """主题/视角分类词 → (说明, 过滤函数)；地点查询返回 None。"""
+    if scene_requests_perspective_theme(raw):
+        raw_l = raw.lower()
+        if raw in _PERSPECTIVE_GENERIC or raw_l in _PERSPECTIVE_GENERIC:
+            return (
+                "perspective_scenes 全库",
+                lambda m: m["library"] == "perspective_scenes",
+            )
+        for word in _PERSPECTIVE_FULL:
+            if word in raw:
+                return (f"{word} 池", lambda m, w=word: w in (m.get("label") or ""))
+    is_theme = is_pure_scene_theme_classifier(raw) or raw in {
+        "古风", "古风场景", "古风主题", "古代", "古代场景", "古代主题",
+        "ancient", "ancient theme", "ancient_scenes",
+    }
+    if not is_theme:
+        return None
+    routes = (
+        (scene_requests_school_theme, "school_scenes"),
+        (scene_requests_medical_theme, "medical_scenes"),
+        (scene_requests_workplace_theme, "workplace_scenes"),
+        (scene_requests_sm_theme, "sm_scenes"),
+        (scene_requests_ancient_theme, "ancient_scenes"),
+        (scene_requests_special_theme, "special_scenes"),
+        (scene_requests_general_theme, "general_scenes"),
+    )
+    for checker, lib in routes:
+        if checker(raw):
+            return (lib, lambda m, lib=lib: m["library"] == lib)
+    return None
+
+
 def cmd_search(args):
     """搜索场景和角色预设，支持模糊和拼音匹配。"""
     has_query = False
-    
+
     # 中文别名 → 英文 tag 映射（搜中文时自动扩展英文 tag）
     SCENE_ALIAS_MAP = {
         "生活": "daily", "日常": "daily", "生活感": "daily", "日常感": "daily",
@@ -1938,118 +2228,89 @@ def cmd_search(args):
 
     if getattr(args, "scene", None):
         has_query = True
-        q = str(args.scene).strip().lower()
-        # 展开中文别名
+        raw_scene = str(args.scene).strip()
+        q = raw_scene.lower()
         extra_tags = [SCENE_ALIAS_MAP[k] for k in SCENE_ALIAS_MAP if k in q]
-        if extra_tags:
+        catalog = _load_scene_catalog()
+        pool = _search_scene_pool(raw_scene)
+
+        if extra_tags and not pool:
             print(f"🔍 正在检索场景库，关键字: '{q}' (展开别名: {', '.join(extra_tags)}) ...\n")
         else:
             print(f"🔍 正在检索场景库，关键字: '{q}' ...\n")
-        
-        # 场景搜索：优先加密资产加载器，回退扫 libraries/ 明文
-        matches = []
-        try:
-            from card_asset_loader import search_scenes as _search_scenes
-            matches = _search_scenes(q, limit=15)
-        except Exception:
-            matches = []
-        if not matches:
-                    if lib_dir.exists():
-                        for p in lib_dir.glob("*.json"):
-                            if p.name == "registry.json":
-                                continue
-                            try:
-                                data = json.loads(p.read_text(encoding="utf-8"))
-                                items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                                for item in items:
-                                    if not isinstance(item, dict):
-                                        continue
-                                    label = item.get("label") or item.get("scene") or ""
-                                    theme = item.get("scene_theme") or item.get("prompt") or ""
-                                    tags = item.get("tags", [])
-                                    moods = item.get("moods", [])
-                                    notes = item.get("notes") or ""
-                        
-                                    # Match label, theme, tags, moods, notes
-                                    match_text = " ".join([label, theme, notes] + tags + moods).lower()
-                                    tag_match = extra_tags and any(t in tags or t in moods for t in extra_tags)
-                                    if q in match_text or tag_match:
-                                        matches.append({
-                                            "label": label,
-                                            "library": p.stem,
-                                            "tags": tags,
-                                            "theme": theme[:80] + "..." if len(theme) > 80 else theme
-                                        })
-                            except Exception:
-                                pass
-        
 
-        # 去重
-        seen = set()
-        dedup_matches = []
-        for m in matches:
-            if m["label"] not in seen:
-                seen.add(m["label"])
-                dedup_matches.append(m)
-                
-        if dedup_matches:
-            print(f"✨ 找到 {len(dedup_matches)} 个匹配场景 (最多展示前 15 条)：")
-            print("-" * 80)
-            for idx, m in enumerate(dedup_matches[:15], 1):
-                tags_str = f" | 标签: {','.join(m['tags'])}" if m['tags'] else ""
-                print(f"  {idx}. 🎬 \033[32m{m['label']}\033[0m ({m['library']}){tags_str}")
-                print(f"     💡 描述: {m['theme']}")
-            print("-" * 80)
+        if raw_scene in _PERSPECTIVE_SHORT:
+            print(f"⚠️ 短词不进视角池。请改传「{raw_scene}视角」，create/chain 才会随机该视角。\n")
+
+        if pool:
+            pool_name, filt = pool
+            matches = _dedupe_scene_matches([m for m in catalog if filt(m)])
+            print(f"📌 「{raw_scene}」→ create/chain --scene {raw_scene} 随机 {pool_name}（{len(matches)}）。勿手拣。\n")
+            _print_scene_matches(matches)
         else:
-            print("❌ 未在场景库中找到匹配场景")
-        print()
+            ascii_short = len(q) <= 2 and q.isascii()
+            matches = []
+            for item in catalog:
+                label = item.get("label") or ""
+                tags = item.get("tags") or []
+                moods = item.get("moods") or []
+                if ascii_short:
+                    hay = " ".join([label] + tags + moods).lower()
+                else:
+                    hay = " ".join(
+                        [label, item.get("theme_full") or "", item.get("notes") or ""] + tags + moods
+                    ).lower()
+                tag_match = extra_tags and any(t in tags or t in moods for t in extra_tags)
+                if q in hay or tag_match:
+                    matches.append(item)
+            _print_scene_matches(_dedupe_scene_matches(matches), miss_as_custom=True)
 
     if getattr(args, "person", None):
         has_query = True
         q = str(args.person).strip().lower()
         print(f"🔍 正在检索角色库/身份库，关键字: '{q}' ...\n")
         
-        presets_path = SCRIPT_DIR / "config" / "amateurs.json"
         matches = []
         try:
-            from card_asset_loader import search_person as _search_person
-            matches = _search_person(q, limit=15)
+            from resolver.role_resolver import load_amateurs
+            from card_identity import apply_role_restrictions
+            presets = apply_role_restrictions(load_amateurs())
+            profiles = presets.get("profiles", {}) or {}
+            for key, val in profiles.items():
+                if not isinstance(val, dict):
+                    continue
+                disp = val.get("display_name") or ""
+                raw_tiers = val.get("body_tiers")
+                if not isinstance(raw_tiers, dict) or not raw_tiers:
+                    from card_blind_body import derive_tiers_from_body_text
+                    raw_tiers = derive_tiers_from_body_text(str(val.get("body_shape") or ""), profile_key=key)
+                tiers_summary = format_blind_summary_inline(raw_tiers)
+                match_text = " ".join([key, disp, tiers_summary]).lower()
+                if q in match_text:
+                    matches.append({
+                        "key": key,
+                        "display_name": disp,
+                        "tiers_summary": tiers_summary,
+                    })
         except Exception:
-            matches = []
-        if not matches:
-                    if presets_path.exists():
-                        try:
-                            data = json.loads(presets_path.read_text(encoding="utf-8"))
-                            profiles = data.get("profiles", {}) or {}
-                            for key, val in profiles.items():
-                                disp = val.get("display_name") or ""
-                                desc = val.get("description") or ""
-                                body = val.get("body_shape") or ""
-                    
-                                match_text = " ".join([key, disp, desc, body]).lower()
-                                if q in match_text:
-                                    matches.append({
-                                        "key": key,
-                                        "display_name": disp,
-                                        "description": desc
-                                    })
-                        except Exception:
-                            pass
+            pass
                 
-
         if matches:
             print(f"✨ 找到 {len(matches)} 个匹配角色/身份 (最多展示前 15 条)：")
             print("-" * 80)
             for idx, m in enumerate(matches[:15], 1):
                 print(f"  {idx}. 👥 \033[36m{m['display_name']}\033[0m (key: \033[33m{m['key']}\033[0m)")
-                print(f"     💡 描述: {m['description']}")
+                print(f"     💡 档位: {m['tiers_summary']}")
             print("-" * 80)
         else:
             print("❌ 未在角色库中找到匹配角色")
+            print("💡 库外角色：原词直接 --person 即可，不必搜到才传。")
         print()
 
     if not has_query:
         print("❌ 错误: 请指定 --scene 或 --person 关键字进行搜索。")
         print("  例: python3 card_cli.py search --scene 教室")
+        print("  例: python3 card_cli.py search --scene 校园")
+        print("  例: python3 card_cli.py search --scene 颜射视角")
         print("  例: python3 card_cli.py search --person jk")
         sys.exit(1)

@@ -1,0 +1,2 @@
+{"operation_id": "ed239512-3da2-40db-b741-f410678e7589", "role": "user", "content": "只回复两个字：正常", "time": 1793031306, "operation_state": "queued"}
+{"operation_id": "ed239512-3da2-40db-b741-f410678e7589", "role": "assistant", "content": "正常", "time": 1793031308, "operation_state": "completed"}

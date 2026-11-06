@@ -33,9 +33,373 @@
 
 #view-settings.workspace-view.active,
 #view-docs.workspace-view.active,
+#view-album.workspace-view.active,
 #view-logs.workspace-view.active {
   display: flex;
   flex-direction: column;
+}
+
+#sidebar-album-sub {
+  padding-top: 18px;
+}
+
+#album-sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.album-toolbar {
+  padding: 4px 20px 8px;
+}
+
+.album-toolbar .btn-sidebar-action {
+  width: 100%;
+}
+
+.album-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.album-nav-group {
+  margin-bottom: 10px;
+}
+
+.album-nav-label {
+  padding: 4px 20px 6px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+
+.album-create-card {
+  width: 360px;
+}
+
+.album-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 12px 6px;
+}
+
+.album-sidebar-list .placeholder-text {
+  margin: 0;
+  padding: 4px 8px 8px;
+  font-size: 0.72rem;
+}
+
+.album-nav-item > i {
+  width: 1em;
+  flex: 0 0 auto;
+  text-align: center;
+  color: inherit;
+  font-size: 0.85rem;
+  opacity: 0.72;
+}
+
+.album-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-sans);
+}
+
+.album-nav-item.active {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+
+.album-nav-item .album-nav-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.album-nav-item .album-nav-count {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.album-nav-caret {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 2px 4px;
+}
+
+.album-nav-item.album-nav-nested {
+  padding-left: 18px;
+}
+
+.album-nav-item .album-nav-tools {
+  display: none;
+  gap: 4px;
+}
+
+.album-nav-item:hover .album-nav-tools,
+.album-nav-item.active .album-nav-tools {
+  display: flex;
+}
+
+.album-nav-tools button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.album-grid {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 18px 16px;
+  align-items: start;
+  align-content: start;
+  isolation: isolate;
+  padding: 40px 28px 80px;
+}
+
+.album-grid .placeholder-text,
+.album-grid .load-more-container {
+  grid-column: 1 / -1;
+}
+
+.album-tile {
+  position: relative;
+  z-index: 1;
+  border: none;
+  border-radius: 14px;
+  overflow: visible;
+  background: transparent;
+  cursor: grab;
+  transform-origin: center 28%;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, z-index 0.22s step-end;
+}
+
+.album-tile:active {
+  cursor: grabbing;
+}
+
+.album-tile-frame,
+.album-tile-missing {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #121015;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1px 2px rgba(20, 12, 18, 0.18),
+    0 14px 32px rgba(18, 10, 16, 0.28);
+}
+
+.album-tile-frame::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 34%);
+  opacity: 0.7;
+}
+
+.album-tile-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.album-tile-frame > .album-tile-missing {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+  box-shadow: none;
+}
+
+.album-tile img,
+.album-tile img.gallery-img,
+.album-tile img.album-thumb {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+  object-position: center 16%;
+  display: block;
+  opacity: 1;
+  transition: object-fit 0s, object-position 0.22s ease, transform 0.22s ease;
+}
+
+.album-tile:hover,
+.album-tile:focus-within {
+  z-index: 80;
+  transform: translateY(-4px) scale(1.06);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, z-index 0s;
+}
+
+.album-tile:hover .album-tile-frame,
+.album-tile:focus-within .album-tile-frame {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 18px 40px rgba(10, 6, 12, 0.42),
+    0 4px 12px rgba(10, 6, 12, 0.28);
+}
+
+.album-tile:hover .album-tile-frame::after,
+.album-tile:focus-within .album-tile-frame::after {
+  opacity: 0.18;
+}
+
+.album-tile:hover img.album-thumb,
+.album-tile:focus-within img.album-thumb {
+  object-fit: contain;
+  object-position: center center;
+  background: #0c0b0e;
+}
+
+.album-tile-quick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.album-tile:hover .album-tile-quick,
+.album-tile:focus-within .album-tile-quick {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.album-tile-quick button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(16, 12, 16, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(8, 4, 8, 0.22);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.album-tile-quick button:hover {
+  background: rgba(20, 14, 18, 0.62);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.album-tile-quick [data-album-fav].is-on {
+  color: #f0b3bf;
+  background: rgba(72, 28, 38, 0.5);
+  border-color: rgba(240, 179, 191, 0.28);
+}
+
+.album-tile-quick [data-album-del]:hover {
+  color: #f3c6c6;
+  background: rgba(58, 22, 24, 0.55);
+}
+
+.album-tile-meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 28px 10px 10px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.album-tile:hover .album-tile-meta,
+.album-tile:focus-within .album-tile-meta {
+  opacity: 1;
+}
+
+.album-tile-title {
+  font-size: 0.72rem;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-tile-sub {
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+}
+
+.album-tile-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.album-tile-actions button {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 0.64rem;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+html.light-mode .album-tile-frame,
+html.light-mode .album-tile-missing {
+  background: #1a1714;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 1px rgba(80, 60, 40, 0.08),
+    0 12px 28px rgba(70, 50, 40, 0.16);
+}
+
+html.light-mode .album-tile:hover .album-tile-frame,
+html.light-mode .album-tile:focus-within .album-tile-frame {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 22px 44px rgba(40, 24, 18, 0.28);
+}
+
+.album-drop-target {
+  outline: 2px dashed var(--color-primary);
 }
 
 .page-header {
@@ -81,6 +445,7 @@
 }
 
 .settings-card-section {
+  scroll-margin-top: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 10px;

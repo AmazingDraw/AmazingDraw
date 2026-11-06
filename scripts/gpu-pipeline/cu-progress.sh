@@ -10,10 +10,10 @@ CU_API="http://127.0.0.1:8188"
 if [ -f "$CONFIG_FILE" ]; then
   CU_API=$(python3 -c "import json; print(json.load(open('${CONFIG_FILE}')).get('comfyui_host', 'http://127.0.0.1:8188'))")
 fi
-WORKSPACE=$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('${CONFIG_FILE}')).get('openclaw_workspace_dir') or '$HOME/.openclaw/workspace'))")
+WORKSPACE=$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get workspace)
 
 QUEUE_SCRIPT="${SCRIPT_DIR}/cu-queue.py"
-CARD_DIR=$(python3 -c "import json,os; c=json.load(open('${CONFIG_FILE}')); print(os.path.expanduser(c.get('cards_dir') or '$HOME/.openclaw/draw-cards/cards'))")
+CARD_DIR=$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get cards_dir)
 TMP_DIR=$(python3 -c "import json,os; c=json.load(open('${CONFIG_FILE}')); print(os.path.expanduser(c.get('tmp_dir') or '/tmp/cu-card'))")
 LOG="$TMP_DIR/cu-draw-card.log"
 FAIL_DIR="$TMP_DIR/failed-delivery"

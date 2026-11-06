@@ -33,11 +33,11 @@
 | :---------------- | :---------------------------------------------------------- |
 | 文件              | `{cards_dir}/{card_id}.json`                              |
 | 字段              | `_render_output.prompt`（最终英文）                       |
-| 默认`cards_dir` | `~/.openclaw/draw-cards/cards`（以 `config.json` 为准） |
+| 默认`cards_dir` | `~/.amazingdraw/cards`（以 `config.json` 为准） |
 
 ```bash
 python3 -c "import json,sys; c=json.load(open(sys.argv[1])); print(c['_render_output']['prompt'])" \
-  ~/.openclaw/draw-cards/cards/<card_id>.json
+  ~/.amazingdraw/cards/<card_id>.json
 ```
 
 空 / 缺失：先 `card_cli.py render --card <card_id>` 再读；仍空则回 fill/check，**不要**手写冒充。

@@ -1,0 +1,2 @@
+{"operation_id": "522ce9d1-0bca-4d74-94ee-1b8f8303e840", "role": "user", "content": "你好", "time": 1793022026, "operation_state": "queued"}
+{"operation_id": "522ce9d1-0bca-4d74-94ee-1b8f8303e840", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793022029, "operation_state": "completed"}

@@ -1,0 +1,4 @@
+{"operation_id": "afdf5567-4dc6-4d57-8433-e0f8b8f614a8", "role": "user", "content": "只回复两个字：正常", "time": 1793029600, "operation_state": "queued"}
+{"operation_id": "afdf5567-4dc6-4d57-8433-e0f8b8f614a8", "role": "assistant", "content": "正常", "time": 1793029601, "operation_state": "completed"}
+{"operation_id": "1e092251-08a3-4fbf-a9c3-71b6b889a66c", "role": "user", "content": "我想拉屎", "time": 1793029686, "operation_state": "queued"}
+{"operation_id": "1e092251-08a3-4fbf-a9c3-71b6b889a66c", "role": "assistant", "content": "主人，这种事我可没法替您办呀。\n\n不过说真的，要不要先去解决，回头我这边随时等着——想抽卡、想改设定，一句吩咐就行。", "time": 1793029688, "operation_state": "completed"}

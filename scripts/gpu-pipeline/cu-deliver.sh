@@ -28,7 +28,7 @@ show_help() {
 环境变量说明:
   META_FILE  存储卡片渲染元数据、人物、场景、Caption 信息的 JSON 文件路径 (必填)
   DONE_FILE  ComfyUI 渲染成功后落盘的标记 JSON 文件路径 (必填)
-  JOB_ID     QueueStore v2 任务 ID (必填)
+  JOB_ID     队列任务 ID (必填)
   LEASE_TOKEN  worker claim 的条件 ACK 令牌 (必填)
   CARD_ID    关联卡片 ID (可选，通常由 worker 透传)
   WORKFLOW   本任务工作流别名 (可选，通常由 worker 透传)
@@ -39,6 +39,7 @@ show_help() {
   CU_FREE_BETWEEN   仅当 CU_BETWEEN_CARDS=free 时生效；=0 可关 /free
   CU_FREE_TIMEOUT   /free 等待显存回升超时秒数（默认 90）
   CU_AUTO_STOP_DELAY 队列空后延迟停 Comfy 秒数（默认 60）
+  TELEGRAM_BOT_TOKEN  Bot Token 兜底：仅当 config.json 的 telegram_bot_token 为空时读取
 EOF
     exit 0
 }
@@ -51,7 +52,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/../config.json"
 TMP_DIR="${CU_WORK_DIR:-$(python3 -c "import json,os; c=json.load(open('${CONFIG_FILE}')); print(os.path.expanduser(c.get('tmp_dir') or '/tmp/cu-card'))")}"
-WORKSPACE="${CU_WORKSPACE:-$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('${CONFIG_FILE}')).get('openclaw_workspace_dir') or '$HOME/.openclaw/workspace'))")}"
+WORKSPACE="${CU_WORKSPACE:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get workspace)}"
 QUEUE_SCRIPT="${SCRIPT_DIR}/cu-queue.py"
 LOG_DIR="$TMP_DIR"
 LOG_FILE="$LOG_DIR/cu-deliver.log"
@@ -71,7 +72,6 @@ CARD_ID="${CARD_ID:-${CU_CARD_ID:-}}"
 LEASE_TOKEN="${LEASE_TOKEN:-${CU_LEASE_TOKEN:-}}"
 WORKFLOW="${WORKFLOW:-${CU_WORKFLOW:-}}"
 REQUESTED_SEED="${REQUESTED_SEED:-${CU_SEED:-}}"
-TOKEN_FILE="$WORKSPACE/.bot_tokens"
 CHAT_ID=$(python3 -c "import json; print(json.load(open('${CONFIG_FILE}')).get('telegram_chat_id', ''))")
 GPU_LOCK="${GPU_LOCK:-$TMP_DIR/cu-gpu.lock}"
 FAILED_DIR="$TMP_DIR/failed-delivery"
@@ -274,12 +274,14 @@ PY
 fi
 
 # ── 2. 获取 Bot Token ──
-BOT_TOKEN=$(python3 -c "import json; print(json.load(open('${CONFIG_FILE}')).get('telegram_bot_token', ''))" 2>/dev/null || echo "")
+# 优先级：config.json 的 telegram_bot_token → 环境变量 TELEGRAM_BOT_TOKEN
+# （api_queue.py 的 _telegram_token_configured 保持同一顺序；不读 .bot_tokens）
+BOT_TOKEN=$(python3 -c "import json; print(str(json.load(open('${CONFIG_FILE}')).get('telegram_bot_token') or '').strip())" 2>/dev/null || echo "")
 if [ -z "$BOT_TOKEN" ]; then
-    BOT_TOKEN=$(grep "^default=" "$TOKEN_FILE" 2>/dev/null | cut -d= -f2-)
+    BOT_TOKEN=$(printf '%s' "${TELEGRAM_BOT_TOKEN:-}" | tr -d '[:space:]')
 fi
 if [ -z "$BOT_TOKEN" ]; then
-    echo "❌ Bot token not found in config.json or $TOKEN_FILE" >&2
+    echo "❌ Bot token not found: set telegram_bot_token in config.json, or export TELEGRAM_BOT_TOKEN (see doc/webui/CONFIG_GUIDE.md)" >&2
     exit 1
 fi
 if ! printf '%s' "$BOT_TOKEN" | grep -Eq '^[0-9]+:[A-Za-z0-9_-]{20,}$'; then
@@ -686,6 +688,41 @@ release_gpu_lock
 
 # ── 8. 检查队列：自动续跑下一张；若队列空则延迟自动停 ComfyUI ──
 # SCRIPT_DIR, CONFIG_FILE, WORKSPACE are already defined at the top
+
+# /draw_terminate 放过了本 job（已出图、只剩发送）。终止语义是"停当前任务，队列保留"，
+# 发完这张后不能自动续跑下一张（也不做卡间 restart / 空闲停机）。
+# terminate 写入 cu-terminate-hold.json（job_ids + ts）；仅命中本 job 且 30 分钟内才生效，
+# 命中即消费，用户 /draw_resume 或新提交时由队列正常续跑。
+TERMINATE_HOLD_FILE="$TMP_DIR/cu-terminate-hold.json"
+if [ -f "$TERMINATE_HOLD_FILE" ]; then
+    HOLD_HIT=$(HOLD_FILE="$TERMINATE_HOLD_FILE" HOLD_JOB_ID="$JOB_ID" python3 - <<'PY' 2>/dev/null || echo ""
+import json, os, time
+path = os.environ["HOLD_FILE"]
+job = os.environ["HOLD_JOB_ID"]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except Exception:
+    data = {}
+ids = [str(x) for x in (data.get("job_ids") or [])] if isinstance(data, dict) else []
+fresh = isinstance(data, dict) and (time.time() - float(data.get("ts") or 0)) < 1800
+hit = fresh and job in ids
+rest = [x for x in ids if x != job] if fresh else []
+try:
+    if rest:
+        data["job_ids"] = rest
+        json.dump(data, open(path, "w", encoding="utf-8"))
+    else:
+        os.unlink(path)
+except OSError:
+    pass
+print("hit" if hit else "")
+PY
+)
+    if [ "$HOLD_HIT" = "hit" ]; then
+        echo "🛑 本 job 在 /draw_terminate 时被放过（只发送）：发完不自动续跑，队列已保留，需要时 /draw_resume 或新提交"
+        exit 0
+    fi
+fi
 
 DETACHED_SPAWN="${SCRIPT_DIR}/detached_spawn.py"
 COMFY_STOP_SCRIPT="${SCRIPT_DIR}/comfyui-start.sh"

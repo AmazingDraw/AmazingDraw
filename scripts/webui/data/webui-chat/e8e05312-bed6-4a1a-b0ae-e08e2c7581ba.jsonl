@@ -1,0 +1,4 @@
+{"operation_id": "ea741505-22e2-4a70-80f6-89a37238f38b", "role": "user", "content": "只回复两个字：你好", "time": 1793031532, "operation_state": "queued"}
+{"operation_id": "ea741505-22e2-4a70-80f6-89a37238f38b", "role": "assistant", "content": "你好", "time": 1793031534, "operation_state": "completed"}
+{"operation_id": "9017440a-4c1c-42c2-82cd-fd95d0e848e4", "role": "user", "content": "QAQ", "time": 1793033146, "operation_state": "queued"}
+{"operation_id": "9017440a-4c1c-42c2-82cd-fd95d0e848e4", "role": "assistant", "content": "QAQ 怎么了？发生什么事了？\n\n我在这。你说一下遇到什么了，或者想做什么，我马上开始处理。", "time": 1793033148, "operation_state": "completed"}

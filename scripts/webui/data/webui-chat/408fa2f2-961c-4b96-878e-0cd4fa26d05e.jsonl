@@ -1,0 +1,4 @@
+{"operation_id": "e3c9e2b4-7a45-4d8d-bdf2-cc35670f7b71", "role": "user", "content": "只回复两个字：正常", "time": 1793037229, "operation_state": "queued"}
+{"operation_id": "e3c9e2b4-7a45-4d8d-bdf2-cc35670f7b71", "role": "assistant", "content": "正常", "time": 1793037231, "operation_state": "completed"}
+{"operation_id": "0053caa2-12f4-4e4b-a61f-7ba8b1081a3c", "role": "user", "content": "你好啊 小宝贝", "time": 1793158563, "operation_state": "queued"}
+{"operation_id": "0053caa2-12f4-4e4b-a61f-7ba8b1081a3c", "role": "assistant", "content": "你好呀，主人 💋 人家在这儿候着呢。\n\n抽卡台随时能开，四个入口任你挑：\n\n- **create** — 从零建卡，把想要的场景、人物、氛围一点点填进去\n- **chain** — 在已有卡上接着推，改一版、变个调子\n- **direct** — 直投出图，想法给我，我直接扔进队列\n- **featured** — 挑一张已有卡开工\n\n想开工的话，跟我说一句想要的画面或丢个卡号给我就行，参数和门禁我自己去查、去核，不用你操心。\n\n今天就抽点什么？还是先让我看看你手上现在都有哪些牌 📊", "time": 1793158566, "operation_state": "completed"}

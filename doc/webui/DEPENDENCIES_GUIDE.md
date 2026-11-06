@@ -76,7 +76,7 @@ python3 -m pip install fastapi uvicorn requests websockets cryptography httpx
 | :--- | :--- |
 | [`fastapi`](https://fastapi.tiangolo.com/) / [`uvicorn`](https://www.uvicorn.org/) | WebUI 8318 服务网关与路由 |
 | [`requests`](https://pypi.org/project/requests/) / [`httpx`](https://www.python-httpx.org/) | 调用 ComfyUI 8188 API 以及模型直投通信 |
-| [`websockets`](https://pypi.org/project/websockets/) / [`cryptography`](https://pypi.org/project/cryptography/) | [OpenClaw Gateway](https://docs.openclaw.ai/gateway) WebSocket 鉴权与私钥握手签名 |
+| [`websockets`](https://pypi.org/project/websockets/) / [`cryptography`](https://pypi.org/project/cryptography/) | ComfyUI 队列/预览通道等本地 WebSocket；`cryptography` 给部分签名场景 |
 
 ---
 
@@ -142,75 +142,12 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 ---
 
-## 5. 🦞 OpenClaw Agent 网关
+## 5. 🤖 LLM
 
-发行版默认 `agent_backend=custom`，**不要求安装 OpenClaw**。OpenClaw 网关是可选对话后端；需要时再自行改配置。抽卡与出图主路径走 WebUI + [ComfyUI](https://github.com/comfyanonymous/ComfyUI)。
+标题提取、场景路由等独立调用走 **OpenAI 兼容 HTTP**：`POST {llm.base_url}/chat/completions`。Base URL、Key、模型在配置页填写，按这台机器实际端点来，不要假设端口或软件名。模型列表来自该端点的 `GET /v1/models`。出图只走 ComfyUI。
 
-### 5.1 安装与版本
+端点不可用时：直投 / 精选 / 渲染仍可进 Comfy；依赖 LLM 的步骤会降级为正则 / 占位 / 放行。没有总开关关掉独立调用；仅 `enable_ai_check`（默认关）跳过 AI 语义门禁。
 
-- **安装方式**：npm 全局包（`/opt/homebrew/lib/node_modules/openclaw`）
-- **运行时**：[Node.js](https://nodejs.org/)（本机 v24）
-- **当前版本**：以本机 `openclaw --version` 为准
-- **主配置**：`~/.openclaw/openclaw.json`
-- **网关端口**：`18789`（见下方端口表）
-
-WebUI 通过 WebSocket 连本机网关，握手用设备私钥签名。Python 侧需要 `websockets` 与 `cryptography`。
-
-### 5.2 模型来源
-
-WebUI 设置页的模型下拉直接读 OpenClaw 的可用模型。OpenClaw 里有什么，WebUI 里就能选什么。
-
-**独立调用**（`card_llm_client.chat_completion`）同样只认 OpenClaw 已配置的模型；列表里出现 `cli-proxy/…` 是 OpenClaw provider 命名空间，不是本仓再直连本地 cliproxy。本仓已退役对该端口与 `CLIPROXY_*` 的硬编码发现路径。
-
-> **完整独立节点清单、超时与失败行为**：见 [LLM_AND_PROMPTS.md](../engine/llm/LLM_AND_PROMPTS.md) **A.1**（勿在本页维护残缺枚举）。  
-> 无「关掉全部独立调用」的总开关；仅 `enable_ai_check`（默认 `false`）跳过 AI 语义门禁。
-
-### 5.3 ⏱️ 两处超时，分属不同层
-
-出问题时先分清是哪一层在喊停，两者互相独立：
-
-| 层级 | 配置位置 | 含义 | 默认 |
-| :--- | :--- | :--- | :--- |
-| **OpenClaw 空闲看门狗** | `openclaw.json` → `models.providers.<provider>.timeoutSeconds` | 模型**连续多久不吐字**就判超时 | 未配置时 **120 秒** |
-| **WebUI 单轮总时限** | 设置页「WebUI 本地服务运行参数」→ 单轮对话总时限<br>（`config.json` 的 `openclaw_ws_timeout_seconds`） | 一轮对话**最长允许跑多久** | 600 秒（可填 60–7200） |
-
-**关键坑**：`models.providers` 里没有条目的 provider 拿不到任何超时配置，只能吃 120 秒默认值。通过 auth-profile 注册的 provider（如 `opencode-go`）尤其容易踩到 —— 它不会自动出现在 `models.providers` 里。
-
-报错长这样，一眼可辨：
-
-```
-LLM idle timeout (120s): no response from model
-```
-
-补配置只需在 `models.providers` 下加一个**只带超时**的条目即可，不用重复写 `baseUrl` / `api` / 模型列表 —— 配置是叠加在 auth-profile 已注册的信息之上，不是替换：
-
-```json
-{
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "opencode-go": { "timeoutSeconds": 600 }
-    }
-  }
-}
-```
-
-另一个反直觉之处：**`agents.defaults.timeoutSeconds` 抬不高这个值**。它在解析时走的是「取较小者」，只能往下压。想突破 120 秒，唯一的路就是上面这个 provider 级 `timeoutSeconds`。
-
-`models` 前缀属于热加载，改完**不需要重启网关**。
-
-### 5.4 常用排查命令
-
-```bash
-# 网关版本与存活
-openclaw --version
-
-# 各 provider 的超时配置一览（未列出的即吃 120 秒默认值）
-python3 -c "import json,os;p=json.load(open(os.path.expanduser('~/.openclaw/openclaw.json')))['models']['providers'];[print(f'{k}: {v.get(\"timeoutSeconds\",\"未配置\")}') for k,v in p.items()]"
-
-# 翻网关日志确认超时的原始报错（8.1 会话正文在 sqlite，不再翻 sessions/*.jsonl）
-openclaw logs --limit 80 --plain | grep -E 'idle timeout|LLM idle'
-```
 
 ---
 
@@ -219,8 +156,8 @@ openclaw logs --limit 80 --plain | grep -E 'idle timeout|LLM idle'
 | 服务名称 | 默认端口 | 绑死地址 | 用途说明 |
 | :--- | :--- | :--- | :--- |
 | **[ComfyUI](https://github.com/comfyanonymous/ComfyUI) 后端** | `8188` | `127.0.0.1` | GPU 图像采样渲染引擎 |
-| **WebUI 控制台** | `8318` | `0.0.0.0` | 本地抽卡与配置前端 |
-| **[OpenClaw Gateway](https://docs.openclaw.ai/gateway)** | `18789` | `127.0.0.1` | WebSocket 设备握手与消息网关（见第 5 节） |
+| **WebUI 控制台** | `8318` | `0.0.0.0` | 本地工作台 / 相册与配置前端 |
+| **LLM 端点** | 可配 | 见 `llm.base_url` | OpenAI 兼容 `/v1` |
 
 ---
 
@@ -232,12 +169,8 @@ openclaw logs --limit 80 --plain | grep -E 'idle timeout|LLM idle'
 # 1. 验证 ComfyUI 连通性
 curl -fsS "http://127.0.0.1:8188/system_stats" && echo "✅ ComfyUI 连通正常"
 
-# 2. 跑通引擎快测绿线（连抽前门禁 / 自愈回归）
-
-# 3. 校验场景库与角色预设
-
-# 4. 验证 OpenClaw 网关存活
-openclaw --version && echo "✅ OpenClaw 可用"
+# 4. 验证 LLM（把 URL 换成配置里的 llm.base_url）
+curl -fsS "<llm.base_url>/models" && echo "✅ LLM /v1 可用"
 ```
 
 
@@ -254,7 +187,6 @@ openclaw --version && echo "✅ OpenClaw 可用"
 | 内核 | 本机编译 `native/*.so` | CI 编译 `native/*.pyd` |
 | Python 版本 | 必须和 zip 标签一致（`cp39`→3.9，`cp312`→3.12；Apple 自带 3.9 请下 cp39） | **必须与 .pyd 编译版本一致** |
 | bash | 自带 | **[Git for Windows](https://git-scm.com/download/win)（Git Bash）** |
-| OpenClaw | npm 全局安装 | npm 安装（路径 `~/.openclaw` 映射） |
 | [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | 支持 | 支持（有 Windows 版） |
 
 ### 8.2 Windows 装机清单（按序）
@@ -263,7 +195,7 @@ openclaw --version && echo "✅ OpenClaw 可用"
 2. **[Python 3.9 或 3.12](https://www.python.org/downloads/)**（必须和 zip 标签一致：`cp39`→3.9，`cp312`→3.12）
 3. **pip 安装依赖**（§2 命令）
 4. **放置 `.pyd`** 到 `card_engine_core/native/`（CI 编译产物，随发行版分发）
-5. **安装 [ComfyUI](https://github.com/comfyanonymous/ComfyUI)**（Windows 版）。OpenClaw 可选，默认不需要
+5. **安装 [ComfyUI](https://github.com/comfyanonymous/ComfyUI)**（Windows 版）；独立 LLM 在配置页填 OpenAI 兼容 Base URL
 6. `bash scripts/gpu-pipeline/comfyui-start.sh start` 启动 ComfyUI
 7. `python3 scripts/webui/web_server.py` 启动 WebUI
 
@@ -275,7 +207,7 @@ openclaw --version && echo "✅ OpenClaw 可用"
 | `.so` → `.pyd` | macOS 本机编译的 `.so` 不能拿到 Windows 用；必须用 CI 的 `.pyd`，且 Python 主版本须匹配 |
 | 模型路径 | `comfyui_dir` 指向 Windows 上 ComfyUI 实际目录 |
 | 启动脚本 | 全部经 Git Bash 的 `bash` 运行 |
-| OpenClaw 网关 | 端口 18789 不变，安装方式见 §5 |
+| LLM | 配置 `llm.base_url`，须为 OpenAI 兼容 `/v1` |
 
 ### 8.4 关键约束（务必读）
 

@@ -412,8 +412,8 @@ function Invoke-OptionalWebUISetup([string]$Exe) {
     Write-Host "== WebUI（可选）=="
     Write-Host "  WebUI 不是必须的：只用 Skill / CLI / Agent 时不必安装。"
     Write-Host "  WebUI 进程只需 fastapi/uvicorn（本步 pip 只装这两样）。"
-    Write-Host "  完整对话抽卡 / AI 连抽还需本机 OpenClaw；本引导不自动安装 OpenClaw。"
-    Write-Host "  install.sh 可能探测并写入路径，也可稍后在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
+    Write-Host "  填槽 / 连抽走 config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）；本引导不安装 LLM 网关。"
+    Write-Host "  不侦测、不安装 dsh 网桥或 OpenClaw 对话后端。"
     Write-Host "  出图另需 ComfyUI+模型（不自动装）。"
     if (Test-WebUIDepsPresent $Exe) {
         Write-Info "  该 Python 已能 import fastapi、uvicorn，跳过 pip。"
@@ -425,21 +425,21 @@ function Invoke-OptionalWebUISetup([string]$Exe) {
     } elseif ($Yes) {
         Write-Info "  非交互（-Yes）默认跳过 WebUI pip。需要时加 -WithWebUI 或 AMAZINGDRAW_WITH_WEBUI=1。"
         Write-Info ("  稍后: `"$Exe`" -m pip install fastapi uvicorn")
-        Write-Info "  （仍不含 OpenClaw；对话/连抽需自备。）"
+        Write-Info "  （仍不含 LLM 网关；填槽需本机 8317 或自行改 llm.base_url。）"
         return
     } elseif (-not (Test-IsInteractive)) {
         Write-Info ("  无交互终端，跳过 WebUI pip。稍后: `"$Exe`" -m pip install fastapi uvicorn")
         return
     } else {
         $ans = ""
-        try { $ans = Read-Host "  现在安装 WebUI 依赖（仅 fastapi/uvicorn，不含 OpenClaw）吗？(Y=是 / N=否，回车=否)" } catch {}
+        try { $ans = Read-Host "  现在安装 WebUI 依赖（仅 fastapi/uvicorn）吗？(Y=是 / N=否，回车=否)" } catch {}
         if ([string]$ans -match '^(?i)(y|yes|是)$') { $want = $true }
     }
     if ($want) {
         Invoke-WebUIPip $Exe
     } else {
         Write-Info ("  已跳过。以后要用 WebUI: `"$Exe`" -m pip install fastapi uvicorn")
-        Write-Info "  对话/连抽另需本机 OpenClaw（不随 pip 安装）。"
+        Write-Info "  填槽 / 连抽另需本机 LLM 端点（默认 127.0.0.1:8317，不随 pip 安装）。"
     }
 }
 

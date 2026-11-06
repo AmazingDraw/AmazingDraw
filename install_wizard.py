@@ -30,6 +30,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+_TOOLS_DIR = str(Path(__file__).resolve().parent)
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)  # sibling helper: detect_local_deps
+
 EXIT_OK = 0
 EXIT_ERR = 1
 EXIT_SKIP = 2
@@ -136,20 +140,6 @@ def _is_comfyui_root(p: Path) -> bool:
         return False
 
 
-def _is_openclaw_home(p: Path) -> bool:
-    try:
-        return p.is_dir() and (p / "openclaw.json").is_file()
-    except Exception:
-        return False
-
-
-def _is_bin_file(p: Path) -> bool:
-    try:
-        return p.is_file()
-    except Exception:
-        return False
-
-
 def find_hints_file(root: Optional[Path] = None) -> Optional[Path]:
     """Locate workflow_moody_zib_zit.txt (mirrors detect_local_deps search)."""
     name = "workflow_moody_zib_zit.txt"
@@ -191,7 +181,7 @@ def prompt_path(
 ) -> Tuple[Optional[str], str]:
     """Ask user for a path. Returns (path_or_None, status) status=ok|skip|invalid.
 
-    kind: comfyui | openclaw_home | openclaw_bin
+    kind: comfyui
     """
     if not interactive:
         return None, "skip"
@@ -202,16 +192,6 @@ def prompt_path(
             "可设环境变量 COMFYUI_DIR。直接回车 / s / skip / 稍后 可跳过：\n> ",
             _is_comfyui_root,
             "无效：目录下找不到 main.py（需要 CLI 根目录，不是 Desktop App）",
-        ),
-        "openclaw_home": (
-            "请粘贴 OpenClaw 家目录（需含 openclaw.json，常见 ~/.openclaw）。回车 / s / skip / 稍后 可跳过：\n> ",
-            _is_openclaw_home,
-            "无效：目录下找不到 openclaw.json",
-        ),
-        "openclaw_bin": (
-            "请粘贴 openclaw 可执行文件路径。回车 / s / skip / 稍后 可跳过：\n> ",
-            _is_bin_file,
-            "无效：不是可读文件",
         ),
     }
     if kind not in validators:
@@ -254,26 +234,6 @@ def cfg_comfyui_valid(cfg: Dict[str, Any]) -> Optional[Path]:
             return p
     return None
 
-
-def cfg_openclaw_home_valid(cfg: Dict[str, Any]) -> Optional[Path]:
-    raw = cfg.get("openclaw_home")
-    if isinstance(raw, str) and raw.strip():
-        p = _expand(raw)
-        if _is_openclaw_home(p):
-            return p
-    return None
-
-
-def cfg_openclaw_bin_valid(cfg: Dict[str, Any]) -> Optional[str]:
-    raw = cfg.get("openclaw_bin")
-    if isinstance(raw, str) and raw.strip():
-        p = _expand(raw)
-        if _is_bin_file(p):
-            try:
-                return str(p.resolve())
-            except Exception:
-                return str(p)
-    return None
 
 
 
@@ -548,41 +508,15 @@ def cmd_prompt_comfyui(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def cmd_prompt_openclaw(args: argparse.Namespace) -> int:
-    config = Path(os.path.expanduser(args.config))
-    cfg = _load_cfg(config)
-    interactive = is_interactive(args.non_interactive)
-    home_ok = cfg_openclaw_home_valid(cfg)
-    bin_ok = cfg_openclaw_bin_valid(cfg)
-    if home_ok is not None or bin_ok is not None:
-        if home_ok is not None:
-            _eprint("✓ OpenClaw home 已配置：" + str(home_ok))
-        if bin_ok is not None:
-            _eprint("✓ OpenClaw bin 已配置：" + bin_ok)
-        _out(str(home_ok or bin_ok or ""))
-        return EXIT_OK
-    if not interactive:
-        _eprint("ℹ 非交互模式：跳过 OpenClaw 路径粘贴。")
-        _eprint("  没有 OpenClaw 时，WebUI 的 AI 连抽/常规对话不可用；直投/精选/出图可先用。")
-        return EXIT_SKIP
-    _eprint("")
-    _eprint("—— OpenClaw（可选）——")
-    _eprint("未侦测到 OpenClaw。AI 连抽/常规对话需要它；直投/精选/出图可先跳过。")
-    updates: Dict[str, Any] = {}
-    path, status = prompt_path("openclaw_home", max_retries=args.max_retries, interactive=True)
-    if status == "ok" and path:
-        updates["openclaw_home"] = path
-        _eprint("✓ 已记录 openclaw_home")
-    path2, status2 = prompt_path("openclaw_bin", max_retries=args.max_retries, interactive=True)
-    if status2 == "ok" and path2:
-        updates["openclaw_bin"] = path2
-        _eprint("✓ 已记录 openclaw_bin")
-    if updates:
-        merge_config(config, updates)
-        _out(updates.get("openclaw_home") or updates.get("openclaw_bin") or "")
-        return EXIT_OK
-    _eprint("已跳过 OpenClaw。WebUI 对话相关能力将不完整，不影响内核/native 出图主路径。")
-    return EXIT_SKIP
+_RETIRED_BACKENDS = ("custom", "claudecode", "hermes", "builtin", "pi", "dsh", "openclaw")
+
+
+def effective_agent_backend(cfg: Dict[str, Any]) -> str:
+    """空值与已退役后端一律视为 llm（8317）。"""
+    v = str(cfg.get("agent_backend") or "").strip().lower()
+    if not v or v in _RETIRED_BACKENDS:
+        return "llm"
+    return v
 
 
 def _repo_root() -> Path:
@@ -1186,11 +1120,10 @@ def cmd_telegram_step(args: argparse.Namespace) -> int:
 
 def cmd_print_webui_blurb(_args: argparse.Namespace) -> int:
     _eprint("")
-    _eprint("—— WebUI 与其它后端 ——")
+    _eprint("—— WebUI ——")
     _eprint("  · WebUI（可选）：装好后可用 scripts/webui/webui-start.sh 启动控制台。")
-    _eprint("  · 对话后端默认走 OpenClaw；未装 OpenClaw 时 AI 连抽/常规对话不可用，")
-    _eprint("    直投 / 精选 / 出图仍可先用。")
-    _eprint("  · 其它 agent 后端若日后开放，不改动本包内核/native；出图主路径不变。")
+    _eprint("  · 填槽 / 连抽走 config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）。")
+    _eprint("  · 出图主路径仍是 ComfyUI。")
     return EXIT_OK
 
 
@@ -1230,12 +1163,12 @@ def cmd_merge_config(args: argparse.Namespace) -> int:
 
 
 def cmd_prompt_extras(args: argparse.Namespace) -> int:
-    """Skippable prompts: output_dir, comfyui_host, openclaw_workspace_dir; optional obsidian_vault_dir."""
+    """Skippable prompts: output_dir, comfyui_host; optional obsidian_vault_dir."""
     config = Path(os.path.expanduser(args.config))
     cfg = _load_cfg(config)
     interactive = is_interactive(args.non_interactive)
     if not interactive:
-        _eprint("ℹ 非交互模式：跳过 output_dir / comfyui_host / openclaw_workspace / obsidian 询问。")
+        _eprint("ℹ 非交互模式：跳过 output_dir / comfyui_host / obsidian 询问。")
         return EXIT_SKIP
 
     updates: Dict[str, Any] = {}
@@ -1244,7 +1177,6 @@ def cmd_prompt_extras(args: argparse.Namespace) -> int:
 
     cur_out = str(cfg.get("output_dir") or "").strip() or "~/Downloads/card-engine-out"
     cur_host = str(cfg.get("comfyui_host") or "").strip() or "http://127.0.0.1:8188"
-    cur_ws = str(cfg.get("openclaw_workspace_dir") or "").strip()
 
     # 快捷跳过/自定义分流
     lead_input = ask_line(
@@ -1303,22 +1235,6 @@ def cmd_prompt_extras(args: argparse.Namespace) -> int:
     else:
         _eprint("保留 comfyui_host。")
 
-    # openclaw_workspace_dir
-    hint = cur_ws or "~/.openclaw/workspace"
-    _eprint("当前 openclaw_workspace_dir：%s" % (cur_ws or "（空，常见 %s）" % hint))
-    raw = ask_line("OpenClaw 工作区目录（回车保留/空 / s 跳过）：\n> ").strip()
-    if raw and raw not in SKIP_TOKENS and raw.lower() not in ("s", "skip") and raw != "稍后":
-        try:
-            pth = _expand(raw)
-            updates["openclaw_workspace_dir"] = str(pth)
-            _eprint("✓ 将写入 openclaw_workspace_dir = " + str(pth))
-        except Exception:
-            _eprint("  路径无法解析，跳过。")
-    elif raw.lower() in ("s", "skip") or raw in ("稍后",):
-        _eprint("已跳过 openclaw_workspace_dir。")
-    else:
-        _eprint("保留 openclaw_workspace_dir。")
-
     # obsidian_vault_dir — optional one-line
     cur_ob = str(cfg.get("obsidian_vault_dir") or "").strip()
     _eprint("当前 obsidian_vault_dir：%s" % (cur_ob or "（空）"))
@@ -1347,15 +1263,14 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
     cfg = _load_cfg(config)
 
     comfy = cfg_comfyui_valid(cfg)
-    oc_home = cfg_openclaw_home_valid(cfg)
-    oc_bin = cfg_openclaw_bin_valid(cfg)
-    oc_ok = oc_home is not None or oc_bin is not None
-    # also treat default ~/.openclaw if openclaw.json exists
-    if not oc_ok:
-        default_oc = Path.home() / ".openclaw"
-        if _is_openclaw_home(default_oc):
-            oc_ok = True
-            oc_home = default_oc
+    llm_url = "http://127.0.0.1:8317/v1"
+    llm_ok = False
+    try:
+        from detect_local_deps import probe_llm_endpoint
+        llm_url, llm_ok = probe_llm_endpoint(cfg)
+    except Exception:
+        pass
+    ai_ok = llm_ok
 
     model_rows = scan_moody_models(comfy)
     models_found = sum(1 for r in model_rows if r[3])
@@ -1395,14 +1310,9 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
     else:
         _eprint("  Moody 模型:         ✗  0/%d 就位" % models_total)
 
-    oc_detail = ""
-    if oc_home is not None:
-        oc_detail = str(oc_home)
-    elif oc_bin:
-        oc_detail = oc_bin
-    _eprint("  OpenClaw / AI 对话: %s  %s" % (
-        mark(oc_ok),
-        oc_detail or "未配置（AI 连抽/常规对话不可用）",
+    _eprint("  LLM（填槽/连抽）:    %s  %s" % (
+        mark(llm_ok),
+        llm_url if llm_ok else "%s（暂不可达，不影响安装）" % llm_url,
     ))
     _eprint("  WebUI（可选）:      %s  %s" % (
         mark(webui_ok),
@@ -1444,10 +1354,10 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
     if comfy is not None and not models_ok:
         _eprint("  · 无/缺 Moody 模型：按清单下载到 $COMFYUI_DIR/models/ 对应子目录")
         _eprint("    （见 install_hints/workflow_moody_zib_zit.txt）。缺模型时默认出图可能失败。")
-    if not oc_ok:
-        _eprint("  · 无 OpenClaw：AI 连抽/常规对话不可用；直投/精选/出图可先用。")
-        _eprint("    安装 OpenClaw 后填写 openclaw_home / openclaw_bin，或再跑安装向导。")
-    if comfy is not None and models_ok and oc_ok:
+    if not llm_ok:
+        _eprint("  · LLM 端点暂不可达：启动本机 OpenAI 兼容网关（默认 127.0.0.1:8317），或改 llm.base_url。")
+        _eprint("    直投 / 精选 / 出图可先用。")
+    if comfy is not None and models_ok and ai_ok:
         _eprint("  · 核心就绪。可启动：")
         if webui_sh.is_file():
             _eprint("      bash '%s' start" % webui_sh)
@@ -1457,14 +1367,14 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
         comfy_label = host if host_from_cfg else "%s（默认）" % host
         webui_label = webui_url if _webui_from_cfg else "%s（WebUI 默认）" % webui_url
         _eprint("    WebUI %s  ·  ComfyUI %s" % (webui_label, comfy_label))
-    elif comfy is not None and models_ok and not oc_ok:
+    elif comfy is not None and models_ok and not ai_ok:
         _eprint("  · 出图路径就绪（无 AI 对话）。可先：")
         if webui_sh.is_file():
             _eprint("      bash '%s' start" % webui_sh)
         _eprint("      bash '%s/scripts/gpu-pipeline/comfyui-start.sh' start" % root)
     if not tg_ok:
         _eprint("  · Telegram 可选：在配置里填 telegram_chat_id / telegram_bot_token（勿提交 token）。")
-    if webui_ok and comfy is None and not oc_ok:
+    if webui_ok and comfy is None and not ai_ok:
         _eprint("  · 仅内核/WebUI 时也可先开控制台查看配置页。")
 
     return EXIT_OK
@@ -1543,10 +1453,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", required=True)
     p.set_defaults(func=cmd_prompt_comfyui)
 
-    p = sub.add_parser("prompt-openclaw", help="Ask OpenClaw home/bin; write config")
-    p.add_argument("--config", required=True)
-    p.set_defaults(func=cmd_prompt_openclaw)
-
     p = sub.add_parser("workflow-step", help="Copy default WF / checklist / custom import")
     p.add_argument("--config", required=True)
     p.add_argument("--root", required=True, help="Dist/repo root (has workflows/)")
@@ -1571,14 +1477,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "prompt-extras",
-        help="Ask output_dir / comfyui_host / openclaw_workspace_dir / obsidian_vault_dir",
+        help="Ask output_dir / comfyui_host / obsidian_vault_dir",
     )
     p.add_argument("--config", required=True)
     p.set_defaults(func=cmd_prompt_extras)
 
     p = sub.add_parser(
         "readiness-summary",
-        help="Always print readiness matrix (ComfyUI/models/OpenClaw/WebUI/Telegram)",
+        help="Always print readiness matrix (ComfyUI/models/LLM/WebUI/Telegram)",
     )
     p.add_argument("--config", required=True)
     p.add_argument("--root", default="", help="Dist/repo root")

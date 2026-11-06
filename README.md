@@ -20,59 +20,46 @@
 
 ## Skill
 
-解压目录根有 `SKILL.md`。把**整个目录**交给 [Cursor](https://www.cursor.com/) / [Claude Code](https://github.com/anthropics/claude-code) / [OpenClaw](https://github.com/openclaw/openclaw) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) 等 AI Agent，一句话就能抽卡，例如 `随机抽三张`、`办公室 偷拍风格 抽一张`。也可以自定义场景库和角色库。
+解压目录根有 `SKILL.md`。把**整个目录**交给 [Cursor](https://www.cursor.com/) / [Claude Code](https://github.com/anthropics/claude-code) / [dsh](https://github.com/deepseek-ai/deepseek-harness) / [OpenClaw](https://github.com/openclaw/openclaw) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) 等 AI Agent，一句话就能抽卡，例如 `随机抽三张`、`办公室 半裸 抽一张`。也可以自定义场景库和角色库。
 
 ![总架构](doc/architecture.svg)
 
 ## 安装
 
-1. 到 **[GitHub Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载对应压缩包。
-2. 解压到一个**固定目录**（例如 macOS `~/AmazingDraw`，Windows `C:\\AmazingDraw`）。这就是运行时目录（WebUI / CLI / skill），不要拆散文件，也不要解压进 ComfyUI。
-3. 在解压后的根目录安装：
-
-**macOS**：
-
-```bash
-bash install.sh
-```
-
-**Windows**：解压后双击 `install.bat`。若缺少 Git Bash 或与 zip 标签一致的 **64 位** Python，脚本会用命令行尝试安装（优先 winget，否则静默下载官方安装包；默认不打开浏览器），然后交给 `install.sh`。在 cmd / PowerShell 里也可运行 `install.bat`（同样支持 `-Yes`）。
-
-免确认（并跳过结束暂停）：`install.bat -Yes`，或环境变量 `AMAZINGDRAW_INSTALL_YES=1`。只打开官网下载页（安装失败时）：加 `-OpenDownloadPage`。
-
-**WebUI 可选**：Skill / CLI / Agent 不需要它。`install.bat` 在匹配 Python 就绪后会询问是否现在安装；选是则对该解释器执行 `python -m pip install fastapi uvicorn`（只为 WebUI 进程；pip 失败只警告，不中断）。这**不会**安装 OpenClaw：对话抽卡 / AI 连抽还须本机自备 OpenClaw（`install.sh` 可能探测路径，或之后在 WebUI「配置」填 `openclaw_home` / `openclaw_bin`）。出图仍须自备 ComfyUI 与模型。`-Yes` 默认跳过 WebUI pip；需要时装 `-WithWebUI` 或设 `AMAZINGDRAW_WITH_WEBUI=1`。
-
-若已装好 Git Bash 与匹配 Python，仍可用 Git Bash 直接跑 `bash install.sh`（PowerShell 不能直接跑 `install.sh`）。
+1. 到 **[GitHub Releases](https://github.com/AmazingDraw/AmazingDraw/releases)** 下载下表对应压缩包。
+2. 解压到固定目录（macOS 例如 `~/AmazingDraw`，Windows 例如 `C:\\AmazingDraw`），不要拆散、不要解进 ComfyUI。
+3. 在解压根目录安装。
 
 | 包 | 系统 | Python |
 | --- | --- | --- |
-| `AmazingDraw-darwin-cp39.zip` | macOS | 3.9（Apple 自带 `/usr/bin/python3` 请用这个） |
+| `AmazingDraw-darwin-cp39.zip` | macOS | 3.9（Apple 自带 `/usr/bin/python3` 用这个） |
 | `AmazingDraw-darwin-cp312.zip` | macOS | 3.12 |
 | `AmazingDraw-windows-cp39.zip` | Windows | 3.9 |
 | `AmazingDraw-windows-cp312.zip` | Windows | 3.12 |
 
-跑 WebUI / CLI 的 Python **必须和 zip 标签一致**。不要把 `.so` 和 `.pyd` 混放，也不要混用 3.9 / 3.12 的内核。
+跑 WebUI / CLI 的 Python **必须和 zip 标签一致**。内核在 `card_engine_core/native/`，`assets.bin` 必须同树；不要混 `.so` / `.pyd`，也不要混用 3.9 / 3.12。
 
-**Windows**：引导层只补 Git Bash 与匹配的 x64 Python，**不会**自动安装 ComfyUI 或模型。ARM64 电脑请仍用 x64 Git/Python（内核是 `win_amd64` `.pyd`，走 Windows on ARM 模拟）。脚本在需要时会补 `python3` 别名；若 ComfyUI 装在其它盘，可先设环境变量 `COMFYUI_DIR` 再安装。
+**macOS**：`bash install.sh`
 
-安装时会尽量**自动探测**本机 ComfyUI、OpenClaw，并在配置为空或无效时写入路径；已有有效配置不会被覆盖。找不到也不影响装完——可之后在 WebUI「配置」里填写。
+**Windows**：双击 `install.bat`（cmd / PowerShell 同样可以）。缺 Git Bash 或匹配的 **x64 Python** 时会尝试自动补（优先 winget）。ARM64 请仍用 x64 Git/Python。免确认：`install.bat -Yes` 或 `AMAZINGDRAW_INSTALL_YES=1`。已装好 Git Bash 时也可 `bash install.sh`（PowerShell 不能直接跑 `install.sh`）。ComfyUI 在其它盘时先设 `COMFYUI_DIR`。
 
-安装以包内 `scripts/config.json` 为权威配置（缺省时由 `config.example.json` 生成；已有则不覆盖）。cards 等数据目录仍默认在 `~/.openclaw/draw-cards/`。
+**WebUI 可选**：Skill / CLI / Agent 不需要。`install.bat` 会问是否 `pip install fastapi uvicorn`（失败只警告）。`-Yes` 默认跳过；要装加 `-WithWebUI` 或 `AMAZINGDRAW_WITH_WEBUI=1`。出图须自备 ComfyUI 与模型。
+
+安装会尽量探测 ComfyUI 与 LLM 端点（默认 `127.0.0.1:8317`）；已有有效配置不覆盖。权威配置是包内 `scripts/config.json`（缺则从 `config.example.json` 生成）。数据在 `~/.amazingdraw/`；从 `~/.openclaw/draw-cards/` 升级时会复制过来并校验，旧目录保留。
 
 ## 推荐模型
 
-场景库和角色库内容较多，**上下文够长、指令遵循度高、内容限制少**的模型更合适。
+库内容较多，选**上下文长、跟指令、限制少**的模型。
 
 | 推荐 | 模型 | 说明 |
 | :--- | :--- | :--- |
-| ⭐⭐⭐⭐⭐ | **DeepSeek Flash** | **首选主力**。内容限制少，严格遵循长结构化指令与互斥门禁，JSON 输出与字段格式极稳；响应迅速且成本极低，是日常单抽、批量出卡与 AI 连抽的最优解。 |
-| ⭐⭐⭐⭐ | **Grok** | **次选（尺度与创意）**。内容审核极为宽松自由，文笔想象力与细节感官张力突出，对高刺激、大尺度放开写的野性场景表现极佳；格式遵循偶尔偶有发散，适合追求画面创意与放飞描写的场景。 |
-| ⭐⭐⭐⭐ | **Gemini Flash** | **次选（超大吞吐，需适当调教）**。拥有百万级超大上下文窗口与极高并发速度，响应极快；但其原生安全过滤策略相对敏感，**需要通过 System Prompt 或前置引导词适当调教脱敏**才能完全发挥实力，适合大吞吐量批量生成。 |
-
+| ⭐⭐⭐⭐⭐ | **DeepSeek Flash** | 首选。JSON 与门禁稳，限制少，适合日常连抽。 |
+| ⭐⭐⭐⭐ | **Grok** | 尺度与创意更好，格式偶有发散。 |
+| ⭐⭐⭐⭐ | **Gemini Flash** | 吞吐大；安全过滤偏严，需自己调教。 |
 
 ## 使用
 
-出图走本机 ComfyUI（默认 <http://127.0.0.1:8188>）。
+出图走本机 ComfyUI（默认 <http://127.0.0.1:8188>）。`install.sh` 会把工作流拷进探测到的 ComfyUI `workflows/`（Comfy 用它自己的 venv 即可）。
 
 ### WebUI
 
@@ -81,33 +68,28 @@ bash scripts/webui/webui-start.sh start          # http://127.0.0.1:8318
 bash scripts/gpu-pipeline/comfyui-start.sh start
 ```
 
-浏览器打开 WebUI 后：顶栏可看 ComfyUI 是否在线；配置页「外接状态」可看 OpenClaw / Telegram / Obsidian 是否就绪。
+**卡片工作台**看图、管卡；闪电=直投，骰子=精选；**相册**分类成品；右侧盯队列。连抽 / 常规 fill 走 CLI。
 
 ### CLI
 
 ```bash
 cd scripts/card-engine
-python3 card_cli.py -h          # 总 help
-python3 card_cli.py create -h   # 单卡
-python3 card_cli.py chain -h    # 连抽
+python3 card_cli.py -h
+python3 card_cli.py create -h
+python3 card_cli.py chain -h      # 默认连抽
+python3 card_cli.py direct -h
+python3 card_cli.py featured -h
 ```
-
-`install.sh` 会把工作流拷到 ComfyUI 的 `workflows/`（探测到的安装根下）。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。
-
-## 目录请保持完整
-
-内核在 `card_engine_core/native/`。**`assets.bin` 必须和这套内核放在同一棵目录树里**，不要拆开、不要单独拷走。一个发行包只对应一个平台、一个 Python 主版本。
 
 ## 配置
 
-- 示例：`config.example.json`
-- 安装后权威配置：包内 `scripts/config.json`
+- 包内 `scripts/config.json`（示例 `config.example.json`）
 - 自定义预设：`user_presets/`
-- Windows 若自动探测失败：可在 WebUI 填写 `comfyui_dir`、`openclaw_home`、`openclaw_bin`
+- LLM：`llm.base_url`（默认 `http://127.0.0.1:8317/v1`）；Comfy 路径可在 WebUI 配置页填
 
 ## 文档
 
-- `doc/webui/DEPENDENCIES_GUIDE.md` — 依赖与装机（装不起来优先看）
+- `doc/webui/DEPENDENCIES_GUIDE.md` — 依赖与装机
 - `doc/webui/USER_GUIDE.md` — WebUI
 - `doc/webui/CARD_ENGINE_COMMANDS.md` — CLI
 - `doc/webui/CONFIG_GUIDE.md` — 配置

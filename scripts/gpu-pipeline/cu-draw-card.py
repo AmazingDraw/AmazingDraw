@@ -61,7 +61,6 @@ def load_global_config() -> dict:
 
 GLOBAL_CONFIG = load_global_config()
 COMFYUI_DIR = os.path.expanduser(GLOBAL_CONFIG.get("comfyui_dir", "~/ComfyUI"))
-OPENCLAW_WORKSPACE = os.path.expanduser(GLOBAL_CONFIG.get("openclaw_workspace_dir") or "~/.openclaw/workspace")
 API = GLOBAL_CONFIG.get("comfyui_host", "http://127.0.0.1:8188")
 
 def resolve_workflow_path(path_str: str) -> str:
@@ -761,7 +760,7 @@ def main():
             "lora": None,
             "model_type": 'flux' if args.model_type == 'flux' else 'z',
             "trigger": None,
-            "instruction": "根据 STEP 1 场景自行脑补身份职业+外貌体型描述填入prompt，场景匹配为王，裸露尺度自由大胆无下限"
+            "instruction": "根据场景匹配身份职业与穿搭，体型由引擎盲盒托管（{{BODY}}），裸露档位严格按 director.exposure_mode 可选集合分类执行"
         }, ensure_ascii=False))
         return
 

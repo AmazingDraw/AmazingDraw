@@ -7,10 +7,9 @@ async function loadModels() {
     const data = await res.json();
     
     if (data.scanned) {
-      state.openclawModels = data.openclaw_models || [];
-      // cliproxy_models 已退役（API 仍可能返回空数组兼容字段，忽略）
+      state.llmModels = data.models || data.openclaw_models || data.cliproxy_models || [];
     } else {
-      state.openclawModels = [];
+      state.llmModels = [];
     }
     
     updateModelDropdown();
@@ -74,18 +73,16 @@ function preserveLlmRetryLimit(settings) {
 
 function updateModelDropdown() {
   const modelSelect = document.getElementById("settings-llm-model");
-  const independentModelSelect = document.getElementById("settings-independent-llm-model");
-  const fallbackModelSelect = document.getElementById("settings-llm-fallback-model");
   const warningBanner = document.getElementById("settings-agent-warning");
   if (!modelSelect) return;
 
   // 控制警告 Banner 显隐
   if (warningBanner) {
-    const hasOpenclaw = state.openclawModels && state.openclawModels.length > 0;
-    warningBanner.classList.toggle("is-hidden", !!hasOpenclaw);
+    const hasModels = state.llmModels && state.llmModels.length > 0;
+    warningBanner.classList.toggle("is-hidden", !!hasModels);
   }
 
-  let models = state.openclawModels || [];
+  let models = state.llmModels || [];
   
   // 2. 填充主对话模型下拉列表
   modelSelect.innerHTML = "";
@@ -103,53 +100,8 @@ function updateModelDropdown() {
   } else {
     const opt = document.createElement("option");
     opt.value = "";
-        opt.textContent = "请先安装 OpenClaw";
+        opt.textContent = "无法从 Base URL 拉取模型";
     modelSelect.appendChild(opt);
-  }
-
-  // 3. 填充独立调用模型下拉列表
-  if (independentModelSelect) {
-    independentModelSelect.innerHTML = "";
-    
-    // 默认空值选项（跟随主对话模型）
-    const defaultOpt = document.createElement("option");
-    defaultOpt.value = "";
-    defaultOpt.textContent = "跟随主对话模型 (Default)";
-    independentModelSelect.appendChild(defaultOpt);
-    
-    if (models && models.length > 0) {
-      models.forEach(model => {
-        const opt = document.createElement("option");
-        opt.value = model;
-        opt.textContent = model;
-        independentModelSelect.appendChild(opt);
-      });
-      
-      const matchedInd = findMatchingModel(state.settings.independent_llm_model, models, false);
-      independentModelSelect.value = matchedInd;
-    }
-  }
-
-  // 4. 填充满级备用模型下拉列表（单选，写入单元素数组保持配置格式不变）
-  if (fallbackModelSelect) {
-    fallbackModelSelect.innerHTML = "";
-    const noneOpt = document.createElement("option");
-    noneOpt.value = "";
-    noneOpt.textContent = "不启用备用模型";
-    fallbackModelSelect.appendChild(noneOpt);
-
-    if (models && models.length > 0) {
-      models.forEach(model => {
-        const opt = document.createElement("option");
-        opt.value = model;
-        opt.textContent = model;
-        fallbackModelSelect.appendChild(opt);
-      });
-      const currentFallback = Array.isArray(state.settings.llm_fallback_models)
-        ? (state.settings.llm_fallback_models[0] || "")
-        : (state.settings.llm_fallback_models || "");
-      fallbackModelSelect.value = findMatchingModel(currentFallback, models, false);
-    }
   }
 }
 
@@ -167,7 +119,8 @@ function buildClientIntegrationsFallback() {
   const vault = String(s.obsidian_vault_dir || "").trim();
   // Browser cannot see env token / vault FS. Temporary optimistic hint until server responds.
   return {
-    openclaw: !!(state.openclawModels && state.openclawModels.length > 0),
+    llm: !!(state.llmModels && state.llmModels.length > 0),
+    openclaw: !!(state.llmModels && state.llmModels.length > 0),
     telegram: s.delivery_telegram !== false && !!chatId,
     obsidian: !!vault,
   };
@@ -187,7 +140,7 @@ async function refreshIntegrationsStatus() {
 function updateSettingsIntegrationChips(integ) {
   if (!integ || typeof integ !== "object") return;
   const specs = [
-    { key: "openclaw", dotId: "settings-sidebar-openclaw-dot", chipId: "chip-openclaw", label: "OpenClaw" },
+    { key: "llm", dotId: "settings-sidebar-llm-dot", chipId: "chip-llm", label: "LLM" },
     { key: "telegram", dotId: "settings-sidebar-telegram-dot", chipId: "chip-telegram", label: "Telegram" },
     { key: "obsidian", dotId: "settings-sidebar-obsidian-dot", chipId: "chip-obsidian", label: "Obsidian" },
   ];
@@ -262,11 +215,15 @@ async function loadSettings() {
       if (form.elements["scene_cooldown_window"]) {
         form.elements["scene_cooldown_window"].value = state.settings.scene_cooldown_window || 10;
       }
-      if (form.elements["openclaw_ws_timeout_seconds"]) {
-        form.elements["openclaw_ws_timeout_seconds"].value = state.settings.openclaw_ws_timeout_seconds || 600;
-      }
       if (form.elements["enable_ai_check"]) {
         form.elements["enable_ai_check"].checked = !!state.settings.enable_ai_check;
+      }
+      const llm = state.settings.llm || {};
+      if (form.elements["llm_base_url"]) {
+        form.elements["llm_base_url"].value = llm.base_url || "http://127.0.0.1:8317/v1";
+      }
+      if (form.elements["llm_api_key"]) {
+        form.elements["llm_api_key"].value = llm.api_key || "";
       }
       if (form.elements["auto_horizontal_for_multi"]) {
         form.elements["auto_horizontal_for_multi"].checked = state.settings.auto_horizontal_for_multi !== false;
@@ -276,12 +233,6 @@ async function loadSettings() {
       }
       if (form.elements["openclaw_workspace_dir"]) {
         form.elements["openclaw_workspace_dir"].value = state.settings.openclaw_workspace_dir || "";
-      }
-      if (form.elements["openclaw_home"]) {
-        form.elements["openclaw_home"].value = state.settings.openclaw_home || "";
-      }
-      if (form.elements["openclaw_bin"]) {
-        form.elements["openclaw_bin"].value = state.settings.openclaw_bin || "";
       }
       if (form.elements["recording_dir"]) {
         form.elements["recording_dir"].value = state.settings.recording_dir || "";
@@ -306,7 +257,6 @@ async function loadSettings() {
         form.elements["render_backend"].value = settingsRenderBackendValue(state.settings);
       }
       // llm_retry_limit 仅保留在 config；不再从设置表单读写
-      // llm_fallback_models 为下拉单选，选中值由 updateModelDropdown() 统一设置
       if (form.elements["webui_host"]) {
         form.elements["webui_host"].value = state.settings.webui_host || "0.0.0.0";
       }
@@ -438,7 +388,8 @@ async function loadSettings() {
           workplace_scenes: 3,
           sm_scenes: 5,
           special_scenes: 5,
-          perspective_scenes: 0
+          perspective_scenes: 0,
+          ancient_scenes: 3
         };
         const fallbackLibraries = {
           school_scenes: { type: "scene", enabled: true, name: "校园场景" },
@@ -447,7 +398,8 @@ async function loadSettings() {
           workplace_scenes: { type: "scene", enabled: true, name: "职场场景" },
           sm_scenes: { type: "scene", enabled: true, name: "SM场景" },
           special_scenes: { type: "scene", enabled: true, name: "特殊场景" },
-          perspective_scenes: { type: "scene", enabled: true, name: "视角场景" }
+          perspective_scenes: { type: "scene", enabled: true, name: "视角场景" },
+          ancient_scenes: { type: "scene", enabled: true, name: "古风场景" }
         };
         const registry = state.settings.scene_registry || {};
         let libraries = registry.libraries || {};
@@ -481,11 +433,10 @@ async function loadSettings() {
     
     await loadModels();
     
-    if (form && state.settings.llm_model && form.elements["llm_model"]) {
-      form.elements["llm_model"].value = state.settings.llm_model;
-    }
-    if (form && state.settings.independent_llm_model && form.elements["independent_llm_model"]) {
-      form.elements["independent_llm_model"].value = state.settings.independent_llm_model;
+    const llmSettings = (state.settings && state.settings.llm) || {};
+    const mainModel = llmSettings.model || state.settings.llm_model;
+    if (form && mainModel && form.elements["llm_model"]) {
+      form.elements["llm_model"].value = findMatchingModel(mainModel, state.llmModels || [], true);
     }
     updateComfyLink();
     initSettingsIntegrationChipClicks();
@@ -534,8 +485,18 @@ async function autoSaveSettings() {
   if (!form) return;
   
   const data = Object.assign({}, state.settings || {}, {
-    agent_backend: (state.settings && state.settings.agent_backend) || "openclaw",
     llm_model: form.elements["llm_model"].value,
+    llm: {
+      base_url: form.elements["llm_base_url"]
+        ? form.elements["llm_base_url"].value.trim()
+        : ((state.settings.llm && state.settings.llm.base_url) || "http://127.0.0.1:8317/v1"),
+      api_key: form.elements["llm_api_key"]
+        ? form.elements["llm_api_key"].value.trim()
+        : ((state.settings.llm && state.settings.llm.api_key) || ""),
+      model: form.elements["llm_model"] ? form.elements["llm_model"].value : (state.settings.llm_model || ""),
+      retry_limit: preserveLlmRetryLimit(state.settings),
+      timeout_seconds: (state.settings.llm && state.settings.llm.timeout_seconds) || 30,
+    },
     comfyui_host: form.elements["comfyui_host"].value.trim(),
     output_dir: form.elements["output_dir"] ? form.elements["output_dir"].value.trim() : (state.settings.output_dir || ""),
     output_dir_archive: form.elements["output_dir_archive"] ? form.elements["output_dir_archive"].value.trim() : (state.settings.output_dir_archive || ""),
@@ -543,7 +504,6 @@ async function autoSaveSettings() {
     recording_dir: form.elements["recording_dir"] ? form.elements["recording_dir"].value.trim() : (state.settings.recording_dir || ""),
     delivery_telegram: form.elements["delivery_telegram"] ? form.elements["delivery_telegram"].checked : (state.settings.delivery_telegram !== false),
     delivery_webui: form.elements["delivery_webui"] ? form.elements["delivery_webui"].checked : (state.settings.delivery_webui !== false),
-    independent_llm_model: form.elements["independent_llm_model"] ? form.elements["independent_llm_model"].value : (state.settings.independent_llm_model || ""),
     telegram_chat_id: form.elements["telegram_chat_id"] ? form.elements["telegram_chat_id"].value.trim() : (state.settings.telegram_chat_id || ""),
     telegram_bot_token: form.elements["telegram_bot_token"] ? form.elements["telegram_bot_token"].value.trim() : (state.settings.telegram_bot_token || ""),
     llm_retry_limit: preserveLlmRetryLimit(state.settings),
@@ -551,24 +511,18 @@ async function autoSaveSettings() {
       form.elements["render_backend"] ? form.elements["render_backend"].value : "local",
       state.settings && state.settings.cloud
     ),
-    llm_fallback_models: form.elements["llm_fallback_models"] ? form.elements["llm_fallback_models"].value.split(",").map(s => s.trim()).filter(Boolean) : (state.settings.llm_fallback_models || []),
     webui_host: form.elements["webui_host"] ? form.elements["webui_host"].value.trim() : (state.settings.webui_host || "0.0.0.0"),
     webui_port: form.elements["webui_port"] ? parseInt(form.elements["webui_port"].value, 10) || 8318 : 8318,
     
     // A 组路径与算法配置
     comfyui_dir: form.elements["comfyui_dir"] ? form.elements["comfyui_dir"].value.trim() : (state.settings.comfyui_dir || ""),
     openclaw_workspace_dir: form.elements["openclaw_workspace_dir"] ? form.elements["openclaw_workspace_dir"].value.trim() : (state.settings.openclaw_workspace_dir || ""),
-    openclaw_home: form.elements["openclaw_home"] ? form.elements["openclaw_home"].value.trim() : (state.settings.openclaw_home || ""),
-    openclaw_bin: form.elements["openclaw_bin"] ? form.elements["openclaw_bin"].value.trim() : (state.settings.openclaw_bin || ""),
     obsidian_vault_dir: form.elements["obsidian_vault_dir"] ? form.elements["obsidian_vault_dir"].value.trim() : (state.settings.obsidian_vault_dir || ""),
     tmp_dir: form.elements["tmp_dir"] ? form.elements["tmp_dir"].value.trim() : (state.settings.tmp_dir || ""),
     cards_dir: form.elements["cards_dir"] ? form.elements["cards_dir"].value.trim() : (state.settings.cards_dir || ""),
 
     default_workflow: form.elements["default_workflow"] ? form.elements["default_workflow"].value : (state.settings.default_workflow || "moody"),
     scene_cooldown_window: form.elements["scene_cooldown_window"] ? parseInt(form.elements["scene_cooldown_window"].value, 10) || 10 : 10,
-    openclaw_ws_timeout_seconds: form.elements["openclaw_ws_timeout_seconds"]
-      ? Math.min(7200, Math.max(60, parseInt(form.elements["openclaw_ws_timeout_seconds"].value, 10) || 600))
-      : (state.settings.openclaw_ws_timeout_seconds || 600),
     enable_ai_check: form.elements["enable_ai_check"]
       ? !!form.elements["enable_ai_check"].checked
       : false,

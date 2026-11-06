@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Discover local ComfyUI + OpenClaw paths for AmazingDraw install."""
+"""Discover local ComfyUI + LLM endpoint (default 127.0.0.1:8317) for AmazingDraw install."""
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import shutil
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -238,147 +239,30 @@ def discover_comfyui(
         return None, False, []
     return ranked[0][0], False, all_roots
 
-def _win_runnable_without_x_ok(target: Path) -> bool:
-    """On win32, existing .exe/.cmd/.bat are runnable even when X_OK is false."""
-    return target.suffix.lower() in (".exe", ".cmd", ".bat")
+
+DEFAULT_LLM_BASE_URL = "http://127.0.0.1:8317/v1"
 
 
-def _is_runnable(target: Path) -> bool:
-    if not target.exists() or not target.is_file():
-        return False
-    if sys.platform == "win32" and _win_runnable_without_x_ok(target):
-        return True
-    return os.access(target, os.X_OK)
+def llm_base_url(cfg: Optional[Dict[str, Any]] = None) -> str:
+    llm = (cfg or {}).get("llm") if isinstance((cfg or {}).get("llm"), dict) else {}
+    base = str(llm.get("base_url") or DEFAULT_LLM_BASE_URL).strip()
+    return base or DEFAULT_LLM_BASE_URL
 
 
-def _windows_search_dirs(home: Path, name: str) -> list:
-    appdata = Path(os.environ.get("APPDATA") or (home / "AppData" / "Roaming"))
-    localappdata = Path(os.environ.get("LOCALAPPDATA") or (home / "AppData" / "Local"))
-
-    dirs = [
-        appdata / "npm",
-        localappdata / "npm",
-        localappdata / "Programs",
-        localappdata / "Programs" / name,
-        localappdata / "bin",
-        home / "scoop" / "shims",
-    ]
-
-    scoop = (os.environ.get("SCOOP") or "").strip()
-    if scoop:
-        dirs.append(Path(scoop) / "shims")
-    programs = localappdata / "Programs"
-    if programs.is_dir():
-        try:
-            for child in programs.glob("openclaw*"):
-                if child.is_dir():
-                    dirs.append(child)
-        except Exception:
-            pass
-    return dirs
-
-
-def resolve_bin_path(name: str) -> str:
-    """Locate an executable by name; Windows-aware for .cmd/.bat and npm dirs."""
-    found = shutil.which(name)
-    if found:
-        return found
-    if sys.platform == "win32":
-        for ext in (".cmd", ".bat", ".exe"):
-            found_ext = shutil.which(name + ext)
-            if found_ext:
-                return found_ext
-
-    home = Path.home()
-    search_dirs = [
-        home / ".local" / "bin",
-        home / "bin",
-        Path("/usr/local/bin"),
-        Path("/usr/bin"),
-        Path("/opt/homebrew/bin"),
-    ]
-    if sys.platform == "win32":
-        search_dirs.extend(_windows_search_dirs(home, name))
-        exts = [".exe", ".cmd", ".bat", ""]
-    else:
-        exts = [""]
-
-    seen = set()
-    for sd in search_dirs:
-        try:
-            key = str(sd.resolve()) if sd.exists() else str(sd)
-        except Exception:
-            key = str(sd)
-        if key in seen:
-            continue
-        seen.add(key)
-        for ext in exts:
-            target = sd / (name + ext)
-            if _is_runnable(target):
-                try:
-                    return str(target.resolve())
-                except Exception:
-                    return str(target)
-    return name
-
-
-def _is_openclaw_home(p: Path) -> bool:
+def probe_llm_endpoint(cfg: Optional[Dict[str, Any]] = None, timeout: float = 0.4) -> Tuple[str, bool]:
+    """TCP probe of llm.base_url host:port. Never raises."""
+    base = llm_base_url(cfg)
+    raw = base if "://" in base else "http://" + base
+    u = urlparse(raw)
+    host = u.hostname or "127.0.0.1"
+    port = u.port
+    if port is None:
+        port = 443 if (u.scheme or "http") == "https" else 80
     try:
-        return p.is_dir() and (p / "openclaw.json").is_file()
-    except Exception:
-        return False
-
-
-def discover_openclaw_home(cfg: Dict[str, Any]) -> Tuple[Optional[Path], bool]:
-    raw = cfg.get("openclaw_home")
-    if isinstance(raw, str) and raw.strip():
-        cur = _expand(raw)
-        if _is_openclaw_home(cur):
-            return cur, True
-    env_raw = (os.environ.get("OPENCLAW_HOME") or "").strip()
-    if env_raw:
-        cur = _expand(env_raw)
-        if _is_openclaw_home(cur):
-            return cur, False
-    default = Path.home() / ".openclaw"
-    if _is_openclaw_home(default):
-        try:
-            return default.resolve(), False
-        except Exception:
-            return default, False
-    return None, False
-
-
-def discover_openclaw_bin(cfg: Dict[str, Any]) -> Tuple[Optional[str], bool]:
-    raw = cfg.get("openclaw_bin")
-    if isinstance(raw, str) and raw.strip():
-        p = _expand(raw)
-        if p.is_file():
-            try:
-                return str(p.resolve()), True
-            except Exception:
-                return str(p), True
-    found = resolve_bin_path("openclaw")
-    # resolve_bin_path may return bare name when missing
-    if found and found != "openclaw" and Path(found).is_file():
-        return found, False
-    return None, False
-
-
-def discover_workspace(home: Optional[Path]) -> Optional[Path]:
-    env = (os.environ.get("OPENCLAW_WORKSPACE_DIR") or "").strip()
-    if env:
-        p = _expand(env)
-        if p.is_dir():
-            return p
-    if home is not None:
-        ws = home / "workspace"
-        if ws.is_dir():
-            return ws
-    default = Path.home() / ".openclaw" / "workspace"
-    if default.is_dir():
-        return default
-    return None
+        with socket.create_connection((host, port), timeout=timeout):
+            return base, True
+    except OSError:
+        return base, False
 
 
 def _normalize_comfy_host(raw: str) -> str:
@@ -409,9 +293,6 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
     changed = False
     result: Dict[str, Any] = {
         "comfyui_dir": None,
-        "openclaw_home": None,
-        "openclaw_bin": None,
-        "workspace": None,
         "wrote": [],
         "comfyui_candidates": None,
         "comfyui_note": None,
@@ -458,43 +339,16 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
         result["comfyui_note"] = tip
         _eprint(tip)
 
-    oc_home, oc_home_keep = discover_openclaw_home(cfg)
-    oc_bin, oc_bin_keep = discover_openclaw_bin(cfg)
-    ws = discover_workspace(oc_home)
-
-    found_any_oc = False
-    if oc_home is not None:
-        found_any_oc = True
-        result["openclaw_home"] = str(oc_home)
-        _eprint("✓ 已找到 OpenClaw 家目录：" + str(oc_home))
-        if do_write and _should_write_path(cfg.get("openclaw_home"), oc_home_keep):
-            cfg["openclaw_home"] = str(oc_home)
-            changed = True
-            result["wrote"].append("openclaw_home")
-            _eprint("  已写入配置 openclaw_home")
-
-    if oc_bin is not None:
-        found_any_oc = True
-        result["openclaw_bin"] = oc_bin
-        msg = "✓ 已找到 OpenClaw 命令：" + oc_bin
-        if oc_bin.lower().endswith((".cmd", ".bat")):
-            msg += "（Windows 可用 openclaw.cmd）"
-        _eprint(msg)
-        if do_write and _should_write_path(cfg.get("openclaw_bin"), oc_bin_keep):
-            cfg["openclaw_bin"] = oc_bin
-            changed = True
-            result["wrote"].append("openclaw_bin")
-            _eprint("  已写入配置 openclaw_bin")
-
-    if ws is not None:
-        result["workspace"] = str(ws)
-        _eprint("✓ OpenClaw 工作区：" + str(ws))
-        found_any_oc = True
-
-    if not found_any_oc:
+    llm_url, llm_ok = probe_llm_endpoint(cfg)
+    result["llm_base_url"] = llm_url
+    result["llm_ok"] = llm_ok
+    if llm_ok:
+        _eprint("✓ LLM 端点可达：" + llm_url)
+    else:
         _eprint(
-            "[i] 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。"
-            "需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
+            "[i] LLM 端点暂不可达：" + llm_url
+            + "（填槽 / 连抽需要本机 OpenAI 兼容 HTTP，常见为 CLI Proxy 8317。"
+            "不影响装完；可稍后启动网关，或在 WebUI「配置」改 llm.base_url。）"
         )
 
     # Honor COMFYUI_HOST env when config comfyui_host empty/invalid (mirror COMFYUI_DIR).
@@ -515,7 +369,7 @@ def run(config_path: Path, do_write: bool) -> Dict[str, Any]:
     return result
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Detect local ComfyUI / OpenClaw paths")
+    ap = argparse.ArgumentParser(description="Detect local ComfyUI / LLM endpoint")
     ap.add_argument("--config", required=True, help="Path to config.json (CONFIG_DST)")
     ap.add_argument("--write", action="store_true", help="Write paths when empty/invalid")
     ap.add_argument("--json", action="store_true", help="Print final JSON result line")
@@ -527,9 +381,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.json:
         payload = {
             "comfyui_dir": result.get("comfyui_dir"),
-            "openclaw_home": result.get("openclaw_home"),
-            "openclaw_bin": result.get("openclaw_bin"),
-            "workspace": result.get("workspace"),
+            "llm_base_url": result.get("llm_base_url"),
+            "llm_ok": result.get("llm_ok"),
             "wrote": result.get("wrote"),
         }
         if result.get("comfyui_candidates") is not None:

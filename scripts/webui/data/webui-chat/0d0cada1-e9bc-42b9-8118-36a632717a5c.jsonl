@@ -1,0 +1,12 @@
+{"operation_id": "71a145b3-16d3-4720-b54b-5d4c76ca5902", "role": "user", "content": "只回复两个字：好3", "time": 1793022769, "operation_state": "queued"}
+{"operation_id": "71a145b3-16d3-4720-b54b-5d4c76ca5902", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793022771, "operation_state": "completed"}
+{"operation_id": "733e6499-1d9f-4a58-92f5-f8c2285e2379", "role": "user", "content": "你好", "time": 1793022836, "operation_state": "queued"}
+{"operation_id": "733e6499-1d9f-4a58-92f5-f8c2285e2379", "role": "assistant", "content": "主人，我在。你的专属抽卡助手，一直候着呢。\n\n说说吧——今天你想先做哪个：**新建卡片**、**直接出图**，还是**连续抽卡**？你给个方向，剩下的交给我。", "time": 1793022840, "operation_state": "completed"}
+{"operation_id": "11b96e04-1572-4106-97d6-cbd3135c5adc", "role": "user", "content": "随便聊聊", "time": 1793022844, "operation_state": "queued"}
+{"operation_id": "11b96e04-1572-4106-97d6-cbd3135c5adc", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793022850, "operation_state": "completed"}
+{"operation_id": "94468cd5-627d-4380-966d-7506ab343b60", "role": "user", "content": "QAQ", "time": 1793022854, "operation_state": "queued"}
+{"operation_id": "94468cd5-627d-4380-966d-7506ab343b60", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793022857, "operation_state": "completed"}
+{"operation_id": "4ec76f1f-96b8-46bd-acb0-18dacaeb4aba", "role": "user", "content": "QAQ", "time": 1793022907, "operation_state": "queued"}
+{"operation_id": "4ec76f1f-96b8-46bd-acb0-18dacaeb4aba", "role": "assistant", "content": "✅ 指令执行成功。", "time": 1793022911, "operation_state": "completed"}
+{"operation_id": "49614949-9292-482f-9050-f65d92fa7876", "role": "user", "content": "QAQ", "time": 1793025041, "operation_state": "queued"}
+{"operation_id": "49614949-9292-482f-9050-f65d92fa7876", "role": "assistant", "content": "怎么啦 QAQ 出什么事了？\n\n我看了下，当前目录是 `amazing-draw/scripts`（ComfyUI 抽卡控制台那套）。是下面哪种情况？\n\n- 抽卡出图报错、跑不动了\n- ComfyUI 挂了，或者队列卡住了\n- 想画点什么，但不知道从哪开始\n- 完全不是这里的事，只是想吐槽\n\n把报错信息、或者刚才做的操作跟我说一下，我直接帮你查。", "time": 1793025045, "operation_state": "completed"}

@@ -29,6 +29,8 @@ from urllib.parse import quote as url_quote
 
 from fastapi import APIRouter, HTTPException
 
+import web_server as _ws_bootstrap  # noqa: F401  确保 scripts/ 在 sys.path
+import amazingdraw_paths  # noqa: E402
 from web_server import (
     CARDS_DIR,
     CONFIG_PATH,
@@ -179,6 +181,15 @@ def _resolve_card_image(
         if candidate is not None and candidate.is_file():
             return candidate, prefix, name
     return None
+
+
+def _reveal_card_for_webui(card: dict) -> dict:
+    """对人类 WebUI 前端揭盲（D8）：返回真实体型、真实 Prompt 及档位摘要，不改磁盘文件。"""
+    try:
+        from card_blind_body import reveal_card_for_human
+        return reveal_card_for_human(card)
+    except Exception:
+        return card
 
 
 def _attach_card_image_fields(card: dict, config: dict) -> Optional[Path]:
@@ -334,6 +345,29 @@ def parse_png_filename(filename: str):
     return person, scene, intent
 
 
+def extract_card_theme(card: dict, png_name: str = "") -> str:
+    """列表/相册用的短主题：JSON 优先，没有再读 PNG 文件名第三段。"""
+    director = card.get("director") if isinstance(card.get("director"), dict) else {}
+    render = card.get("render") if isinstance(card.get("render"), dict) else {}
+    constraints = card.get("constraints") if isinstance(card.get("constraints"), dict) else {}
+    for val in (
+        director.get("intent_zh"),
+        render.get("meta_theme"),
+        card.get("theme_zh"),
+        constraints.get("theme"),
+        director.get("intent"),
+    ):
+        text = str(val or "").strip()
+        if text:
+            return text[:24]
+    if png_name:
+        _, _, intent = parse_png_filename(str(png_name))
+        intent = str(intent or "").strip()
+        if intent and any("\u4e00" <= ch <= "\u9fff" for ch in intent) and len(intent) <= 40:
+            return intent[:24]
+    return ""
+
+
 def extract_prompt_from_png(png_path: Path) -> str:
     """利用 Pillow 从 PNG 文件中提取嵌入的英文提示词"""
     try:
@@ -405,10 +439,12 @@ def list_cards():
                 # 列表摘要：人物/场景优先 JSON；若空且文件名可解析则补齐（交付本地 rename 后仍可读）
                 person = card.get("subject", {}).get("display_name", "") or ""
                 scene = card.get("scene", {}).get("name", "") or ""
-                if (not person or not scene) and card.get("render_image"):
-                    p2, s2, _ = parse_png_filename(str(card["render_image"]))
+                png_name = str(card.get("render_image") or "")
+                if (not person or not scene) and png_name:
+                    p2, s2, _ = parse_png_filename(png_name)
                     person = person or p2
                     scene = scene or s2
+                theme = extract_card_theme(card, png_name)
                 try:
                     card_version = int(card.get("version") or 0)
                 except (TypeError, ValueError):
@@ -421,6 +457,7 @@ def list_cards():
                     "mode": card.get("mode", "amateur"),
                     "person": person,
                     "scene": scene,
+                    "theme": theme,
                     "narrative": card.get("director", {}).get("story_elevation_zh", "") or card.get("narrative_zh", "") or (card.get("creative", {}) or {}).get("ai_notes", ""),
                     "workflow_mode": card.get("workflow_mode", "single"),
                     "mtime": mtime,
@@ -474,6 +511,9 @@ def list_cards():
                     cache_ref[0] = True
                     
                 card_id_virtual = os.path.splitext(filename)[0]
+                theme = ""
+                if intent and any("\u4e00" <= ch <= "\u9fff" for ch in str(intent)) and len(str(intent)) <= 40:
+                    theme = str(intent).strip()[:24]
                 cards.append({
                     "card_id": card_id_virtual,
                     "version": None,
@@ -481,6 +521,7 @@ def list_cards():
                     "mode": "amateur",
                     "person": person,
                     "scene": scene,
+                    "theme": theme,
                     "narrative": intent or prompt[:100],
                     "workflow_mode": "single",
                     "mtime": mtime,
@@ -529,7 +570,7 @@ def get_card(card_id: str):
                     if jdata.get("render_image") == f"{card_id}.png":
                         config = load_system_config()
                         _attach_card_image_fields(jdata, config)
-                        return jdata
+                        return _reveal_card_for_webui(jdata)
                 except Exception:
                     continue
         except Exception:
@@ -686,7 +727,7 @@ def get_card(card_id: str):
                     card.setdefault("director", {})
                     if not card["director"].get("intent"):
                         card["director"]["intent"] = intent
-        return card
+        return _reveal_card_for_webui(card)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -767,6 +808,11 @@ async def delete_card(card_id: str):
     # 5. 清理聊天历史和规则缓存
     clear_chat_history(card_id)
     reset_rule_session(webui_session_id(card_id))
+    try:
+        from api_albums import prune_card_from_albums
+        prune_card_from_albums(card_id)
+    except Exception:
+        pass
         
     return {"status": "deleted"}
 
@@ -837,6 +883,13 @@ def _cleanup_cards(
             deleted_ids.append(card_id)
         except Exception as e:
             print(f"Cleanup card {card_id} ({group}) failed: {e}")
+
+    if deleted_ids:
+        try:
+            from api_albums import prune_cards_from_albums
+            prune_cards_from_albums(deleted_ids)
+        except Exception:
+            pass
 
     return {
         "status": "ok",
@@ -1439,7 +1492,7 @@ def get_roles():
 
     # 兼容旧路径：custom_presets_dir/profiles/*.json（扁平 {key: profile}）
     config = load_system_config()
-    presets_dir = Path(config.get("custom_presets_dir", str(PRESETS_DIR)))
+    presets_dir = amazingdraw_paths.custom_presets_dir(config)
     profiles_dir = presets_dir / "profiles"
     if profiles_dir.exists():
         for f in profiles_dir.glob("*.json"):
@@ -1526,7 +1579,7 @@ def get_scenes():
             s.setdefault("library", "special_scenes")
 
     config = load_system_config()
-    presets_dir = Path(config.get("custom_presets_dir", str(PRESETS_DIR)))
+    presets_dir = amazingdraw_paths.custom_presets_dir(config)
     scenes_dir = presets_dir / "scenes"
     if scenes_dir.exists():
         for f in scenes_dir.glob("*.json"):

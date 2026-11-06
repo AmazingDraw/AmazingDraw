@@ -1,0 +1,2 @@
+{"operation_id": "2009059e-ab53-4870-8893-2dd1e4069afc", "role": "user", "content": "只回复两个字：你好", "time": 1793022710, "operation_state": "queued"}
+{"operation_id": "2009059e-ab53-4870-8893-2dd1e4069afc", "role": "assistant", "content": "❌ 发生错误: Internal error: turn failed: llm-deepseek: no API key for provider route \"deepseek-official\"; store DEEPSEEK_API_KEY through the credentials service (the web Models page writes it), or export DEEPSEEK_API_KEY in the launching environment", "time": 1793022710, "operation_state": "failed"}

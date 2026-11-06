@@ -1,0 +1,4 @@
+{"operation_id": "0b83146f-b7fa-4a52-af67-7fa32f507af8", "role": "user", "content": "只回复两个字：一", "time": 1793030035, "operation_state": "queued"}
+{"operation_id": "0b83146f-b7fa-4a52-af67-7fa32f507af8", "role": "assistant", "content": "一", "time": 1793030037, "operation_state": "completed"}
+{"operation_id": "1ac7b5db-18bf-415f-aa84-aad9408cc082", "role": "user", "content": "只回复两个字：二", "time": 1793030037, "operation_state": "queued"}
+{"operation_id": "1ac7b5db-18bf-415f-aa84-aad9408cc082", "role": "assistant", "content": "二", "time": 1793030039, "operation_state": "completed"}

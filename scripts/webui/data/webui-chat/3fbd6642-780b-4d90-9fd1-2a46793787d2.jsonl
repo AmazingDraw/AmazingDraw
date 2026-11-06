@@ -1,0 +1,2 @@
+{"operation_id": "cfc87bf1-8c7d-470e-a257-006d01a2705b", "role": "user", "content": "只回复两个字：你好", "time": 1793022732, "operation_state": "queued"}
+{"operation_id": "cfc87bf1-8c7d-470e-a257-006d01a2705b", "role": "assistant", "content": "你好", "time": 1793022734, "operation_state": "completed"}

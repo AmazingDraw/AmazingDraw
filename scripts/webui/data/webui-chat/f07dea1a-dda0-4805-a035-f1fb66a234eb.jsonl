@@ -1,0 +1,2 @@
+{"operation_id": "0c12f72c-8bff-40d0-8af3-8567cbfeae3a", "role": "user", "content": "只回复两个字：你好", "time": 1793028942, "operation_state": "queued"}
+{"operation_id": "0c12f72c-8bff-40d0-8af3-8567cbfeae3a", "role": "assistant", "content": "❌ 发生错误: ACP 进程已退出", "time": 1793028943, "operation_state": "failed"}

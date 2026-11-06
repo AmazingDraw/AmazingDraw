@@ -144,10 +144,7 @@ function initModals() {
         progress.finish();
         if (createModal) createModal.classList.remove("open");
         formCreate.reset();
-        showToast("卡片骨架创建成功，正在交给 AI 接手", "success");
-
-        // 复用卡片→抽卡交接：切到 draw 会话并带上卡片上下文，让 AI 按常规流程往下跑
-        await handoffCardsToDrawChat(buildTakeoverPrompt(result.card_id, data));
+        showToast("卡片骨架创建成功", "success");
       } catch (err) {
         progress.fail();
         showToast("创建骨架失败", "error");
