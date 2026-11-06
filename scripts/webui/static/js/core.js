@@ -13,7 +13,7 @@ let state = {
   scenes: [],
   settings: {},
   lastSlots: {}, // 用于比对并触发闪烁效果
-  openclawModels: [],
+  llmModels: [],
   activeFilter: "all",
   timeFilter: "all",     // all / today / 7d / 30d / YYYY-MM
   cardsLimit: 100,
@@ -32,8 +32,19 @@ let state = {
   streamingTurn: null,      // 在途这轮的 {userText, replyText, msgId}；切回该会话时补画（此时尚未落盘）
   streamingTurns: new Map(), // 每个会话各自的在途轮次，允许 S1/S2/S3 并发且不串 UI
   bootReady: false,       // settings 就绪前禁止 loadCards 画侧栏
-  activeView: "chat",     // 当前 workspace 视图：chat / settings / docs (注: 对应 Cards/Draw/配置/文档 选项)
+  activeView: "chat",     // chat(卡片工作台) / album / settings / docs
   dangerConfirmAction: null,
+  albums: [],
+  albumVirtual: {},
+  albumPool: [],
+  albumPoolTotal: 0,
+  albumFilter: "all",
+  albumTimeFilter: "all",
+  albumPersonFilter: "",
+  albumSceneFilter: "",
+  albumPersonRareOpen: false,
+  albumGroups: { persons: [] },
+  albumLimit: 100,
 };
 
 
@@ -48,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initLightbox();
   initCardStatusFilters();
   initTimeFilter();
+  initAlbum();
   initChat();
   initModals();
   initAutocomplete();
@@ -63,17 +75,8 @@ document.addEventListener("DOMContentLoaded", () => {
     state.bootReady = true;
     // 完整同步 mode 按钮 + 指示条（loadSettings 在 boot 期只做了半套样式）
     renderChatModeButtons({ skipSidebar: true });
-    const mode = normalizeChatMode(state.settings && state.settings.chat_mode);
-    if (mode === "draw") {
-      // 刷新恢复：boot 时先灌入 localStorage 会话 id，再拉列表+历史，避免内容空
-      const savedSessionId = localStorage.getItem("active_session_id");
-      if (savedSessionId) {
-        state.activeSessionId = savedSessionId;
-      }
-      updateSidebarViewMode();
-    } else {
-      loadCards();
-    }
+    if (state.settings) state.settings.chat_mode = "cards";
+    loadCards();
     if (typeof maybeStartWebuiOnboarding === "function") maybeStartWebuiOnboarding();
   }).catch(() => {
     state.bootReady = true;

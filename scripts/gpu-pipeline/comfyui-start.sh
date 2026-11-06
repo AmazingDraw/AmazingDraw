@@ -7,14 +7,14 @@ CONFIG_FILE="$(dirname "$0")/../config.json"
 COMFYUI_DIR="$HOME/ComfyUI"
 COMFY_PORT="8188"
 OUTPUT_DIR="$HOME/Downloads/draw_things"
-WORKSPACE="$HOME/.openclaw/workspace"
+WORKSPACE="$HOME/.amazingdraw"
 
 # 如果存在 config.json，用 python 轻量提取
 if [ -f "$CONFIG_FILE" ]; then
   COMFYUI_DIR=$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('$CONFIG_FILE')).get('comfyui_dir', '$HOME/ComfyUI')))")
   COMFY_PORT=$(python3 -c "import json, urllib.parse; u=json.load(open('$CONFIG_FILE')).get('comfyui_host', 'http://127.0.0.1:8188'); u_parsed=urllib.parse.urlparse(u); print(u_parsed.port if u_parsed.port else 8188)")
   OUTPUT_DIR=$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('$CONFIG_FILE')).get('output_dir', '~/Downloads/draw_things')))")
-  WORKSPACE=$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('$CONFIG_FILE')).get('openclaw_workspace_dir') or '$HOME/.openclaw/workspace'))")
+  WORKSPACE=$(python3 "$(cd "$(dirname "$0")/.." && pwd)/amazingdraw_paths.py" get workspace)
 fi
 
 COMFYUI_MAIN="$COMFYUI_DIR/main.py"

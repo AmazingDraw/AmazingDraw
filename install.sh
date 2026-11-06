@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # AmazingDraw 发行版安装引导
-# 自动创建 OpenClaw 依赖目录 + 生成权威配置 + 校验运行环境
+# 自动创建数据目录 + 生成权威配置 + 侦测 ComfyUI / LLM 端点（默认 127.0.0.1:8317）+ 校验运行环境
 # Releases 提供两套包，文件名里的 cp39 / cp312 就是 Python 主版本。
 # 跑 WebUI/CLI 的 Python 必须和 zip 标签一致。
 # Apple 自带 /usr/bin/python3 是 3.9，请下 cp39；本机 3.12 请下 cp312。
@@ -27,19 +27,31 @@ for _a in "$@"; do
       echo ""
       echo "环境变量:"
       echo "  AMAZINGDRAW_INSTALL_NONINTERACTIVE=1   等同于 --non-interactive"
-      echo "  OPENCLAW_DIR=...                       指定 cards/自定义预设等数据目录（默认 ~/.openclaw/draw-cards；配置权威在包内 scripts/config.json）"
       echo "  COMFYUI_DIR=...                        指定 ComfyUI 本地根目录"
+      echo ""
+      echo "填槽 / 连抽走 config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）。"
+      echo "不安装 dsh / OpenClaw 对话后端。"
       exit 0
       ;;
     --non-interactive|--noninteractive)
       AMAZINGDRAW_INSTALL_NONINTERACTIVE=1
       ;;
+    --skip-dsh-plugin|--dsh-plugin-mode=*)
+      # 已退役：忽略旧选项
+      ;;
+    --dsh-plugin-mode)
+      # 已退役：丢掉后面的 mode 参数
+      _SKIP_NEXT_DSH_MODE=1
+      ;;
     *)
-      _INSTALL_ARGS+=("$_a")
+      if [ "${_SKIP_NEXT_DSH_MODE:-0}" = 1 ]; then
+        _SKIP_NEXT_DSH_MODE=0
+      else
+        _INSTALL_ARGS+=("$_a")
+      fi
       ;;
   esac
 done
-# 剩余参数目前忽略；保留扩展位
 export AMAZINGDRAW_INSTALL_NONINTERACTIVE
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -238,6 +250,8 @@ _pick_py() {
           "/usr/local/bin/python3.9"
           "/Library/Frameworks/Python.framework/Versions/3.9/bin/python3"
           "$HOME/.pyenv/shims/python3.9"
+          "$HOME/.local/bin/python3.9"
+          "$HOME"/.local/share/uv/python/cpython-3.9.*/bin/python3.9
         )
         ;;
       3.12)
@@ -246,6 +260,8 @@ _pick_py() {
           "/usr/local/bin/python3.12"
           "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
           "$HOME/.pyenv/shims/python3.12"
+          "$HOME/.local/bin/python3.12"
+          "$HOME"/.local/share/uv/python/cpython-3.12.*/bin/python3.12
         )
         ;;
     esac
@@ -382,12 +398,15 @@ else
   fi
 fi
 
-OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw/draw-cards}"
-WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-$HOME/.openclaw/workspace}"
+# 自有数据目录固定为 ~/.amazingdraw（cards / custom_presets / webui-chat / install-report…）；
+# 单项覆盖只走 scripts/config.json 的 cards_dir / custom_presets_dir，不再有环境变量入口。
+DATA_DIR="$HOME/.amazingdraw"
+# 旧版（≤0.1.18）数据目录，仅用于一次性迁移 / 旧配置迁入提示（不是安装 OpenClaw）
+LEGACY_DATA_DIR="$HOME/.openclaw/draw-cards"
 # 权威配置：发行包内 scripts/config.json（引擎 / WebUI 亦读此路径）
 CONFIG_DST="$ROOT/scripts/config.json"
 CONFIG_EXAMPLE="$ROOT/config.example.json"
-LEGACY_CONFIG="$OPENCLAW_DIR/config.json"
+LEGACY_CONFIG="$LEGACY_DATA_DIR/config.json"
 CORE_CONFIG="$ROOT/card_engine_core/config.json"
 NATIVE_DIR="$ROOT/card_engine_core/native"
 
@@ -404,8 +423,7 @@ echo "== AmazingDraw 安装引导 =="
 echo "  发行版: $ROOT"
 echo "  平台: $UNAME_S  IS_WIN=$IS_WIN  python=${PY:-（未选定）}"
 echo "  HOME: $HOME"
-echo "  OpenClaw 数据目录: $OPENCLAW_DIR"
-echo "  OpenClaw 工作区:   $WORKSPACE_DIR"
+echo "  数据目录: $DATA_DIR"
 echo "  权威配置:          $CONFIG_DST"
 if [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixed" ]; then
   echo "  本包内核 Python: $WANT_PY"
@@ -419,15 +437,15 @@ if [ -z "$PY" ]; then
   fatal_add "没有可用的 Python 解释器，无法继续配置与校验"
 fi
 
-# ── 1. 创建 OpenClaw 依赖目录 ──
-mkdir -p "$OPENCLAW_DIR/cards"
-mkdir -p "$OPENCLAW_DIR/custom_presets/amateurs"
-mkdir -p "$OPENCLAW_DIR/custom_presets/roles"
-mkdir -p "$OPENCLAW_DIR/custom_presets/scenes"
-echo "✓ 目录就绪: $OPENCLAW_DIR/{cards,custom_presets/...}"
+# ── 1. 创建自有数据目录（~/.amazingdraw）──
+mkdir -p "$DATA_DIR/cards"
+mkdir -p "$DATA_DIR/custom_presets/amateurs"
+mkdir -p "$DATA_DIR/custom_presets/roles"
+mkdir -p "$DATA_DIR/custom_presets/scenes"
+echo "✓ 目录就绪: $DATA_DIR/{cards,custom_presets/...}"
 
 # ── 2. 权威配置 = 包内 scripts/config.json（保留已有；缺则种子/旧路径迁入）──
-# 数据目录仍用 OPENCLAW_DIR（cards / custom_presets）；配置权威不再落 ~/.openclaw/.../config.json
+# 数据目录为 ~/.amazingdraw（cards / custom_presets）；配置权威不落 ~/.openclaw/.../config.json
 CONFIG_MIGRATED_FROM_LEGACY=0
 if [ -f "$CONFIG_DST" ]; then
   echo "✓ 保留已有权威配置 $CONFIG_DST"
@@ -463,9 +481,6 @@ changed = False
 if not tmp or tmp.startswith("/tmp"):
     cfg["tmp_dir"] = str(Path(tempfile.gettempdir()) / "cu-card")
     changed = True
-if not str(cfg.get("cards_dir") or "").strip():
-    cfg["cards_dir"] = "~/.openclaw/draw-cards/cards"
-    changed = True
 if changed:
     p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 Path(cfg["tmp_dir"]).mkdir(parents=True, exist_ok=True)
@@ -479,6 +494,41 @@ fi
 _sync_core_config
 if [ -f "$CONFIG_DST" ] && [ -f "$CORE_CONFIG" ]; then
   echo "✓ $CORE_CONFIG 已与权威配置对齐"
+fi
+
+# ── 3.1 旧数据一次性迁移：~/.openclaw/{draw-cards,webui-chat} → ~/.amazingdraw ──
+# 只复制（不移动、不建链接），逐文件 sha256 校验，标记文件 ~/.amazingdraw/.migrated-from-openclaw.json
+# 存在则跳过；目标已有不同内容时不覆盖、两份都留。旧目录保留，可手动删除。失败不阻断安装。
+if [ -n "$PY" ] && [ -f "$ROOT/scripts/amazingdraw_paths.py" ]; then
+  if "$PY" "$(py_path "$ROOT/scripts/amazingdraw_paths.py")" migrate > "$DATA_DIR/.migrate-last.json" 2>&1; then
+    echo "✓ 旧数据迁移检查完成（详情: $DATA_DIR/.migrate-last.json）"
+  else
+    echo "⚠ 旧数据迁移未完成（不影响安装；可稍后重跑: $PY scripts/amazingdraw_paths.py migrate；详情: $DATA_DIR/.migrate-last.json）"
+  fi
+fi
+
+# 旧版 install.sh 把 cards_dir / custom_presets_dir 显式写成 ~/.openclaw/draw-cards/…；
+# 仅当值恰好等于旧默认路径时清空（= 改走 ~/.amazingdraw 默认），其它自定义值原样保留。
+if [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
+  CFG_FIX_PY="$(py_path "$CONFIG_DST")"
+  "$PY" - "$CFG_FIX_PY" <<'PY' || true
+import json, os, sys
+from pathlib import Path
+
+p = Path(sys.argv[1])
+cfg = json.loads(p.read_text(encoding="utf-8"))
+old_root = os.path.normpath(os.path.expanduser("~/.openclaw/draw-cards"))
+changed = []
+for key, sub in (("cards_dir", "cards"), ("custom_presets_dir", "custom_presets")):
+    v = str(cfg.get(key) or "").strip()
+    if v and os.path.normpath(os.path.expanduser(v)) == os.path.join(old_root, sub):
+        cfg[key] = ""
+        changed.append(key)
+if changed:
+    p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("✓ 配置里的旧默认路径已清空（改走 ~/.amazingdraw）: " + ", ".join(changed))
+PY
+  _sync_core_config
 fi
 
 # ── 3.6 默认工作流复制：推迟到侦测/向导之后（需有效 comfyui_dir）──
@@ -561,7 +611,7 @@ if [ -n "$PY" ]; then
   fi
 fi
 
-# ── 5.0 旧配置迁移：废弃的 agent_backend → openclaw（仅此一项）──
+# ── 5.0 旧配置迁移：废弃的对话后端 → llm（8317）──
 AGENT_BACKEND_BEFORE=""
 AGENT_BACKEND_AFTER=""
 AGENT_BACKEND_MIGRATED=0
@@ -573,13 +623,13 @@ from pathlib import Path
 p = Path(sys.argv[1])
 cfg = json.loads(p.read_text(encoding="utf-8"))
 old = str(cfg.get("agent_backend") or "").strip().lower()
-legacy = ("custom", "claudecode", "hermes")
+legacy = ("custom", "claudecode", "hermes", "builtin", "pi", "dsh", "openclaw")
 if old in legacy:
-    cfg["agent_backend"] = "openclaw"
+    cfg["agent_backend"] = "llm"
     p.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print("migrated:%s:openclaw" % old)
+    print("migrated:%s:llm" % old)
 else:
-    print("keep:%s" % (old or "openclaw"))
+    print("keep:%s" % (old or "llm"))
 PY
 )" || true
   case "$_mig_out" in
@@ -587,8 +637,8 @@ PY
       AGENT_BACKEND_MIGRATED=1
       AGENT_BACKEND_BEFORE="${_mig_out#migrated:}"
       AGENT_BACKEND_BEFORE="${AGENT_BACKEND_BEFORE%%:*}"
-      AGENT_BACKEND_AFTER="openclaw"
-      echo "✓ 已迁移 agent_backend: ${AGENT_BACKEND_BEFORE} → openclaw（旧 custom / claudecode / hermes 已废弃）"
+      AGENT_BACKEND_AFTER="llm"
+      echo "✓ 已迁移 agent_backend: ${AGENT_BACKEND_BEFORE} → llm（dsh / OpenClaw / 其它旧后端已退役）"
       _sync_core_config
       ;;
     keep:*)
@@ -597,7 +647,7 @@ PY
   esac
 fi
 
-# ComfyUI / OpenClaw：本机路径侦测（可选依赖，不阻断安装）
+# ComfyUI / LLM 端点：本机路径侦测（可选依赖，不阻断安装）
 # 优先调用 tools/detect_local_deps.py；写入规则：仅填充空值或无效路径，不覆盖有效用户配置。
 DETECT_HELPER=""
 _INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -619,7 +669,7 @@ COMFYUI_DIR="${COMFYUI_DIR:-}"
 if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$DETECT_HELPER" ]; then
   CFG_PY="$(py_path "$CONFIG_DST")"
   DETECT_PY="$(py_path "$DETECT_HELPER")"
-  # 人话输出到终端；--write 仅在空/无效时写入 comfyui_dir / openclaw_home / openclaw_bin
+  # 人话输出到终端；--write 仅在空/无效时写入 comfyui_dir
   set +e
   "$PY" "$DETECT_PY" --config "$CFG_PY" --write
   _detect_rc=$?
@@ -647,11 +697,6 @@ elif [ -f "$CONFIG_DST" ] && [ -n "$PY" ]; then
     echo "✓ 已找到本机 ComfyUI：$COMFYUI_DIR"
   else
     echo "[i] 本机还没侦测到 ComfyUI（可选）。装好后可在 WebUI「配置」里填写 ComfyUI 本地根目录；或设置环境变量 COMFYUI_DIR 后再跑一次安装。"
-  fi
-  if [ -d "$WORKSPACE_DIR" ]; then
-    echo "✓ OpenClaw 工作区：$WORKSPACE_DIR"
-  else
-    echo "[i] 未侦测到 OpenClaw（AI 连抽/常规对话才需要；直投/精选/出图可先不用）。需要时安装 OpenClaw，或在 WebUI 配置里填写 openclaw_home / openclaw_bin。"
   fi
 fi
 
@@ -701,17 +746,6 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
     *) echo "  ⚠ ComfyUI 向导步骤异常（已忽略）" ;;
   esac
 
-  # C. OpenClaw 缺失则粘贴
-  set +e
-  PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-openclaw --config "$CFG_PY"
-  _wiz_rc=$?
-  set -e
-  case "$_wiz_rc" in
-    0) ;;
-    2) WIZARD_NOTES="${WIZARD_NOTES}openclaw:skipped;" ;;
-    *) echo "  ⚠ OpenClaw 向导步骤异常（已忽略）" ;;
-  esac
-
   # 向导可能刚写入路径：读回 COMFYUI_DIR 供工作流复制与安装报告
   COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; v=json.load(open(p,encoding='utf-8')).get('comfyui_dir') or ''; print(os.path.expanduser(v) if v else '')" "$CFG_PY" 2>/dev/null || true)
   [ -n "$COMFYUI_DIR" ] && COMFYUI_DIR="$(bash_path "$COMFYUI_DIR")"
@@ -741,7 +775,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
   # F. WebUI 说明
   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} webui-blurb || true
 
-  # G. 可选路径：output_dir / comfyui_host / openclaw_workspace / obsidian（须在 readiness-summary 之前）
+  # G. 可选路径：output_dir / comfyui_host / obsidian（须在 readiness-summary 之前）
   set +e
   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 "$PY" "$WIZ_PY" ${WIZARD_NI} prompt-extras --config "$CFG_PY"
   _wiz_rc=$?
@@ -825,10 +859,8 @@ fail_if_fatal
 # ── 安装报告 ──
 # 读回配置字段供报告（detect / migrate 之后）
 REPORT_AGENT_BACKEND="${AGENT_BACKEND_AFTER:-}"
+REPORT_LLM_URL="http://127.0.0.1:8317/v1"
 REPORT_COMFYUI="未找到"
-REPORT_OC_HOME="未找到"
-REPORT_OC_BIN="未找到"
-REPORT_OC_WS="未找到"
 REPORT_WORKFLOW="${REPORT_WORKFLOW:-未跑向导}"
 REPORT_TELEGRAM="${REPORT_TELEGRAM:-未询问}"
 WIZARD_NOTES="${WIZARD_NOTES:-}"
@@ -841,24 +873,19 @@ cfg = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 def exp(v):
     v = (v or "").strip()
     return os.path.expanduser(v) if v else ""
-ab = str(cfg.get("agent_backend") or "").strip() or "openclaw"
+llm = cfg.get("llm") if isinstance(cfg.get("llm"), dict) else {}
+base = str(llm.get("base_url") or "http://127.0.0.1:8317/v1").strip()
+ab = str(cfg.get("agent_backend") or "").strip()
 cu = exp(cfg.get("comfyui_dir"))
-oh = exp(cfg.get("openclaw_home"))
-ob = exp(cfg.get("openclaw_bin"))
-ow = exp(cfg.get("openclaw_workspace_dir"))
+print(base)
 print(ab)
 print(cu)
-print(oh)
-print(ob)
-print(ow)
 PY
 )" || true
   if [ -n "$_rep" ]; then
-    REPORT_AGENT_BACKEND="$(printf '%s\n' "$_rep" | sed -n '1p')"
-    _cu="$(printf '%s\n' "$_rep" | sed -n '2p')"
-    _oh="$(printf '%s\n' "$_rep" | sed -n '3p')"
-    _ob="$(printf '%s\n' "$_rep" | sed -n '4p')"
-    _ow="$(printf '%s\n' "$_rep" | sed -n '5p')"
+    REPORT_LLM_URL="$(printf '%s\n' "$_rep" | sed -n '1p')"
+    REPORT_AGENT_BACKEND="$(printf '%s\n' "$_rep" | sed -n '2p')"
+    _cu="$(printf '%s\n' "$_rep" | sed -n '3p')"
     if [ -n "$_cu" ]; then
       _cu_b="$(bash_path "$_cu")"
       if [ -f "$_cu_b/main.py" ] || [ -f "$_cu/main.py" ]; then
@@ -867,43 +894,14 @@ PY
         REPORT_COMFYUI="${_cu}（路径无效）"
       fi
     fi
-    if [ -n "$_oh" ]; then
-      _oh_b="$(bash_path "$_oh")"
-      if [ -d "$_oh_b" ] || [ -d "$_oh" ]; then
-        REPORT_OC_HOME="${_oh}"
-      else
-        REPORT_OC_HOME="${_oh}（路径无效）"
-      fi
-    fi
-    if [ -n "$_ob" ]; then
-      _ob_b="$(bash_path "$_ob")"
-      if [ -x "$_ob_b" ] || [ -x "$_ob" ] || command -v "$_ob" >/dev/null 2>&1; then
-        REPORT_OC_BIN="${_ob}"
-      else
-        REPORT_OC_BIN="${_ob}（未找到可执行）"
-      fi
-    fi
-    if [ -n "$_ow" ]; then
-      _ow_b="$(bash_path "$_ow")"
-      if [ -d "$_ow_b" ] || [ -d "$_ow" ]; then
-        REPORT_OC_WS="${_ow}"
-      else
-        REPORT_OC_WS="${_ow}（路径无效）"
-      fi
-    elif [ -d "$WORKSPACE_DIR" ]; then
-      REPORT_OC_WS="$WORKSPACE_DIR"
-    fi
   fi
 fi
-# 回退：detect 已写入的 COMFYUI_DIR / 默认 workspace
+# 回退：detect 已写入的 COMFYUI_DIR
 if [ "$REPORT_COMFYUI" = "未找到" ] && [ -n "${COMFYUI_DIR:-}" ] && [ -f "$COMFYUI_DIR/main.py" ]; then
   REPORT_COMFYUI="$COMFYUI_DIR"
 fi
-if [ "$REPORT_OC_WS" = "未找到" ] && [ -d "$WORKSPACE_DIR" ]; then
-  REPORT_OC_WS="$WORKSPACE_DIR"
-fi
-if [ -z "$REPORT_AGENT_BACKEND" ]; then
-  REPORT_AGENT_BACKEND="openclaw"
+if [ -z "$REPORT_LLM_URL" ]; then
+  REPORT_LLM_URL="http://127.0.0.1:8317/v1"
 fi
 
 # shim 文案
@@ -991,15 +989,13 @@ _report_body() {
   echo "  解释器: ${PY:-（未选定）}  版本=${PY_MM:-?}  内核ABI=${WANT_PY:-?}"
   echo "  python3 别名: $REPORT_SHIM"
   echo "  配置: $CONFIG_DST"
+  echo "  LLM 端点: ${REPORT_LLM_URL:-http://127.0.0.1:8317/v1}"
   if [ "$AGENT_BACKEND_MIGRATED" = 1 ]; then
     echo "  agent_backend: ${REPORT_AGENT_BACKEND}（已从 $AGENT_BACKEND_BEFORE 迁移）"
-  else
+  elif [ -n "${REPORT_AGENT_BACKEND:-}" ]; then
     echo "  agent_backend: $REPORT_AGENT_BACKEND"
   fi
   echo "  ComfyUI: $REPORT_COMFYUI"
-  echo "  OpenClaw home: $REPORT_OC_HOME"
-  echo "  OpenClaw bin:  $REPORT_OC_BIN"
-  echo "  OpenClaw workspace: $REPORT_OC_WS"
   echo "  工作流向导: ${REPORT_WORKFLOW:-未记录}"
   echo "  Telegram: ${REPORT_TELEGRAM:-未记录}"
   if [ -n "${WIZARD_NOTES:-}" ]; then
@@ -1026,10 +1022,10 @@ _report_body() {
 echo ""
 _report_body
 
-# 写入可粘贴的报告文件（优先 OpenClaw 数据目录）
+# 写入可粘贴的报告文件（优先 ~/.amazingdraw）
 REPORT_FILE=""
-if [ -d "$OPENCLAW_DIR" ]; then
-  REPORT_FILE="$OPENCLAW_DIR/install-report.txt"
+if [ -d "$DATA_DIR" ]; then
+  REPORT_FILE="$DATA_DIR/install-report.txt"
 elif [ -d "$(dirname "$CONFIG_DST")" ]; then
   REPORT_FILE="$(dirname "$CONFIG_DST")/install-report.txt"
 fi

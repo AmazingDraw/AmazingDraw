@@ -1,13 +1,6 @@
 # 配置文件使用指南
 
-`config.json` 不能写 `//` 注释。WebUI 保存设置会整文件重写，手动加的未知字段也会被擦掉。
-
-| 环境 | 权威配置 |
-| :--- | :--- |
-| 本地 skill | `scripts/config.json`（本机文件，不进 git） |
-| 发行包 | 包内 `scripts/config.json`（发行包运行时直接读取） |
-
-无论本地 skill 还是发行包，运行时权威配置均为对应目录内的 `scripts/config.json`。
+运行时只认当前程序目录下的 `scripts/config.json`（本地 skill 与发行包都是这份；本机文件不进 git）。不能写 `//` 注释。WebUI 保存设置会整文件重写，手动加的未知字段也会被擦掉。
 
 ---
 
@@ -26,11 +19,11 @@
 | :--- | :--- |
 | `comfyui_dir` | 本机 ComfyUI 根目录，`comfyui-start.sh` 用 |
 | `obsidian_vault_dir` | Obsidian 库根。提交后写 markdown；精选从 `灵感库/` 抽 `.md`，图在 `attachments/`。空则精选不可用 |
-| `custom_presets_dir` | 第三方角色 / 场景。子目录 `amateurs/`、`roles/`、`scenes/`。名为 `template.json` 的文件会被跳过 |
+| `custom_presets_dir` | 第三方角色 / 场景。空则 `~/.amazingdraw/custom_presets`。子目录 `amateurs/`、`roles/`、`scenes/`。名为 `template.json` 的文件会被跳过 |
 | `recording_dir` | 抽卡历史 MD（submit 通过后写入） |
-| `cards_dir` | 卡片 JSON。空则 `~/.openclaw/draw-cards/cards` |
+| `cards_dir` | 卡片 JSON。空则 `~/.amazingdraw/cards`（数据根目录固定为 `~/.amazingdraw`，无独立配置键；旧数据用 `python3 scripts/amazingdraw_paths.py migrate` 从 `~/.openclaw/draw-cards`、`~/.openclaw/webui-chat` 复制过来） |
 | `tmp_dir` | 临时目录。空则 `/tmp/cu-card`（Windows 由 `install.sh` 改成系统临时目录） |
-| `openclaw_workspace_dir` | OpenClaw 工作区根。空则不用。支持 `~` |
+| `openclaw_workspace_dir` | 旧配置项，仅作后台进程 cwd；空则用 `~/.amazingdraw`，可不填。支持 `~` |
 
 ---
 
@@ -43,17 +36,17 @@
 
 ---
 
-## LLM 与 Agent
+## LLM
+
+独立调用走 OpenAI 兼容 HTTP：`card_llm_client.chat_completion` → `{llm.base_url}/chat/completions`。Base URL 按本机实际端点配置。WebUI 已取消抽卡对话（`POST /api/chat` 返回 410）。
 
 | 键 | 说明 |
 | :--- | :--- |
-| `llm_model` | **AI 对话模型**：Draw 页导演助手；灯 1（`test-llm`）默认也测它。模型 id 来自 OpenClaw（可含 `cli-proxy/…` 等 provider 命名空间） |
-| `independent_llm_model` | **独立调用 AI 模型**：归档/直投提炼/场景路由等后台短调用；**空 = 跟随** `llm_model` |
-| `llm_fallback_models` | 备用模型列表（Draw 对话与独立调用共用） |
-| `llm_retry_limit` | 单个候选的最大尝试次数（含首次）。代码默认 `1` |
-| `agent_backend` | 默认 `openclaw`。对话后端统一为 `openclaw`（历史旧值如 `custom` / `claudecode` / `hermes` 均自动归一） |
-| `openclaw_ws_timeout_seconds` | OpenClaw 等待秒数，默认 `600` |
-| `chat_mode` | WebUI 会话：`cards`（卡片列表）和 `draw`（抽卡对话） |
+| `llm.base_url` | OpenAI 兼容 `/v1` 端点，按本机填写 |
+| `llm.api_key` | 可空；端点不需要 key 时留空 |
+| `llm.model` / `llm_model` | 唯一模型，设置页从 `/v1/models` 拉取。所有 LLM 调用共用 |
+| `llm.retry_limit` / `llm_retry_limit` | 单个候选最大尝试次数（含首次），代码默认 `1` |
+| `chat_mode` | 遗留键；WebUI 运行时固定为工作台 `cards` |
 
 ---
 
@@ -65,7 +58,7 @@
 | `exposure_limit` | 兼容区间 `[min, max]`。没有 `exposure_allowed_modes` 时用。WebUI 保存 chips 时会派生写入 |
 | `restrict_roles` | 默认 `true`。WebUI「限制角色」：打开后限制角色不进角色库 |
 | `disabled_celebrities` | 默认 `[]`。禁用明星名单：支持填中文名（例 `"高叶"`）或 LoRA 键（例 `"girlslike_zi_gy"`），填入后不进入随机抽取池与候选列表 |
-| `enable_ai_check` | 默认 `false`。打开后 `check_prompt.sh` 在物理门禁之外再调 LLM 语义检查。WebUI 在「单轮对话总时限」右侧 |
+| `enable_ai_check` | 默认 `false`。打开后 `check_prompt.sh` 在物理门禁之外再调 LLM 语义检查。WebUI 在服务参数区 |
 | `scene_cooldown_window` | 连续 N 张内避免同一具体场景，默认 `9` |
 | `auto_horizontal_for_multi` | 检测到多人时是否自动切横版，默认 `true` |
 | `scene_library_weights` | 子库抽样权重，键名带 `_scenes`：`school_scenes` / `general_scenes` / `medical_scenes` / `workplace_scenes` / `sm_scenes` / `special_scenes` / `perspective_scenes` |
@@ -95,13 +88,26 @@
 | 键 | 说明 |
 | :--- | :--- |
 | `delivery_telegram` / `delivery_webui` | 是否推 Telegram / 控制台预览 |
-| `telegram_chat_id` / `telegram_bot_token` | 推送目标。Token 可空。真实 ID/Token 不要提交 git |
+| `telegram_chat_id` / `telegram_bot_token` | 推送目标。Token 可空：空则读环境变量 `TELEGRAM_BOT_TOKEN`（见下）。真实 ID/Token 不要提交 git |
+
+**Bot Token 优先级**：`config.json` 的 `telegram_bot_token` → 环境变量 `TELEGRAM_BOT_TOKEN`。都没有则投递报错；格式须为 `数字:字符串`。
+
+各系统设置 `TELEGRAM_BOT_TOKEN`（换成自己的 token，别提交 git）：
+
+| 系统 | 做法 |
+| :--- | :--- |
+| macOS / Linux（终端启动） | `export TELEGRAM_BOT_TOKEN='...'`，写进 `~/.bashrc` / `~/.bash_profile`（zsh 用 `~/.zshrc`） |
+| macOS（Dock / launchd 等图形方式启动 WebUI，读不到 shell rc） | `launchctl setenv TELEGRAM_BOT_TOKEN '...'`，重启 WebUI；该设置重启电脑后失效 |
+| Windows（PowerShell / cmd） | `setx TELEGRAM_BOT_TOKEN "..."`，**新开**终端后生效 |
+| Windows Git Bash / WSL | Git Bash 同上（`setx` 后新开 Git Bash）；WSL 按 Linux 写 `~/.bashrc`（WSL 不继承 Windows 的 `setx`） |
+
+只用环境变量也可：把 `config.json` 里 `telegram_bot_token` 留空即可。
 
 ---
 
 ## 云端出图（可选，默认关）
 
-叠加在建卡流程上的**出图策略**，不是第五 CLI 模式。缺省 `enabled: false`，现网 Comfy + Telegram 不变。
+叠加在建卡流程上的**出图策略**：开启后交给外部渲染。缺省 `enabled: false`，现网 Comfy + Telegram 不变。
 
 ```json
 "cloud": {

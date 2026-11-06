@@ -107,6 +107,10 @@ html.light-mode .btn-secondary-minimal:hover {
   pointer-events: auto;
 }
 
+#create-modal {
+  display: none !important;
+}
+
 .modal-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -675,12 +679,16 @@ html.light-mode .draw-guide-tips code {
   position: fixed;
   z-index: 12001;
   pointer-events: none;
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 0 0 9999px rgba(8, 10, 18, 0.58);
-  outline: 2px solid rgba(99, 140, 255, 0.85);
+  outline: 2px solid rgba(99, 140, 255, 0.9);
   outline-offset: 0;
   opacity: 0;
-  transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease, opacity 0.15s ease;
+  transition: top 0.16s ease, left 0.16s ease, width 0.16s ease, height 0.16s ease, opacity 0.12s ease;
+}
+
+.onboarding-spotlight.is-jump {
+  transition: none;
 }
 
 .onboarding-spotlight.is-visible {

@@ -76,12 +76,6 @@ async function loadCards(opts = {}) {
       window.lastCardStatuses[c.card_id] = c.status;
     });
 
-    // 抽卡模式只缓存数据，不渲染卡片侧栏/参数板（避免刷新后错成卡片页）
-    const isDraw = normalizeChatMode(state.settings && state.settings.chat_mode) === "draw";
-    if (isDraw && !opts.forceRender) {
-      return;
-    }
-
     renderCardsList(state.cards);
 
     // 渲染完卡片列表后，自动恢复上次激活的卡片
@@ -103,33 +97,6 @@ function initIncrementalPolling() {
   
     setInterval(async () => {
     try {
-      if (state.settings.chat_mode === "draw") {
-        const res = await fetch("/api/chat/sessions");
-        if (!res.ok) return;
-        const data = await res.json();
-        const sessions = data.sessions || [];
-        state.sessionTotal = Number.isFinite(Number(data.total))
-          ? Number(data.total)
-          : sessions.length;
-        
-        const currentIds = sessions.map(s => s.session_id);
-        const isChanged = !window.lastSessionIds || 
-                          currentIds.length !== window.lastSessionIds.length ||
-                          currentIds.some((id, idx) => id !== window.lastSessionIds[idx]) ||
-                          sessions.some(s => s.updated_at !== window.lastSessionMtimes[s.session_id]);
-                          
-        if (isChanged) {
-          window.lastSessionIds = currentIds;
-          window.lastSessionMtimes = {};
-          sessions.forEach(s => {
-            window.lastSessionMtimes[s.session_id] = s.updated_at;
-          });
-          state.sessions = sessions;
-          renderSessionsList(sessions);
-        }
-        return;
-      }
-      
       const res = await fetch("/api/cards");
       if (!res.ok) return;
       const cards = await res.json();

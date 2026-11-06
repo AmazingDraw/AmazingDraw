@@ -44,6 +44,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
+import io
 import json
 import os
 import re
@@ -62,6 +64,9 @@ except Exception:
 
 _GPU_DIR = Path(__file__).resolve().parent
 _CONFIG_FILE = _GPU_DIR.parent / "config.json"
+if str(_GPU_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(_GPU_DIR.parent))
+import amazingdraw_paths  # noqa: E402  自有数据目录唯一解析入口（固定 ~/.amazingdraw）
 
 
 def _load_config() -> dict:
@@ -82,15 +87,21 @@ def _cfg_path(key: str, default: str) -> Path:
 WORK_DIR = Path(os.path.expanduser(os.environ.get("CU_WORK_DIR") or str(
     _cfg_path("tmp_dir", "/tmp/cu-card")
 ))).resolve()
+CARDS_DIR = Path(os.path.expanduser(os.environ.get("CU_CARDS_DIR") or str(
+    amazingdraw_paths.cards_dir(_load_config())
+))).resolve()
 PID_GLOB = "cu-submit-bg_*.pid"
 GPU_LOCK = WORK_DIR / "cu-gpu.lock"
 PAUSED_STATE = WORK_DIR / "cu-paused-task.json"
+# terminate -> cu-deliver.sh: do not auto-resume after a spared (sending) job
+TERMINATE_HOLD = WORK_DIR / "cu-terminate-hold.json"
+TERMINATE_HOLD_TTL = 1800.0
 RUNTIME_STATE = WORK_DIR / "cu-runtime.json"
 QUEUE_SCRIPT = _GPU_DIR / "cu-queue.py"
 COMFYUI_START = _GPU_DIR / "comfyui-start.sh"
 WORKSPACE = Path(os.path.expanduser(
     os.environ.get("CU_WORKSPACE")
-    or str(_cfg_path("openclaw_workspace_dir", str(Path.home() / ".openclaw" / "workspace")))
+    or str(amazingdraw_paths.workspace_dir(_load_config()))
 )).resolve()
 DRAW_LOG = WORK_DIR / "cu-draw-card.log"
 
@@ -120,7 +131,7 @@ def parse_args() -> argparse.Namespace:
     pause = sub.add_parser('pause', help='Pause current draw worker and freeze queue')
     pause.add_argument('--force', action='store_true', help='Skip confirmation hints in output only')
     sub.add_parser('resume', help='Resume the last paused draw worker')
-    sub.add_parser('terminate', help='Clear queue, kill workers, release GPU lock, stop ComfyUI')
+    sub.add_parser('terminate', help='Stop current workers and ComfyUI; keep the queue, clean drafts')
     sub.add_parser('clear', help='Clear the local rendering queue')
     return p.parse_args()
 
@@ -636,18 +647,26 @@ def cmd_status() -> int:
 def kill_process_group(pid: int, sig: int) -> None:
     try:
         pgid = os.getpgid(pid)
-        os.killpg(pgid, sig)
+        if pgid == os.getpgrp():
+            # Never signal our own group (would stop/kill cu-control itself).
+            os.kill(pid, sig)
+        else:
+            os.killpg(pgid, sig)
     except Exception:
         pass
+
+
+def _is_gone(pid: int) -> bool:
+    return not pid_alive(pid) or ps_state(pid).startswith('Z')
 
 
 def wait_dead(pid: int, seconds: float) -> bool:
     deadline = time.time() + seconds
     while time.time() < deadline:
-        if not pid_alive(pid):
+        if _is_gone(pid):
             return True
         time.sleep(0.2)
-    return not pid_alive(pid)
+    return _is_gone(pid)
 
 
 def cmd_pause() -> int:
@@ -818,102 +837,348 @@ def cmd_resume() -> int:
     return 1
 
 
-def cmd_terminate() -> int:
-    workers = gather_active_workers()
-    killed = 0
-    queue_failures = []
-    for w in workers:
-        job_id = str(w.get('job_id') or '')
-        lease_token = str(w.get('lease_token') or '')
-        if job_id and lease_token:
-            try:
-                qproc = subprocess.run(
-                    [
-                        sys.executable,
-                        str(QUEUE_SCRIPT),
-                        'nack',
-                        '--job-id',
-                        job_id,
-                        '--lease-token',
-                        lease_token,
-                        '--error',
-                        'terminated_by_control',
-                        '--no-retry',
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                qack = json.loads(qproc.stdout or '{}')
-                if qproc.returncode != 0 or not qack.get('ok'):
-                    queue_failures.append(qack or {'status': 'invalid_ack'})
-            except Exception as exc:
-                queue_failures.append({'status': 'nack_error', 'error': str(exc)})
-        kill_process_group(w['pid'], signal.SIGTERM)
-        if not wait_dead(w['pid'], 3.0):
-            kill_process_group(w['pid'], signal.SIGKILL)
-            wait_dead(w['pid'], 2.0)
-        killed += 1
+def _last_json_line(text: str) -> dict:
+    for line in reversed((text or '').splitlines()):
+        raw = line.strip()
+        if not raw.startswith('{'):
+            continue
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            return data
+    return {}
 
-    # 杀掉正在运行的 delivery/draw-card 进程（防止已完成的图片继续发送）
-    deliver_killed = 0
+
+def worker_is_delivering(worker: dict) -> bool:
+    """A finished render that is only sending should not be put back on the queue."""
+    runtime = read_runtime_state()
+    same_job = str(runtime.get('job_id') or '') == str(worker.get('job_id') or '')
+    if same_job and str(runtime.get('stage') or '') == 'delivering':
+        return True
+    done_file = str(worker.get('done_file') or '')
+    return bool(done_file) and Path(done_file).is_file()
+
+
+@contextlib.contextmanager
+def _card_io_scope():
+    """Import card_io and point it at the same dirs cu-control uses.
+
+    card_io reads cards_dir / tmp_dir from config.json only; CU_CARDS_DIR /
+    CU_WORK_DIR overrides (tests, alternate deployments) must be applied here
+    and restored afterwards so the module-level state never leaks.
+    """
+    engine_dir = str(_GPU_DIR.parent / 'card-engine')
+    if engine_dir not in sys.path:
+        sys.path.insert(0, engine_dir)
+    import card_io  # noqa: WPS433 - lazy: only terminate needs it
+    saved = (card_io.CARDS_DIR, card_io.CARD_LOCKS_DIR)
     try:
-        result = subprocess.run(['pgrep', '-f', r'cu-deliver\.sh|cu-draw-card\.py'],
-                                capture_output=True, text=True, timeout=5)
-        for pid_str in (result.stdout or '').strip().splitlines():
-            pid_str = pid_str.strip()
-            if not pid_str or not pid_str.isdigit():
-                continue
-            pid = int(pid_str)
-            try:
-                os.kill(pid, signal.SIGTERM)
-                deliver_killed += 1
-            except (ProcessLookupError, PermissionError):
-                pass
-    except Exception:
-        pass
+        if os.environ.get('CU_CARDS_DIR'):
+            card_io.CARDS_DIR = CARDS_DIR
+        if os.environ.get('CU_WORK_DIR'):
+            card_io.CARD_LOCKS_DIR = WORK_DIR / 'card-locks'
+        yield card_io
+    finally:
+        card_io.CARDS_DIR, card_io.CARD_LOCKS_DIR = saved
 
-    GPU_LOCK.unlink(missing_ok=True)
-    PAUSED_STATE.unlink(missing_ok=True)
 
-    cleared_count = 0
+def mark_card_requeued(card_id: str, job_id: str = '') -> str:
+    """Keep the card file. Move an in-flight card back to queued, atomically.
+
+    Goes through card_io (card_lock + load_card/save_card) so it cannot
+    clobber a concurrent WebUI/engine write, bumps the card version and keeps
+    render.queue_state in step with the queue ("pending").
+
+    Returns one of: requeued | skipped | missing | stale_job | error:<why>.
+    """
+    if not card_id:
+        return 'skipped'
     try:
-        clear_proc = subprocess.run(
-            [sys.executable, str(QUEUE_SCRIPT), 'clear', '--force'],
+        # card_io prints progress lines (save_card) and may print on lock
+        # timeouts; terminate's stdout is a user-facing summary, keep it clean.
+        with contextlib.redirect_stdout(io.StringIO()):
+            with _card_io_scope() as card_io:
+                with card_io.card_lock(card_id, owner='cu-control-terminate', timeout=5.0):
+                    card = card_io.load_card(card_id, default=None)
+                    if not isinstance(card, dict):
+                        return 'missing'
+                    render_cfg = card.get('render')
+                    bound_job = str(render_cfg.get('queue_job_id') or '') if isinstance(render_cfg, dict) else ''
+                    if job_id and bound_job and bound_job != job_id:
+                        return 'stale_job'
+                    if card.get('status') not in {'rendering', 'submitted'}:
+                        return 'skipped'
+                    if not isinstance(render_cfg, dict):
+                        render_cfg = card['render'] = {}
+                    card['status'] = 'queued'
+                    render_cfg['queue_state'] = 'pending'
+                    card_io.save_card(card)
+                    return 'requeued'
+    except (Exception, SystemExit) as exc:  # card_lock timeout calls sys.exit
+        return f'error:{exc}'
+
+
+def freeze_worker(pid: int) -> None:
+    """SIGSTOP the worker's process group so it cannot advance while we decide."""
+    kill_process_group(pid, signal.SIGSTOP)
+
+
+def thaw_worker(pid: int) -> None:
+    kill_process_group(pid, signal.SIGCONT)
+
+
+def stop_worker(pid: int) -> bool:
+    """Terminate a (possibly frozen) worker group and confirm it is gone.
+
+    SIGTERM stays pending on a stopped group until SIGCONT, so send both: the
+    exit trap then runs once, with the lease already released.
+    """
+    kill_process_group(pid, signal.SIGTERM)
+    kill_process_group(pid, signal.SIGCONT)
+    if not wait_dead(pid, 3.0):
+        kill_process_group(pid, signal.SIGKILL)
+        wait_dead(pid, 2.0)
+    return wait_dead(pid, 0.0)
+
+
+def request_release(job_id: str, lease_token: str) -> tuple:
+    """Ask QueueStore to drop the lease. Returns (returncode_or_None, ack)."""
+    try:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                str(QUEUE_SCRIPT),
+                'release',
+                '--job-id',
+                job_id,
+                '--lease-token',
+                lease_token,
+                '--error',
+                'terminated_soft',
+            ],
             capture_output=True,
             text=True,
             timeout=10,
         )
-        clear_ack = json.loads(clear_proc.stdout or '{}')
-        if clear_proc.returncode != 0 or not clear_ack.get('ok'):
-            queue_failures.append(clear_ack or {'status': 'clear_invalid_ack'})
-        else:
-            cleared_count = int(clear_ack.get('count') or 0)
+        return proc.returncode, _last_json_line(proc.stdout)
     except Exception as exc:
-        queue_failures.append({'status': 'clear_error', 'error': str(exc)})
+        return None, {'ok': False, 'status': 'release_error', 'error': str(exc)}
 
+
+def classify_release(returncode, ack: dict) -> str:
+    """Map a release ACK to what terminate does with that worker.
+
+    released: lease dropped, job is pending again -> kill the worker
+    spare:    job already completed / paused -> leave the worker alone
+    orphan:   queue has no live job for this worker (unknown, failed or
+              waiting for retry) -> nothing to put back, just kill the worker
+    blocked:  anything else (lock busy, lease owned by someone else, bad ack)
+              -> leave the worker running and report it
+    """
+    status = str(ack.get('status') or '')
+    state = str(ack.get('state') or '')
+    if returncode == 0 and ack.get('ok') and status in {'pending', 'already_pending'}:
+        return 'released'
+    if status == 'invalid_state' and state in {'completed', 'paused'}:
+        return 'spare'
+    if status == 'not_found' or (status == 'invalid_state' and state in {'failed', 'retry_wait'}):
+        return 'orphan'
+    return 'blocked'
+
+
+def _read_terminate_hold() -> dict:
+    data = safe_json(str(TERMINATE_HOLD)) if TERMINATE_HOLD.exists() else {}
+    return data if isinstance(data, dict) else {}
+
+
+def add_terminate_hold(job_id: str) -> None:
+    """Tell cu-deliver.sh not to auto-resume the queue after this job's send."""
+    if not job_id:
+        return
+    now = time.time()
+    hold = _read_terminate_hold()
+    ids = [str(x) for x in (hold.get('job_ids') or [])] if now - float(hold.get('ts') or 0) < TERMINATE_HOLD_TTL else []
+    if job_id not in ids:
+        ids.append(job_id)
     try:
-        subprocess.run([sys.executable, str(QUEUE_SCRIPT), 'drafts', '--clean'], capture_output=True, text=True, timeout=10)
-    except Exception:
+        TERMINATE_HOLD.write_text(json.dumps({'ts': now, 'job_ids': ids}), encoding='utf-8')
+    except OSError:
         pass
 
-    try:
-        subprocess.run(['bash', str(COMFYUI_START), 'stop'],
-                       capture_output=True, text=True, timeout=30)
-    except Exception:
-        pass
 
+def prune_stale_paused_state() -> bool:
+    """Drop cu-paused-task.json only when it can no longer be resumed.
+
+    The paused job stays in the queue (terminate keeps the queue), and
+    /draw_resume needs this record, so it is removed only if the prompt or
+    meta file it points at is gone.
+    """
+    if not PAUSED_STATE.exists():
+        return False
+    data = safe_json(str(PAUSED_STATE))
+    prompt_file = str(data.get('prompt_file') or '')
+    meta_file = str(data.get('meta_file') or '')
+    if prompt_file and meta_file and Path(prompt_file).exists() and Path(meta_file).exists():
+        return False
+    PAUSED_STATE.unlink(missing_ok=True)
+    return True
+
+
+def cmd_terminate() -> int:
+    """Stop the current render and ComfyUI. The queue and card files stay.
+
+    Per worker, in this order (each step closes a race the previous one left):
+      1. SIGSTOP the worker group: it cannot finish rendering, write DONE or
+         start delivering while we decide.
+      2. Re-check "already delivering" on the frozen worker. If so, record a
+         hold for cu-deliver.sh, SIGCONT and leave it alone.
+      3. Release the lease (job back to pending). A frozen worker cannot
+         heartbeat or ack, and its exit trap's nack now hits lease_mismatch.
+      4. SIGTERM + SIGCONT, escalate to SIGKILL, and confirm the process died.
+    """
+    workers = gather_active_workers()
+    killed_ids = set()
+    spared_ids = set()
+    orphan_ids = set()
+    queue_failures = []
+    card_warnings = []
+    released_jobs = set()
+    orphan_jobs = set()
+    blocked_jobs = set()
+
+    def key_of(worker: dict) -> str:
+        return str(worker.get('job_id') or '') or f"pid:{worker.get('pid')}"
+
+    def stop_and_count(worker: dict, bucket: set) -> None:
+        if stop_worker(worker['pid']):
+            killed_ids.add(key_of(worker))
+            bucket.add(key_of(worker))
+        else:
+            queue_failures.append({
+                'status': 'worker_not_dead',
+                'pid': worker.get('pid'),
+                'error': 'worker survived SIGKILL; job already returned to the queue',
+            })
+
+    for worker in workers:
+        pid = worker['pid']
+        job_id = str(worker.get('job_id') or '')
+        lease_token = str(worker.get('lease_token') or '')
+        key = key_of(worker)
+        if key in spared_ids or (job_id and job_id in blocked_jobs):
+            continue
+        if job_id and (job_id in released_jobs or job_id in orphan_jobs):
+            # Sibling process of a job we already handled: lease is gone.
+            stop_and_count(worker, orphan_ids if job_id in orphan_jobs else set())
+            continue
+
+        freeze_worker(pid)
+        frozen = True
+        try:
+            if worker_is_delivering(worker):
+                add_terminate_hold(job_id)
+                spared_ids.add(key)
+                continue
+            if not job_id or not lease_token:
+                queue_failures.append({
+                    'status': 'missing_lease',
+                    'pid': pid,
+                    'error': 'worker has no job_id/lease token; left running so it cannot be marked failed',
+                })
+                if job_id:
+                    blocked_jobs.add(job_id)
+                continue
+            returncode, release_ack = request_release(job_id, lease_token)
+            outcome = classify_release(returncode, release_ack)
+            if outcome == 'spare':
+                add_terminate_hold(job_id)
+                spared_ids.add(key)
+                continue
+            if outcome == 'blocked':
+                queue_failures.append(release_ack or {'status': 'release_invalid_ack', 'job_id': job_id})
+                blocked_jobs.add(job_id)
+                continue
+            if outcome == 'released':
+                released_jobs.add(job_id)
+                result = mark_card_requeued(str(worker.get('card_id') or ''), job_id)
+                if result.startswith('error:'):
+                    card_warnings.append(f'{worker.get("card_id")}: {result}')
+            else:
+                orphan_jobs.add(job_id)
+            frozen = False  # stop_worker sends SIGCONT itself, after SIGTERM
+            stop_and_count(worker, orphan_ids if outcome == 'orphan' else set())
+        finally:
+            if frozen:
+                thaw_worker(pid)
+
+    spared = len(spared_ids)
+    killed = len(killed_ids)
+    orphans = len(orphan_ids)
+    requeued = killed - orphans
+
+    # A worker we could not return to the queue must keep running. Stopping
+    # ComfyUI under it would make its exit trap fail the job.
+    can_stop_backend = not queue_failures
+    if can_stop_backend and spared == 0:
+        GPU_LOCK.unlink(missing_ok=True)
+    if can_stop_backend:
+        try:
+            subprocess.run(
+                ['bash', str(COMFYUI_START), 'stop'],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except Exception as exc:
+            queue_failures.append({'status': 'comfy_stop_error', 'error': str(exc)})
+
+    paused_pruned = prune_stale_paused_state()
+
+    draft_ack = {}
+    try:
+        draft_proc = subprocess.run(
+            [sys.executable, str(QUEUE_SCRIPT), 'drafts', '--clean'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        draft_ack = _last_json_line(draft_proc.stdout)
+        if draft_proc.returncode != 0 or not draft_ack.get('ok'):
+            queue_failures.append(draft_ack or {'status': 'drafts_clean_failed', 'stderr': (draft_proc.stderr or '')[:300]})
+    except Exception as exc:
+        queue_failures.append({'status': 'drafts_clean_error', 'error': str(exc)})
+
+    removed_drafts = int(draft_ack.get('removed') or 0) if draft_ack.get('ok') else None
     lines = ['> 💣 **draw_terminate**', '>']
     lines.append('> **结果**')
-    lines.append(f'> • 已终止 {killed} 个 worker')
-    lines.append(f'> • 已清理 {cleared_count} 个等待任务')
-    if deliver_killed:
-        lines.append(f'> • 已终止 {deliver_killed} 个 delivery 进程')
-    lines.append('> • GPU 锁已释放')
-    lines.append('> • 草稿已清理')
-    lines.append('> • ComfyUI 已停止')
+    lines.append(f'> • 已停止 {requeued} 个任务，退回队列')
+    if orphans:
+        lines.append(f'> • 另清理 {orphans} 个已失效 worker（队列里已无对应在途任务）')
+    if spared:
+        lines.append(f'> • {spared} 个已出图任务继续发送（发完不自动续跑，需要时 /draw_resume）')
+    if removed_drafts is None:
+        lines.append('> • 草稿清理未确认')
+    elif removed_drafts:
+        lines.append(f'> • 草稿已清理 {removed_drafts} 张（含尚未提交的 WebUI 草稿）')
+    else:
+        lines.append('> • 无草稿')
+    if paused_pruned:
+        lines.append('> • 已清理失效的暂停记录')
+    if can_stop_backend and spared == 0:
+        lines.append('> • GPU 锁已释放')
+    elif spared:
+        lines.append('> • GPU 锁留给正在发送的图')
+    if can_stop_backend:
+        lines.append('> • ComfyUI 已停止')
+    else:
+        lines.append('> • ComfyUI 未停止：有任务无法安全退回')
+    lines.append('> • 队列保留')
+    if card_warnings:
+        lines.append(f'> • ⚠️ 卡片状态未更新：{card_warnings}')
     if queue_failures:
-        lines.append(f'> • ⚠️ QueueStore 未完全确认：{queue_failures}')
+        lines.append(f'> • ⚠️ 未完全确认：{queue_failures}')
     print('\n'.join(lines))
     return 1 if queue_failures else 0
 

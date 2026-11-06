@@ -46,19 +46,11 @@ function initTheme() {
 }
 
 function getHelpText() {
-  return `🎬 **Cards / Draw 控制台**
+  return `🎬 **工作台 / 相册**
 
-侧栏两态（内部键不变）：
-*   **Cards · 卡片**：纯展示与管理；发送会交接进 Draw 并可选携带当前卡。
-*   **Draw · 抽卡**：真 AI 对话（极简人设 + CLI help）；右侧快捷钮发「进入xxx模式」。
-
-### 四模式入口
-*   **常规**：快捷钮发送「进入常规模式」，再按 \`card_cli --help\` 走 create/fill/…
-*   **连抽**：快捷钮发送「进入连抽模式」，由 AI 对话驱动批量出卡
-*   **直投**：快捷钮发送「进入直投模式」；输入框旁闪电也可直投完整英文 prompt
-*   **精选**：输入框旁骰子 → \`/api/featured\`
-
-卡片页可先选卡再发消息交接；Draw 页直接聊即可。`;
+*   **卡片工作台**：列表、预览、参数看板；出卡只用直投（闪电）和精选（骰子）。
+*   **相册**：成品库，可建专辑，也可按角色浏览；悬停卡片可收藏或删除。
+*   CLI 四模式仍在终端可用；WebUI 出卡只用直投 / 精选。`;
 }
 
 function showWelcomeMessage() {
@@ -86,12 +78,10 @@ function syncChatModeButtonUI() {
     const view = btn.getAttribute("data-view");
     let isActive = false;
 
-    if (currentView === "settings" || currentView === "docs") {
-      // 配置/文档：高亮对应 view 按钮，卡片/抽卡不再占指示条
+    if (currentView === "settings" || currentView === "docs" || currentView === "album") {
       isActive = view === currentView;
     } else {
-      // 聊天相关视图：高亮当前 chat_mode（cards/draw）
-      isActive = !!mode && mode === currentMode;
+      isActive = !!mode && mode === "cards";
     }
 
     btn.classList.toggle("active", isActive);
@@ -150,7 +140,7 @@ function initChatModeSelector() {
   container.querySelectorAll(".chat-mode-btn[data-mode]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const mode = btn.getAttribute("data-mode");
-      // 右侧选择器现为全局常驻节点：若当前停留在配置/文档页，点击卡片/抽卡需先跳回对话视图
+      // 右侧选择器现为全局常驻节点：若当前停留在配置/文档/相册，点击卡片需先跳回工作台
       const viewChat = document.getElementById("view-chat");
       if (viewChat && !viewChat.classList.contains("active")) {
         switchView("chat");
@@ -160,7 +150,7 @@ function initChatModeSelector() {
       state.settings.chat_mode = mode;
       try { localStorage.setItem("chat_mode", mode); } catch (_) {}
       renderChatModeButtons();
-      // URL：卡片 #cards / 抽卡 #draw（与顶层 #settings #docs 并列）
+      // URL：工作台 #cards / 相册 #album（与顶层 #settings #docs 并列）
       if (typeof persistActiveView === "function") persistActiveView("chat");
       
       try {
@@ -252,19 +242,19 @@ function showNavigationGuardModal(onSave, onDiscard, onCancel) {
 }
 
 
-const WORKSPACE_VIEWS = ["chat", "settings", "docs"];
+const WORKSPACE_VIEWS = ["chat", "album", "settings", "docs"];
 const VIEW_STORAGE_KEY = "active_view";
 
 function currentChatModeForHash() {
-  if (state.settings) state.settings.chat_mode = normalizeChatMode(state.settings.chat_mode);
-  return (state.settings && state.settings.chat_mode) === "draw" ? "draw" : "cards";
+  if (state.settings) state.settings.chat_mode = "cards";
+  return "cards";
 }
 
-/** hash 路由：#cards / #draw / #settings / #docs；旧 #chat 兼容为当前 chat_mode */
+/** hash 路由：#cards / #album / #settings / #docs；旧 #draw 进相册，#chat 进工作台 */
 function parseHashRoute() {
   const raw = String(location.hash || "").replace(/^#\/?/, "").split(/[/?#]/)[0].trim().toLowerCase();
-  if (raw === "cards" || raw === "draw") return { view: "chat", mode: raw };
-  if (raw === "chat") return { view: "chat", mode: null }; // legacy
+  if (raw === "cards" || raw === "chat") return { view: "chat", mode: "cards" };
+  if (raw === "album" || raw === "draw") return { view: "album", mode: null };
   if (raw === "settings" || raw === "docs") return { view: raw, mode: null };
   return null;
 }
@@ -276,7 +266,7 @@ function viewFromHash() {
 
 function hashForWorkspaceView(view) {
   const v = WORKSPACE_VIEWS.includes(view) ? view : "chat";
-  if (v === "settings" || v === "docs") return v;
+  if (v === "settings" || v === "docs" || v === "album") return v;
   return currentChatModeForHash();
 }
 
@@ -308,9 +298,12 @@ function restoreActiveView() {
   }
   try {
     const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-    if (stored === "cards" || stored === "draw") {
-      applyChatModeFromRoute(stored);
+    if (stored === "cards" || stored === "chat") {
+      applyChatModeFromRoute("cards");
       return "chat";
+    }
+    if (stored === "draw" || stored === "album") {
+      return "album";
     }
     if (stored === "chat") return "chat"; // legacy storage
     if (WORKSPACE_VIEWS.includes(stored)) return stored;
@@ -364,14 +357,19 @@ async function switchView(targetView, force = false) {
   // Show/Hide sidebar helpers (cards & queue) & Slots Board
   const settingsSubPanel = document.getElementById("sidebar-settings-sub");
   const docsSubPanel = document.getElementById("sidebar-docs-sub");
+  const albumSubPanel = document.getElementById("sidebar-album-sub");
 
   if (chatSubPanel) chatSubPanel.classList.add("hidden");
   if (settingsSubPanel) settingsSubPanel.classList.add("hidden");
   if (docsSubPanel) docsSubPanel.classList.add("hidden");
+  if (albumSubPanel) albumSubPanel.classList.add("hidden");
 
   if (targetView === "chat") {
     if (chatSubPanel) chatSubPanel.classList.remove("hidden");
     setParamPanelCollapsed(false);
+  } else if (targetView === "album") {
+    if (albumSubPanel) albumSubPanel.classList.remove("hidden");
+    setParamPanelCollapsed(true);
   } else if (targetView === "settings") {
     if (settingsSubPanel) settingsSubPanel.classList.remove("hidden");
     setParamPanelCollapsed(true);
@@ -388,6 +386,8 @@ async function switchView(targetView, force = false) {
   // Trigger view-specific loaders
   if (targetView === "settings") {
     loadSettings();
+  } else if (targetView === "album") {
+    if (typeof ensureAlbumViewLoaded === "function") ensureAlbumViewLoaded();
   } else if (targetView === "docs") {
     const allowedDocs = new Set(
       Array.from(document.querySelectorAll(".doc-sidebar-tab-btn")).map(b => b.getAttribute("data-doc"))
@@ -566,7 +566,7 @@ function initNavigation() {
     if (parsed.view !== state.activeView) {
       switchView(parsed.view);
     } else {
-      // 同在对话页：#cards ↔ #draw 只切模式；旧 #chat 归一到 #cards/#draw
+      // 同视图内 hash 变化（工作台 #cards / 旧 #chat）
       if (modeChanged) {
         renderChatModeButtons();
         if (typeof updateSidebarViewMode === "function") updateSidebarViewMode();
@@ -774,39 +774,20 @@ function setParamPanelCollapsed(collapsed) {
 
 // 兜底值与后端 DEFAULT_CONFIG.resolution_presets 保持一致，避免前后端各写一套数
 function updateSidebarViewMode() {
-  const isDraw = normalizeChatMode(state.settings && state.settings.chat_mode) === "draw";
   const filters = document.getElementById("card-status-filters");
   try {
-    localStorage.setItem("chat_mode", isDraw ? "draw" : "cards");
+    localStorage.setItem("chat_mode", "cards");
   } catch (_) {}
+  if (state.settings) state.settings.chat_mode = "cards";
 
   if (typeof _timeFilterMonths !== "undefined") {
     _timeFilterMonths = "";
   }
 
-  if (isDraw) {
-    document.documentElement.classList.remove("cards-mode-active");
-    document.documentElement.classList.add("draw-mode-active");
-    if (filters) filters.style.display = "none";
-    // 抽卡模式右栏固定 guide，防止残留卡片参数板
-    renderDrawGuidePanel(state.activeSessionId || state.pendingSessionId || null);
-    // 仅交接锁期间跳过历史/自动选旧会话；正常刷新必须拉历史，否则标题有内容空
-    const handoffLock = !!state.sessionUiLock;
-    const preferId = state.pendingSessionId
-      || state.activeSessionId
-      || localStorage.getItem("active_session_id")
-      || undefined;
-    loadSessions({
-      preferSessionId: preferId,
-      skipHistory: handoffLock,
-      skipAutoSelect: handoffLock && !state.pendingSessionId && !state.activeSessionId,
-    });
-  } else {
-    document.documentElement.classList.remove("draw-mode-active");
-    document.documentElement.classList.add("cards-mode-active");
-    if (filters) filters.style.display = "flex";
-    loadCards({ forceRender: true });
-  }
+  document.documentElement.classList.remove("draw-mode-active");
+  document.documentElement.classList.add("cards-mode-active");
+  if (filters) filters.style.display = "flex";
+  loadCards({ forceRender: true });
 }
 
 // =====================================================================

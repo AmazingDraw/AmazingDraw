@@ -338,32 +338,41 @@ def _check_required_loras(
 # 中转挂掉时会给出假绿灯。探测复用 card_llm_client.chat_completion 这个公开入口，
 # 于是与真实抽卡走同一套路由/降级链，不另造一套 HTTP 逻辑。
 _LLM_PROBE_TIMEOUT = 15.0
-_LLM_PROBE_MAX_TOKENS = 8
-_LLM_PROBE_MESSAGES = [{"role": "user", "content": "ping"}]
+_LLM_PROBE_MAX_TOKENS = 256
+_LLM_PROBE_MESSAGES = [{"role": "user", "content": "ping：只回复两个字：pong"}]
 _LLM_PROBE_SAMPLE_CHARS = 80
 
 # 最近一次实测结果（内存态）。WebUI 重启后需重新点一次「测试连通」。
 _LAST_LLM_PROBE: Dict[str, Any] = {}
 
 
-def _classify_llm_error(message: str) -> str:
-    """把底层异常话术翻成小白能懂的结论（§9「API 失败」一行）。"""
+def _agent_backend_label(backend: Optional[str] = None) -> str:
+    return "LLM 端点"
+
+
+def _classify_llm_error(message: str, backend: Optional[str] = None) -> str:
+    """把底层异常话术翻成小白能懂的结论（§9「API 失败」一行）。
+
+    结论里带上 LLM 端点，方便对症排查。
+    """
     text = (message or "").lower()
+    label = _agent_backend_label(backend)
     if "api key not found" in text or "401" in text or "unauthorized" in text:
-        return "OpenClaw 鉴权失败或模型 Key 不可用"
+        return f"{label} 鉴权失败或模型 Key 不可用"
     if (
         "curl failed" in text
         or "timed out" in text
         or "timeout" in text
         or "connection refused" in text
+        or "connection failed" in text
         or "could not resolve" in text
-        or "openclaw failed" in text
+        or "sidecar" in text
     ):
-        return "无法连接 OpenClaw / 模型端点或网络不通"
+        return "无法连接 LLM 端点（检查 Base URL）或网络不通"
     if "is empty" in text:
         return "模型有响应但内容为空（模型 ID 可能不对）"
     if "not json" in text:
-        return "返回的不是标准 JSON（OpenClaw 路由或模型配置可能有误）"
+        return f"返回的不是标准 JSON（{label} 路由或模型配置可能有误）"
     return "调用失败"
 
 
@@ -564,7 +573,7 @@ def get_environment():
         "assets": assets,
         "disk": disk,
         "config": {
-            "agent_backend": cfg.get("agent_backend"),
+            "llm_base_url": ((cfg.get("llm") or {}).get("base_url") or ""),
             "lora_subdir": ((cfg.get("workflows") or {}).get(cfg.get("default_workflow") or "") or {}).get("lora_subdir"),
         },
     }
@@ -575,7 +584,7 @@ def test_llm(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """真实打一枪探测 AI 对话模型连通性（§5 / 灯 1）。
 
     门槛键为配置里的 `llm_model`（可用 body.model 覆盖本次）；探测栈复用
-    `card_llm_client.chat_completion`（与独立调用同路由，经 OpenClaw）。
+    `card_llm_client.chat_completion`（与独立调用同路由）。
     只读契约不变：不写配置；结果缓存供 §6 灯 1 引用。字段非空不算绿。
     """
     body = payload if isinstance(payload, dict) else {}

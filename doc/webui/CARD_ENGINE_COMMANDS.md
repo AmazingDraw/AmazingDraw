@@ -12,19 +12,20 @@ python3 card_cli.py create --user-input "可爱风格"
 
 # 指定场景/人物
 python3 card_cli.py create --person "OL" --scene "停车场" --user-input "高冷风格"
-python3 card_cli.py create --person "JK" --scene "校园" --user-input "加入宠物元素"
+python3 card_cli.py create --person "女大学生" --scene "校园" --user-input "加入宠物元素"
 
 # 比例 / 体型 / 其他
 python3 card_cli.py create --aspect portrait --user-input "可爱风格"    # 512x768（默认）
-python3 card_cli.py create --person "JK" --profile jk-pink --user-input "高冷风格"
+python3 card_cli.py create --person "护士" --profile nurse-milk --user-input "高冷风格"
 python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle --user-input "加入宠物元素"
 ```
 
 | 参数             | 说明                                                                                                                                                                |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--user-input` | **必填**。风格/元素等用户补充（如：可爱风格、高冷风格、加入宠物元素）                                                                                         |
-| `--mode`       | `amateur`(默认) / `celebrity`                                                                                                                                   |
-| `--bundle`     | 启用结构化 JSON 词库参考（默认关闭）。不带值：智能加载四类词库常用章节；带值：指定章节加载（例：`--bundle "tattoo:图案速查,props:振动棒"`，同库多章节用竖线隔开） |
+| `--mode`       | `amateur`(默认，单人自动开启体型盲盒 `{{BODY}}`) / `celebrity`                                                                                                  |
+| `--bundle`     | 覆盖默认的 1 条场景词库。不带值：按当前场景扩一圈相关章；带值：指定章节（例：`--bundle "tattoo:图案速查"`） |
+| `--no-blind`   | 关闭体型盲盒（降级为传统明文 `slots.body_shape`）                                                                                                               |
 
 ---
 
@@ -45,7 +46,7 @@ python3 card_cli.py fill --card <id> \
 
 # 结构化 JSON 一次导入（连抽默认；勿拆 --phase）
 python3 card_cli.py fill --card <id> --json-file fill.json
-python3 card_cli.py fill --card <id> --json '{"theme_zh":"...","director":{...},"slots":{...},"story_elevation":"...","story_elevation_zh":"...","lighting_palette_zh":"...","style_recipe_zh":"..."}'
+python3 card_cli.py fill --card <id> --json '{"theme_zh":"...","director":{...},"slots":{...},"story_elevation_zh":"...","lighting_palette_zh":"...","style_recipe_zh":"..."}'
 
 # 分阶段填（仅常规模式精细打磨；连抽禁止）
 python3 card_cli.py fill --card <id> --phase director   # 第一阶段：8维导演
@@ -55,7 +56,7 @@ python3 card_cli.py fill --card <id> --phase elevation  # 第三阶段：叙事�
 
 | 参数                         | 说明                                                      |
 | ---------------------------- | --------------------------------------------------------- |
-| `--json-file` / `--json` | **连抽推荐**：一次写齐 director + slots + elevation |
+| `--json-file` / `--json` | **连抽推荐**：一次写齐 director + slots + elevation（盲盒卡勿填 `body_shape`；脸型五官轮廓写入 `makeup_hair`，人物专属气质写入 `expression_gaze`） |
 | `--phase`                  | 可选分阶段；**仅**常规模式精细打磨，连抽勿用        |
 | `--clothing`               | 服装描述（旧`--exposure-clothing` 已弃用）              |
 
@@ -158,8 +159,8 @@ python3 card_cli.py submit --card <id> --confirm --dry-run  # 模拟预览
 
 ```bash
 # 创建骨架（--user-input 必填）
-python3 card_cli.py chain --count 3 --person "JC" --user-input "可爱风格"
-python3 card_cli.py chain --count 3 --person "JK" --scene "教室" --user-input "高冷风格"
+python3 card_cli.py chain --count 3 --person "女大学生" --user-input "可爱风格"
+python3 card_cli.py chain --count 3 --person "护士" --scene "诊室" --user-input "高冷风格"
 
 # resume 提交（自动 render → check → autofix → submit）
 python3 card_cli.py chain --resume <card_id>
@@ -209,6 +210,7 @@ python3 card_cli.py featured --dry-run   # 只建卡并模拟 submit 命令，�
 ```bash
 python3 card_cli.py mend --card <id> --set slots.clothing --value "xxx"
 python3 card_cli.py mend --card <id> --get slots.clothing   # 读取字段
+python3 card_cli.py mend --card <id> --reroll-body          # 重抽盲盒体型（保持用户约束与外层结构）
 python3 card_cli.py mend --card <id> --undo                 # 撤销
 python3 card_cli.py mend --card <id> --history              # 修改记录
 python3 card_cli.py mend --card <id> --set slots.pose --value "..." --dry-run
@@ -221,7 +223,11 @@ python3 card_cli.py mend --card <id> --set slots.pose --value "..." --dry-run
 ```bash
 python3 card_cli.py doc prompt   # 查阅提示词装配手册
 python3 card_cli.py doc pitfalls # 高频报错避坑指南
-python3 card_cli.py search --person jk    # 模糊搜索场景/角色库
+python3 card_cli.py doc PROMPT_TEMPLATE.md   # 也认文件名/相对路径/中文关键词（如 doc 避坑）；未知输入会给出近似提示
+python3 card_cli.py search --scene 走廊      # 地点 → 钉死命中 label
+python3 card_cli.py search --scene 校园      # 主题 → 抽卡原词随机整库
+python3 card_cli.py search --scene 颜射视角  # 完整视角词 → 抽卡原词随机该池
+python3 card_cli.py search --person 护士     # 角色只看四轴；抽卡仍直接 --person
 python3 card_cli.py resolve --scene-library general_scenes --include-tags office --exposure-focus auto
 python3 card_cli.py resolve --scene-id some-scene-id --mood 暧昧   # 精确场景 id；见 resolve --help
 ```
@@ -270,7 +276,7 @@ WebUI 据此区分 `archived` 与 `already_archived`，不再解析 CLI stdout�
 
 ```bash
 # 查看卡面 JSON
-cat ~/.openclaw/draw-cards/cards/<card_id>.json | python3 -m json.tool
+cat ~/.amazingdraw/cards/<card_id>.json | python3 -m json.tool
 
 # 查看后台日志
 tail -20 /tmp/cu-card/cu-submit-bg_*.log

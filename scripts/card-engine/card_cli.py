@@ -47,7 +47,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROMPT_TEMPLATE_PATH = SCRIPT_DIR.parent.parent / "doc" / "PROMPT_TEMPLATE.md"
 DRAW_GUIDE_PATH = SCRIPT_DIR.parent.parent / "doc" / "DRAW_GUIDE.md"
 
-DOC_WARNING_TEXT = """
+SANDBOX_RULE_TEXT = """🔒 [AI 铁律 · 严禁扫库，闭环抽卡]
+严禁使用 grep / find / cat 刺探源码、内部 JSON 与历史卡片！
+1. 角色直传：任何角色直接传 --person，引擎全自动识别，无需搜库；
+2. 体型托管：盲盒全自动采样，严禁刺探或手写 body_shape；
+3. 场景查询：只用 card_cli.py search，禁止翻看配置；
+4. 闭环推进：建卡(create/chain) ➔ 读返回模板 ➔ 填槽(fill) ➔ 提交(resume/render)。"""
+
+DOC_WARNING_TEXT = f"""
+{SANDBOX_RULE_TEXT}
+
 ⚠️ [AI 必读契约]：
   在进行导演策划与槽位填充前，必须查阅相对路径下的核心文档（或使用 python3 card_cli.py doc <名称>）：
   1) 提示词装配手册: doc/cli/PROMPT_TEMPLATE.md
@@ -55,7 +64,9 @@ DOC_WARNING_TEXT = """
   3) 高频报错避坑指南: doc/cli/CHECK_PITFALLS.md
 """
 
-CHAIN_DOC_WARNING_TEXT = """
+CHAIN_DOC_WARNING_TEXT = f"""
+{SANDBOX_RULE_TEXT}
+
 ⚠️ [AI 必读契约]：
   在进行导演策划与槽位填充前，必须查阅相对路径下的核心文档（或使用 python3 card_cli.py doc <名称>）：
   1) 提示词装配手册: doc/cli/PROMPT_TEMPLATE.md
@@ -99,24 +110,29 @@ def add_shared_parsers(sub):
     c_doc.add_argument(
         "name",
         nargs="?",
-        choices=["prompt", "draw", "pitfalls", "commands", "config"],
         default="prompt",
-        help="文档类型：prompt / draw / pitfalls / commands / config（默认 prompt）",
+        help="文档类型：prompt / draw / pitfalls / commands / config（默认 prompt）；也接受 doc 下的文件名或路径（如 PROMPT_TEMPLATE.md）",
     )
 
     c_search = sub.add_parser(
         "search",
-        help="模糊搜索场景库/角色库中的预设 label 或 key",
+        help="查地点 / 主题 / 视角 / 角色；主题与完整视角词原样交给 create/chain 即整池随机",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-🚀 搜索预设命令 (Search Presets):
-  - 搜索场景：python3 card_cli.py search --scene "教室"
-  - 搜索角色：python3 card_cli.py search --person "jk"
-  - 混合搜索：python3 card_cli.py search --scene "走廊" --person "ol"
+search 只确认库内有没有。抽卡把同一词传 create/chain --scene。禁止 grep JSON。
+
+  地点  --scene 走廊       钉死命中的 label
+  主题  --scene 校园       随机整库（医疗/职场/SM/日常/古风/特殊 同理）
+  视角  --scene 颜射视角   随机该视角池（必须完整词；特殊视角=视角库全盲盒）
+  角色  --person 护士      只看 Y·V·U·L；抽卡角色仍直接 --person
+  未命中                   原词照传：场景 → manual-custom（fill 必写英文 scene.keywords）；角色直接 --person
 """
     )
-    c_search.add_argument("--scene", help="按关键字搜索场景库 (如 '教室', '走廊')")
-    c_search.add_argument("--person", help="按关键字搜索角色库/身份库 (如 '孕妇', 'jk')")
+    c_search.add_argument(
+        "--scene",
+        help="地点列出 label；主题词或完整视角词列出对应池。抽卡原词给 create/chain 即整池随机。",
+    )
+    c_search.add_argument("--person", help="按关键字搜索角色库/身份库 (如 '护士', '女大学生', 'ol')；仅展示四轴粗标签(Y·V·U·L)，不暴露真实体型文本")
 
     c_resolve = sub.add_parser("resolve", help="resolver 联合解析，输出 fill-ready 字段")
     c_resolve.add_argument("--scene-library", default="general_scenes", help="场景库名")
@@ -135,7 +151,7 @@ def add_shared_parsers(sub):
   - 查看状态：python3 card_cli.py queue status
   - 健康检查：python3 card_cli.py queue health
   - 清空队列：python3 card_cli.py queue clear [--force]
-  - 按稳定任务 ID 删除：python3 card_cli.py queue remove --job-id JOB_ID
+  - 按任务 ID 删除：python3 card_cli.py queue remove --job-id JOB_ID
   - 删除指定排位任务：python3 card_cli.py queue remove --position N
   - 按唯一指纹删除任务：python3 card_cli.py queue remove --fingerprint HASH
 """
@@ -143,7 +159,7 @@ def add_shared_parsers(sub):
     c_queue.add_argument("action", choices=["status", "health", "clear", "remove"], help="队列操作")
     c_queue.add_argument("--force", action="store_true", help="强制执行（用于 clear 命令，请极其谨慎使用且需二次确认）")
     c_queue.add_argument("--position", type=int, help="要删除的任务排队位置 (1-indexed)")
-    c_queue.add_argument("--job-id", help="要删除的 QueueStore v2 稳定任务 ID（推荐）")
+    c_queue.add_argument("--job-id", help="要删除的任务 ID（推荐）")
     c_queue.add_argument("--fingerprint", help="要删除的任务 SHA1 唯一指纹")
 
     # ── mend: 连抽手动修复 ──
@@ -156,6 +172,7 @@ def add_shared_parsers(sub):
   - 修改字段：python3 card_cli.py mend --card <id> --set slots.clothing --value "xxx"
   - 预览修改：python3 card_cli.py mend --card <id> --set slots.clothing --value "xxx" --dry-run
   - 读取当前值：python3 card_cli.py mend --card <id> --get slots.clothing
+  - 重抽体型：python3 card_cli.py mend --card <id> --reroll-body
   - 撤销上一步：python3 card_cli.py mend --card <id> --undo
   - 查看历史：python3 card_cli.py mend --card <id> --history
 """
@@ -164,6 +181,8 @@ def add_shared_parsers(sub):
     c_mend.add_argument("--set", dest="field", help="字段路径，如 slots.clothing")
     c_mend.add_argument("--value", help="新值")
     c_mend.add_argument("--get", dest="get_field", help="读取字段当前值")
+    c_mend.add_argument("--reroll-body", nargs="?", const="all", default=None, help="重抽当前盲盒卡的四轴体型：单人卡直接传，多人卡可指定 1, 2, ... 或 all（默认 all）")
+    c_mend.add_argument("--stage", dest="stage", help="重抽体型时显式指定角色年龄阶段 Y1~Y5（单人传如 'Y2'，多人重抽全部可传如 'Y5,Y2'）")
     c_mend.add_argument("--undo", action="store_true", help="撤销上一步修改")
     c_mend.add_argument("--history", action="store_true", help="查看最近修改记录")
     c_mend.add_argument("--dry-run", action="store_true", help="预览 diff，不写入")
@@ -185,26 +204,36 @@ def _configure_stdio() -> None:
 
 _configure_stdio()
 
-PRIORITY_RULE_TEXT = """[!] 优先级规则：用户指定 > 库内命中 > 随机补全
-* 基础属性（身份 / 体型 / 明星 / 场景 / 主题 / 视角 / 比例等）：用户指定则锁定（优先使用库项），未指定才随机。"""
+PRIORITY_RULE_TEXT = f"""{SANDBOX_RULE_TEXT}
 
-PERSPECTIVE_TIPS_TEXT = """[tip] 技巧：自带视角特定场景精准命中
+[!] 优先级规则：用户指定 > 库内命中 > 随机补全
+* 基础属性（身份 / 体型 / 明星 / 场景 / 主题 / 视角 / 比例等）：用户指定则锁定（优先使用库项），未指定才随机。
+* 角色全兼容（--person）：支持【明星中文名】、素人【库内预设】（如 护士/OL/女大学生/孕妇）与【库外自由身份】（如 暗房冲洗师/机车女/茶道师 等任意具体角色，直接原样传入，引擎自动走自由体型盲盒）。严禁使用通用词「素人」。"""
+
+SCENE_ARG_HELP = (
+    "地点钉死该条；主题词（校园/医疗/职场/SM/日常/古风/特殊）随机整库；"
+    "完整视角词（颜射视角等）随机该池；特殊视角=视角库全盲盒。"
+    "短词「颜射」「后入」不进池。库外描述→manual-custom。"
+)
+
+PERSPECTIVE_TIPS_TEXT = """[tip] 技巧：自带视角特定场景精准命中（视角场景免疫外部裸露指令，只认自身允许的裸露档位）
 在 --scene 中包含以下关键词，可直接抽中全库原生视角特定机位：
   --scene "颜射视角"  -> 命中：诊室医生椅旁(颜射视角)、教室课桌旁(颜射视角)等
   --scene "后入视角"  -> 命中：器材室软垫(后入视角)、更衣室长凳旁(后入视角)等
-  --scene "丝袜视角"  -> 命中：闺房床沿(丝袜视角)、浴室地砖(丝袜视角)等"""
+  --scene "丝袜视角"  -> 命中：闺房床沿(丝袜视角)、浴室地砖(丝袜视角)等
+  --scene "鱼眼视角"  -> 命中：玄关猫眼(鱼眼视角)、试衣间顶角(鱼眼视角)等
+  --scene "偷拍视角"  -> 命中：车厢座下(偷拍视角)、隔间蹲位(偷拍视角)等"""
 
 CREATE_EPILOG = f"""
 {DOC_WARNING_TEXT}
 
 常规单卡交互流 (Normal Mode Workflow):
-  R0. [可选检索] search   -> 模糊搜索场景库/角色库 (如 python3 card_cli.py search --scene 走廊)
-  R1. create --user-input "用户原始要求"  -> 创建卡面骨架（--user-input 必传，落卡供约束解析）
-  R2. 导演决策            -> AI 先深读骨架信息，再进行 8 维创意决策
-  R3. fill→options→描述  -> 先 fill 导演/槽位；再 options --auto 抽动态方向；再为 2–8/9 写 direction_descriptions（见 options --help）
+  R1. create --user-input "用户原始要求"  -> 创建卡面骨架（--user-input 必传；--person 支持明星中文名、库内预设或库外自由身份如「暗房女冲洗师」；素人卡默认开启四轴体型盲盒：单人 {{{{BODY}}}} / 多人 {{{{BODY:1}}}} 等）
+  R2. 导演决策            -> AI 先深读骨架信息（含四轴档位 Y·V·U·L），再进行 8 维创意决策
+  R3. fill→options→描述  -> 先 fill 导演/槽位（勿填 body_shape，由引擎盲盒托管）；再 options --auto 抽动态方向；再为 2–8/9 写 direction_descriptions（见 options --help）
   R4. 渲染与展示          -> render → present --json 取结构化数据，AI 严格按 DRAW_GUIDE.md 格式输出
   R5. 交互修改循环        -> 依据用户指令进行 AI 动作响应（注：精修中统一使用 text_template 输出选项，出图时才使用 compact_template）：
-      * 说「画」或「1」      => 先单独发骚话 → 再提交画图（使用 compact_template 终结展示）
+      * 说「画」或「1」      => 先单独发撩人台词 → 再提交画图（使用 compact_template 终结展示）
       * 说「数字 2-8 / 9」   => 2-8 动态方向或 9 纹身固定位应用修改，随后 options --auto 轮转动态位并重新设计选项（使用 text_template）
       * 说「修改内容+数字」  => 先按文字优化，再应用数字方向并 options 轮转重新设计（使用 text_template）
       * 说「6」              => 检查：脚本检查 → AI检查 → 输出修正提示词
@@ -213,6 +242,10 @@ CREATE_EPILOG = f"""
       * 说「换」或「0」      => 随机换全新场景重抽（使用 text_template）
   R6. 提交生成            -> check -> submit --confirm 确认提交 GPU 队列
 
+🎬 导演摘要（仅常规模式 present 顶部芯片；连抽无此展示）：
+  - summary_display 由 theme_zh、人物及 director 各中文短标签组成，排除标点后总纯字数 ≤36 字。
+  - theme_zh 填 4~6 字情绪主题短标签；style_recipe_zh / lighting_palette_zh / pose_direction_zh 等各填 4~8 字，严禁长句。
+
 """
 
 
@@ -220,12 +253,11 @@ CHAIN_EPILOG = f"""
 {CHAIN_DOC_WARNING_TEXT}
 
 批量连抽导演流 (Chain Mode Workflow):
-  C0. [可选检索] search   -> 模糊搜索场景库/角色库 (如 python3 card_cli.py search --person jk)
-  C1. chain --count N --person 神秘少女 --profile jc-shy --user-input "用户原始要求"  -> 创建 N 张卡骨架并返回 card_id（--person 锁身份，--profile 锁体型；--user-input 必传，落卡供约束解析）
-  C2. 逐张决策             -> AI 先深读骨架信息，再逐张进行 8 维创意决策
-  C3. 逐张一次 fill        -> 每张卡只用一次 fill（勿拆 --phase）：--json-file / --json 一次写齐 director+slots+elevation+theme_zh
+  C1. chain --count N --user-input "用户原始要求"  -> 创建 N 张卡骨架并返回 card_id与模板路径（可选传 --person/--scene；素人卡默认开启四轴体型盲盒：单人 {{{{BODY}}}} / 多人 {{{{BODY:1}}}} 等；--user-input 必传，落卡供约束解析）
+  C2. 逐张决策             -> AI 先深读骨架与模板中的四轴档位 Y·V·U·L，再逐张进行 8 维创意决策
+  C3. 逐张一次 fill        -> 每张卡只用一次 fill（勿拆 --phase）：--json-file / --json 一次写齐 director+slots+elevation+theme_zh（勿填 body_shape，由引擎盲盒托管）
   C4. 逐张 resume         -> 运行 python3 card_cli.py chain --resume <card_id> 自动进行 render -> check -> autofix -> submit --confirm
-  C5. 修复 mend           -> check 失败时: python3 card_cli.py mend --card <id> --set <field> --value "<新值>" 修改字段，再回到 C4
+  C5. 修复 mend           -> check 失败时: python3 card_cli.py mend --card <id> --set <field> --value "<新值>"（如需更换盲盒体型用 --reroll-body），再回到 C4
   * 注：连抽模式为全自动连跑，中途不要停下来等待或询问指令。
   * 注：--phase 仅常规模式用；连抽一次 fill 完成，勿拆三次。
 """
@@ -242,52 +274,62 @@ def add_single_parsers(sub):
         epilog=CREATE_EPILOG
     )
     c_create.add_argument("--mode", choices=["celebrity", "amateur"], default="amateur", help="默认为素人模式 amateur，没有明确要求禁止使用 celebrity 明星模式")
-    c_create.add_argument("--scene", help="指定场景（跳过随机）")
-    c_create.add_argument("--person", help="指定人物（明星中文名 / 身份职业如 OL、护士、大学生）。注意：严禁使用通用词「素人」，必须具体到职业/身份。")
+    c_create.add_argument("--scene", help=SCENE_ARG_HELP)
+    c_create.add_argument("--person", help="指定人物：明星中文名（celebrity 模式）/ 素人库内预设（如 护士/OL/女大学生/孕妇）/ 库外自由身份（如 暗房冲洗师/机车女/茶道师，原样传入即可，引擎自动走自由体型盲盒）。注意：严禁使用通用词「素人」，必须具体到职业/身份。")
     c_create.add_argument("--workflow", help="指定 workflow config")
     c_create.add_argument("--size", help="画幅，如 768x1024（优先级高于 --aspect）")
     c_create.add_argument("--aspect", choices=["portrait", "landscape", "square", "widescreen"], help=aspect_help)
     c_create.add_argument("--seed", type=int, help="固定 seed")
-    c_create.add_argument("--profile", default="default", help="预设配置名（见 amateurs.json profiles；用户指定优先，未指定才随机）")
+    c_create.add_argument("--profile", default="default", help="预设配置名（见 amateurs.json profiles；默认根据身份或体型偏好自动匹配，未指定才随机）")
     c_create.add_argument("--user-input", help="用户原始要求（运行时强制必传，落卡供约束解析；不传则报错）")
-    c_create.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="启用场景词库参考（默认关闭）。不带值：智能加载纹身/宠物/道具/饰品四类词库常用章节；带值：按指定章节加载，格式同 cu-template-bundle.py --sections，如 --bundle \"tattoo:图案速查|皮肤融合,props:振动棒\"")
+    c_create.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="覆盖场景自动词库。默认按场景标签自动挂 1 条可选提示词。不带值：按当前场景扩一圈相关章节；带值：同 cu-template-bundle.py --sections")
+    c_create.add_argument("--no-bundle", action="store_true", dest="no_bundle", help="关闭场景自动词库（也不加载 --bundle）")
+    c_create.add_argument("--no-blind", action="store_true", help="关闭体型盲盒（降级为传统明文 slots.body_shape）")
+    c_create.add_argument("--stage", dest="stage", help="显式指定角色年龄阶段 Y1~Y5（Y1含苞初绽/Y2豆蔻含春/Y3韶华舒展/Y4风姿绰约/Y5丰润韵致，多人卡支持逗号分隔如 'Y5,Y2'）")
 
+    FILL_EPILOG = """
+📦 体型盲盒规则（默认开启）：
+  - 素人卡（单人与多人）默认启用四轴体型盲盒：slots.body_shape 由引擎托管为占位符（单人 "{{BODY}}"、多人 "{{BODY:1}}" 等），AI 仅根据骨架/模板中的四轴粗标签（阶段 Y · 身材 V · 奶量 U · 私密 L）搭配服饰与姿态，严禁填写或覆盖 body_shape，也不要在 clothing/pose 中越权描写胸部尺寸。
+"""
     c_fill = sub.add_parser(
         "fill",
         help="填充卡面槽位",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=FILL_EPILOG,
     )
     c_fill.add_argument("--card", required=True, help="卡面 ID")
+    c_fill.add_argument("--json", dest="json_text", default=None,
+                        help="结构化 fill JSON 字符串。包含 director、slots、elevation 等全量定义（单卡主力）。")
+    c_fill.add_argument("--json-file", dest="json_file", help="结构化 fill JSON 文件路径（连抽/批量主力）。")
     c_fill.add_argument("--phase", choices=["director", "slots", "elevation"], default=None,
                         help="可选分阶段填（常规模式精细打磨）。连抽请勿使用：一次 --json/--json-file 写齐即可")
-    c_fill.add_argument("--json-file", dest="json_file", help="结构化 fill JSON 文件")
+    c_fill.add_argument("--theme-zh", dest="theme_zh", default=None, help="顶部展示用的中文主题短标签（可选）")
+    # 门禁真会因为长度/语种打回，help 里写清楚校验规则
+    _vr = load_validation_rules()
+    _story_zh_help = (
+        f"中文叙事（可选覆盖，门禁校验：必须为中文，长度 {_vr['min_story_chars']}-{_vr['max_story_chars']} 字，"
+        f"容错区间 {_vr['min_story_tolerance']}-{_vr['max_story_tolerance']} 字）"
+    )
+    c_fill.add_argument("--story-elevation-zh", dest="story_elevation_zh", default=None, help=_story_zh_help)
+    c_fill.add_argument("--story-elevation-file", dest="story_elevation_file", default=None,
+                        help="从文件读取中文叙事写入 story_elevation_zh（可选）")
+
+    # 历史散装参数（底层保留兼容，但在 --help 视图中静默隐藏，避免干扰 AI）
     for slot in SLOT_RENDER_ORDER:
-        c_fill.add_argument(f"--{slot.replace('_', '-')}", dest=slot, default=None)
+        c_fill.add_argument(f"--{slot.replace('_', '-')}", dest=slot, default=None, help=argparse.SUPPRESS)
     for d in [
         "intent", "exposure_mode", "half_nude_region", "style_recipe", "lighting_palette",
         "pose_direction", "makeup_direction", "expression_gaze",
         "focus_detail", "story_elevation",
     ]:
-        c_fill.add_argument(f"--dir-{d.replace('_', '-')}", dest=f"dir_{d}", default=None)
+        c_fill.add_argument(f"--dir-{d.replace('_', '-')}", dest=f"dir_{d}", default=None, help=argparse.SUPPRESS)
     for d_zh in [
         "intent_zh", "pose_direction_zh", "makeup_direction_zh",
         "expression_gaze_zh", "focus_detail_zh",
     ]:
-        c_fill.add_argument(f"--dir-{d_zh.replace('_', '-')}", dest=f"dir_{d_zh}", default=None)
-    c_fill.add_argument("--theme-zh", dest="theme_zh", default=None, help="顶部展示用的中文主题短标签")
-    # 门禁真会因为长度/语种打回，help 里不写清楚 AI 只能靠报错试出来，白白多跑几轮。
-    # 数字一律从校验规则实时取，避免 help 与门禁各说各话。
-    _vr = load_validation_rules()
-    _story_zh_help = (
-        f"中文叙事（门禁校验：必须为中文，长度 {_vr['min_story_chars']}-{_vr['max_story_chars']} 字，"
-        f"容错区间 {_vr['min_story_tolerance']}-{_vr['max_story_tolerance']} 字，越界会被 fill 打回）"
-    )
-    c_fill.add_argument("--story-elevation-zh", dest="story_elevation_zh", default=None, help=_story_zh_help)
-    c_fill.add_argument("--story-elevation-file", dest="story_elevation_file", default=None,
-                        help=f"从文件读取中文叙事写入 story_elevation_zh，约束同 --story-elevation-zh")
-    c_fill.add_argument("--lighting-palette-zh", dest="lighting_palette_zh", default=None, help="光影的中文展示文本")
-    c_fill.add_argument("--style-recipe-zh", dest="style_recipe_zh", default=None, help="风格胶片的中文展示文本")
-    c_fill.add_argument("--json", dest="json_text", default=None, help="结构化 fill JSON 字符串。按优先级：half_nude(半裸，保留服装结构 + 露点词) > upper(露上，下身补 lower body fully covered) > lower(露下，上身补 chest covered) > both(全裸)。不露场景：half_covered(半遮，擦边) > none(全包)。")
+        c_fill.add_argument(f"--dir-{d_zh.replace('_', '-')}", dest=f"dir_{d_zh}", default=None, help=argparse.SUPPRESS)
+    c_fill.add_argument("--lighting-palette-zh", dest="lighting_palette_zh", default=None, help=argparse.SUPPRESS)
+    c_fill.add_argument("--style-recipe-zh", dest="style_recipe_zh", default=None, help=argparse.SUPPRESS)
 
     c_patch = sub.add_parser("patch", help="局部修改卡面")
     c_patch.add_argument("--card", required=True)
@@ -371,10 +413,11 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
 
   text_template    : 已拼装好的完整展示文本（含 __dirtytalk__ 占位、🎬摘要、
                      代码块、分割线、所有引用选项）。
-                     AI 只需将 __dirtytalk__ 替换为自己写的中文骚话，原样输出。
+                     AI 只需将 __dirtytalk__ 替换为自己写的中文撩人台词，原样输出。
                      在微调精修交互中，必须一直使用该模板输出选项列表，严禁截断。
+                     🎬 摘要行排除标点后纯字数 ≤36（fill 时把 theme_zh 与各 *_zh 写成短标签）。
 
-  compact_template : 终结出图提交时用（骚话+摘要+prompt，不含选项）。
+  compact_template : 终结出图提交时用（撩人台词+摘要+prompt，不含选项）。
                      只有主人发送「画/1/61」正式提交生图时，才使用该模板输出给主人。
 
   options[N]       : 每个方向包含：
@@ -425,7 +468,7 @@ AI 必须在 --auto 之后立刻为每个动态方向（2/3/4/5/7/8）补写具�
     c_present.add_argument("--card", required=True)
     c_present.add_argument("--json", action="store_true", help="输出结构化 JSON（含 text_template / compact_template / interaction_guide）")
     c_present.add_argument("--reply-id", type=int, default=None, help="写入 delivery.reply_id")
-    c_present.add_argument("--compact", action="store_true", help="修改后重展示：只输出完整上半段（骚话+摘要+prompt），不含选项")
+    c_present.add_argument("--compact", action="store_true", help="修改后重展示：只输出完整上半段（撩人台词+摘要+prompt），不含选项")
 
     from card_config import load_system_config
     cfg = load_system_config()
@@ -495,15 +538,18 @@ def add_chain_parsers(sub):
         epilog=CHAIN_EPILOG
     )
     c_chain.add_argument("--mode", choices=["celebrity", "amateur"], default="amateur", help="模式（默认为素人模式 amateur，没有明确要求禁止使用 celebrity 明星模式）")
-    c_chain.add_argument("--scene", help="指定场景（可选）")
-    c_chain.add_argument("--person", help="指定人物（可选）。注意：严禁使用通用词「素人」，必须具体到职业/身份。")
-    c_chain.add_argument("--profile", default="default", help="指定体型预设（可选，见 amateurs.json profiles，如 jk-big / jc-shy；用户指定优先，未指定才在该身份组内随机）")
+    c_chain.add_argument("--scene", help="（可选）" + SCENE_ARG_HELP)
+    c_chain.add_argument("--person", help="指定人物（可选）：明星中文名（celebrity 模式）/ 素人库内预设（如 护士/OL/女大学生/孕妇）/ 库外自由身份（如 暗房冲洗师/机车女/茶道师，原样传入即可，引擎自动走自由体型盲盒）。注意：严禁使用通用词「素人」，必须具体到职业/身份。")
+    c_chain.add_argument("--profile", default="default", help="指定体型预设（可选，见 amateurs.json profiles，如 nurse-milk / college-sweet；默认根据身份或体型偏好自动匹配，未指定才在该身份组内随机）")
     c_chain.add_argument("--count", type=int, default=1, help="创建卡数量（默认模式）")
     c_chain.add_argument("--resume", metavar="CARD_ID", help="已 fill 的卡 ID，直接走 render→check→autofix→submit")
     c_chain.add_argument("--dry-run", action="store_true", help="配合 --resume 使用：仅跑 render→check→autofix 全流程校验，不提交 GPU 队列（测试/审查用）")
 
     c_chain.add_argument("--user-input", help="用户原始要求（运行时强制必传，落卡供约束解析；chain --resume 豁免；不传则报错）")
-    c_chain.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="启用场景词库参考（默认关闭）。不带值：智能加载纹身/宠物/道具/饰品四类词库常用章节；带值：按指定章节加载，格式同 cu-template-bundle.py --sections，如 --bundle \"tattoo:图案速查|皮肤融合,props:振动棒\"")
+    c_chain.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="覆盖场景自动词库。默认按场景标签自动挂 1 条可选提示词。不带值：按当前场景扩一圈相关章节；带值：同 cu-template-bundle.py --sections")
+    c_chain.add_argument("--no-bundle", action="store_true", dest="no_bundle", help="关闭场景自动词库")
+    c_chain.add_argument("--no-blind", action="store_true", help="关闭体型盲盒（降级为传统明文 slots.body_shape）")
+    c_chain.add_argument("--stage", dest="stage", help="显式指定角色年龄阶段 Y1~Y5（Y1含苞初绽/Y2豆蔻含春/Y3韶华舒展/Y4风姿绰约/Y5丰润韵致，多人卡支持逗号分隔如 'Y5,Y2'）")
 
 
 # ── command dispatch ──────────────────────────────────────────────────────────
@@ -543,6 +589,7 @@ def build_parser(command_set, description):
 🎮 抽卡控制台四大运行模式工作流 (Console Four Workflows):
 
   ⭐ [AI 契约] 主人未指定特定模式时，AI 应默认执行②批量连抽模式（chain 流程）。
+  ⭐ [角色理解] 用户提及的任何角色（明星中文名、库内预设身份或库外角色如「暗房冲洗师」「机车女」），AI 均直接作为 --person 传入，无需查库，引擎全自动识别并托管体型盲盒。
 
   ① 常规单抽模式 (Normal Single Mode):
     $ python3 card_cli.py create --user-input "<用户原始要求>" [--person <角色>] [--scene <场景>]
@@ -554,7 +601,7 @@ def build_parser(command_set, description):
     → 通过快捷数字或口头指令进行交互式微调修改（输入「1」或「画」提交出图）
 
   ② 批量连抽模式 (Chain Batch Mode):
-    $ python3 card_cli.py chain --count <数量> --user-input "<用户原始要求>" [--person <角色>]
+    $ python3 card_cli.py chain --count <数量> --user-input "<用户原始要求>"
     → AI 导演逐张深读骨架 JSON，做 8 维创意决策
     → 逐张一次 fill 导入槽位（--json-file 一次写齐，勿拆 --phase）
     → $ python3 card_cli.py chain --resume <id> (自动 render -> check -> autofix -> submit)
@@ -605,6 +652,8 @@ def build_chain_compat_parser():
 
 
 def run_parsed_args(args, parser=None):
+    from card_blind_body import ensure_stdio_masking
+    ensure_stdio_masking()
     CARDS_DIR.mkdir(parents=True, exist_ok=True)
     cmd = COMMANDS.get(args.command)
     if not cmd:
@@ -618,7 +667,7 @@ def run_parsed_args(args, parser=None):
     if args.command in ("chain", "create") and not getattr(args, "resume", None):
         user_input = str(getattr(args, "user_input", "") or "").strip()
         if not user_input:
-            msg = "缺少 --user-input（用户原始要求必传，如「女高中生 3 张」「只露逼 户外」）"
+            msg = "缺少 --user-input（用户原始要求必传，如「神秘女生 3 张」「只露逼 户外」）"
             if parser:
                 parser.error(msg)
             raise SystemExit(msg)

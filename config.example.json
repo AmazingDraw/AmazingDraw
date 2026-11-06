@@ -2,17 +2,23 @@
   "comfyui_host": "http://127.0.0.1:8188",
   "output_dir": "~/Downloads/card-engine-out",
   "tmp_dir": "/tmp/cu-card",
-  "cards_dir": "~/.openclaw/draw-cards/cards",
+  "cards_dir": "",
   "comfyui_dir": "~/ComfyUI",
   "obsidian_vault_dir": "",
   "openclaw_workspace_dir": "",
-  "openclaw_home": "",
-  "openclaw_bin": "",
-  "agent_backend": "openclaw",
+  "llm": {
+    "base_url": "http://127.0.0.1:8317/v1",
+    "api_key": "",
+    "model": "gemini-flash",
+    "independent_model": "",
+    "fallback_models": [],
+    "timeout_seconds": 30,
+    "retry_limit": 3
+  },
   "restrict_roles": true,
   "disabled_celebrities": [],
   "enable_ai_check": false,
-  "custom_presets_dir": "~/.openclaw/draw-cards/custom_presets",
+  "custom_presets_dir": "",
   "default_workflow": "moody_zib_zit",
   "scene_cooldown_window": 9,
   "scene_library_weights": {
@@ -67,6 +73,12 @@
         "enabled": true,
         "name": "视角场景",
         "file": "perspective_scenes.json"
+      },
+      "ancient_scenes": {
+        "type": "scene",
+        "enabled": true,
+        "name": "古风场景",
+        "file": "ancient_scenes.json"
       }
     }
   },

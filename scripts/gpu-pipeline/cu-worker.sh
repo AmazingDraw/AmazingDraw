@@ -26,7 +26,7 @@ show_help() {
   --prompt-file  存储 Stable Diffusion 完整英文提示词的纯文本文件 (必填)
   --meta-file    存储卡片渲染元数据、人物、场景、Caption 信息的 JSON 文件 (必填)
   --done-file    渲染成功后写入结果文件物理路径、Seed和耗时的标记 JSON 文件 (必填)
-  --job-id       QueueStore v2 任务 ID (必填)
+  --job-id       队列任务 ID (必填)
   --card-id      关联卡片 ID，可为空字符串
   --lease-token  claim 后持久化的条件 ACK 令牌 (必填)
   --lora         强制指定 LoRA 名字 (可选)
@@ -45,7 +45,9 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/../config.json"
-WORKSPACE="${CU_WORKSPACE:-$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('${CONFIG_FILE}')).get('openclaw_workspace_dir') or '~/.openclaw/workspace'))")}"
+WORKSPACE="${CU_WORKSPACE:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get workspace)}"
+# 卡片目录：与 cu-queue 一致（CU_CARDS_DIR 覆盖 > config.cards_dir > ~/.amazingdraw/cards）
+CARDS_DIR_RESOLVED="${CU_CARDS_DIR:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get cards_dir)}"
 START_EPOCH="$(date +%s)"
 WORK_DIR="${CU_WORK_DIR:-$(python3 -c "import json, os; print(os.path.expanduser(json.load(open('${CONFIG_FILE}')).get('tmp_dir') or '/tmp/cu-card'))")}"
 RUNTIME_FILE="$WORK_DIR/cu-runtime.json"
@@ -181,39 +183,12 @@ export PROMPT_FILE META_FILE DONE_FILE LORA WIDTH HEIGHT WORKFLOW SEED
 write_runtime "boot"
 
 notify_gpu_lock_issue() {
+    # 只记日志，不再推送 Telegram 提醒（用户要求移除）
     local TITLE="$1"
     local DETAIL="$2"
     local EXIT_CODE="$3"
     local ELAPSED_MIN="$(( ($(date +%s) - START_EPOCH) / 60 ))"
-    local OPTIONS=()
-
-    if [[ "$DETAIL" == *"保存图片到输出目录时被系统中断"* ]]; then
-        OPTIONS+=(
-            "差一点点卡在保存那步了 🫠\n我继续盯着，别管它～"
-            "图快好了，保存时绊了一下 😵‍💫\n我来收尾，等我发你。"
-        )
-    elif [[ "$TITLE" == *"自动恢复交付失败"* ]]; then
-        OPTIONS+=(
-            "图应该出来了，发送卡了一下 📮\n我补发，别急。"
-            "像是出图了但没送到你手上 🤏\n我继续补一下。"
-        )
-    else
-        OPTIONS+=(
-            "这张有点磨蹭 😵‍💫\n我继续盯着，出了就发你。"
-            "还在跑，慢吞吞的 🐢\n你先别管，我看着呢。"
-            "它今天有点慢 🫠\n我守着，别急。"
-            "这张比平时久一点 ⏳\n我继续等它出来。"
-            "还活着，只是慢 😶‍🌫️\n我盯着，出了马上发。"
-            "它在憋大招吧 🫣\n我继续看着。"
-        )
-    fi
-
-    local IDX=$(( RANDOM % ${#OPTIONS[@]} ))
-    local NOTIFY_MSG="${OPTIONS[$IDX]}\n\n已跑约 ${ELAPSED_MIN} 分钟。"
-    local CHAT_ID
-    CHAT_ID=$(python3 -c "import json; print(json.load(open('${CONFIG_FILE}')).get('telegram_chat_id', ''))" 2>/dev/null || echo "")
-    openclaw message send --channel telegram -t "$CHAT_ID" -m "$NOTIFY_MSG" 2>/dev/null || true
-    echo "📢 已通知用户，等待确认"
+    echo "${TITLE}: ${DETAIL} (rc=${EXIT_CODE}, 已跑约 ${ELAPSED_MIN} 分钟)"
 }
 
 echo "=== cu-worker $(date '+%Y-%m-%d %H:%M:%S') ==="
@@ -368,7 +343,7 @@ try:
     meta = json.load(open(meta_path, encoding='utf-8'))
     card_id = meta.get('card_id')
     if card_id:
-        card_file = Path.home() / '.openclaw' / 'draw-cards' / 'cards' / f'{card_id}.json'
+        card_file = Path(r'$CARDS_DIR_RESOLVED') / f'{card_id}.json'
         if card_file.exists():
             card = json.load(open(card_file, encoding='utf-8'))
             card['status'] = 'failed'

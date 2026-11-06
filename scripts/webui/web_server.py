@@ -22,7 +22,6 @@ import json
 import os
 import re
 import sys
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -37,6 +36,8 @@ import uvicorn
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(SCRIPT_DIR.parent / "card-engine"))
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+import amazingdraw_paths  # noqa: E402  自有数据目录唯一解析入口（固定 ~/.amazingdraw）
 
 # 兼容 `python3 web_server.py` 直跑：预登记 __main__ 为 web_server，
 # 否则 api_cards 等子模块 `from web_server import ...` 会二次执行本文件，造成循环导入
@@ -170,7 +171,6 @@ sys.stderr = ThreadLocalStream(rotating_file, mirror=sys.stderr)
 
 
 from card_core import CARDS_DIR, save_card, load_card
-from agent_bridge import stream_agent_chat  # re-export for tests/monkeypatch
 from prompt_rules import clean_user_message, normalize_chat_mode
 
 # =====================================================================
@@ -196,25 +196,43 @@ DEPRECATED_CONFIG_KEYS = (
     "output_dir_fallback",   # 额外搜救目录已移除
     "agent_webhook_url",     # 随 custom_http 后端一并废弃
     "agent_api_key",
+    "agent_backend",
+    "backends",
     "comfyui_extra_models_config",  # 已废弃：不再配置、启动也不再传 yaml
     "bound_scene_bypass_exposure_limit",  # 绑定场景始终绕过全局裸露限制
+    "openclaw_home",
+    "openclaw_bin",
+    "independent_llm_model",
+    "llm_fallback_models",
+    "openclaw_ws_timeout_seconds",
 )
 PRESETS_DIR = SCRIPT_DIR.parent / "presets"
 
-# 历史桌面 Pi / 第三方后端已退役；运行时一律归一为 openclaw。
-_DEPRECATED_AGENT_BACKENDS = frozenset(
-    {"claudecode", "hermes", "custom", "builtin", "pi"}
-)
 
-
-def normalize_agent_backend(value: Any) -> str:
-    """Only OpenClaw remains; anything else maps to openclaw."""
-    backend = str(value or "openclaw").strip().lower()
-    if backend == "openclaw":
-        return "openclaw"
-    if backend in _DEPRECATED_AGENT_BACKENDS or backend:
-        return "openclaw"
-    return "openclaw"
+def _hydrate_llm_config(user_config: Dict[str, Any]) -> None:
+    """内存中补齐 llm 块，并与旧键 llm_model 对齐。不回写磁盘。"""
+    try:
+        from card_llm_client import resolve_llm_config
+        resolved = resolve_llm_config(user_config)
+    except Exception:
+        resolved = {
+            "base_url": "http://127.0.0.1:8317/v1",
+            "api_key": "",
+            "model": str(user_config.get("llm_model") or ""),
+            "timeout_seconds": 30,
+            "retry_limit": int(user_config.get("llm_retry_limit") or 1),
+        }
+    disk_llm = user_config.get("llm") if isinstance(user_config.get("llm"), dict) else {}
+    user_config["llm"] = {
+        "base_url": resolved["base_url"],
+        "api_key": str(disk_llm.get("api_key") or ""),
+        "model": resolved["model"],
+        "timeout_seconds": resolved["timeout_seconds"],
+        "retry_limit": resolved["retry_limit"],
+    }
+    if resolved["model"]:
+        user_config["llm_model"] = resolved["model"]
+    user_config["llm_retry_limit"] = resolved["retry_limit"]
 
 
 def load_system_config() -> Dict[str, Any]:
@@ -223,22 +241,23 @@ def load_system_config() -> Dict[str, Any]:
         "comfyui_host": "http://127.0.0.1:8188",
         # 便携占位默认值；本机真实路径只写在 config.json，禁止在此硬编码机器路径
         "output_dir": "~/Downloads/draw_things",
-        "custom_presets_dir": str(PRESETS_DIR.resolve()),
+        "custom_presets_dir": "",  # 空 = ~/.amazingdraw/custom_presets（amazingdraw_paths）
         "recording_dir": "~/Downloads/draw_history",
         "llm_model": "",
-        "agent_backend": "openclaw",
+        "llm": {
+            "base_url": "http://127.0.0.1:8317/v1",
+            "api_key": "",
+            "model": "",
+            "timeout_seconds": 30,
+            "retry_limit": 1,
+        },
         "delivery_telegram": True,
         "delivery_webui": True,
-        "independent_llm_model": "",
-        "llm_fallback_models": [],
         "chat_mode": "cards",
         "comfyui_dir": str(Path.home() / "ComfyUI"),
         "obsidian_vault_dir": "~/Documents/ObsidianVault",
         "webui_host": "0.0.0.0",
         "webui_port": 8318,
-        "openclaw_ws_timeout_seconds": 600,
-        "openclaw_home": "",
-        "openclaw_bin": "",
         "scene_cooldown_window": 9,
         "scene_library_weights": {
             "school_scenes": 5,
@@ -247,7 +266,8 @@ def load_system_config() -> Dict[str, Any]:
             "workplace_scenes": 3,
             "sm_scenes": 5,
             "special_scenes": 5,
-            "perspective_scenes": 0
+            "perspective_scenes": 0,
+            "ancient_scenes": 3
         },
         # WebUI 场景权重面板依赖此注册表；缺省时前端会空白并可能自动保存成 {}
         "scene_registry": {
@@ -259,6 +279,7 @@ def load_system_config() -> Dict[str, Any]:
                 "sm_scenes": {"type": "scene", "enabled": True, "name": "SM场景", "file": "sm_scenes.json"},
                 "special_scenes": {"type": "scene", "enabled": True, "name": "特殊场景", "file": "special_scenes.json"},
                 "perspective_scenes": {"type": "scene", "enabled": True, "name": "视角场景", "file": "perspective_scenes.json"},
+                "ancient_scenes": {"type": "scene", "enabled": True, "name": "古风场景", "file": "ancient_scenes.json"},
             }
         },
         "llm_retry_limit": 1,
@@ -335,24 +356,9 @@ def load_system_config() -> Dict[str, Any]:
             for k, v in defaults.items():
                 if k not in user_config:
                     user_config[k] = v
-            # 强制回退已废弃的后端（含历史 builtin/pi）
-            normalized_backend = normalize_agent_backend(
-                user_config.get("agent_backend")
-            )
-            if user_config.get("agent_backend") != normalized_backend:
-                user_config["agent_backend"] = normalized_backend
-                try:
-                    disk = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                    if disk.get("agent_backend") != normalized_backend:
-                        disk["agent_backend"] = normalized_backend
-                        safe_write_config(
-                            CONFIG_PATH,
-                            json.dumps(disk, indent=2, ensure_ascii=False),
-                        )
-                except Exception:
-                    pass
-            # 归一化 chat_mode：仅 cards | draw
-            user_config["chat_mode"] = normalize_chat_mode(user_config.get("chat_mode"), "cards")
+            user_config.pop("agent_backend", None)
+            user_config["chat_mode"] = "cards"
+            _hydrate_llm_config(user_config)
             for key in DEPRECATED_CONFIG_KEYS:
                 user_config.pop(key, None)
             try:
@@ -363,7 +369,7 @@ def load_system_config() -> Dict[str, Any]:
             
             # 展开用户目录路径
             config = user_config.copy()
-            for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "openclaw_workspace_dir", "custom_presets_dir", "openclaw_home", "openclaw_bin"]:
+            for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "openclaw_workspace_dir", "custom_presets_dir"]:
                 if k in config and isinstance(config[k], str):
                     val = os.path.expanduser(config[k])
                     if val.strip() and not os.path.isabs(val):
@@ -385,7 +391,7 @@ def load_system_config() -> Dict[str, Any]:
         
     # 返回展开后的 defaults
     config = defaults.copy()
-    for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "custom_presets_dir", "openclaw_home", "openclaw_bin"]:
+    for k in ["output_dir", "output_dir_archive", "obsidian_vault_dir", "comfyui_dir", "custom_presets_dir"]:
         if k in config and isinstance(config[k], str):
             val = os.path.expanduser(config[k])
             if val.strip() and not os.path.isabs(val):
@@ -489,10 +495,7 @@ def safe_write_config(file_path: Path, content: str, max_backups: int = 9):
 
 def save_system_config(config_data: Dict[str, Any]):
     """保存配置并合并已有字段"""
-    if "agent_backend" in config_data:
-        config_data["agent_backend"] = normalize_agent_backend(
-            config_data.get("agent_backend")
-        )
+    config_data.pop("agent_backend", None)
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     
     current_config = {}
@@ -515,6 +518,14 @@ def save_system_config(config_data: Dict[str, Any]):
             
     for k, v in config_data.items():
         current_config[k] = v
+    if isinstance(current_config.get("llm"), dict):
+        llm_block = current_config["llm"]
+        if llm_block.get("model"):
+            current_config["llm_model"] = llm_block["model"]
+        llm_block.pop("independent_model", None)
+        llm_block.pop("fallback_models", None)
+        if llm_block.get("retry_limit") is not None:
+            current_config["llm_retry_limit"] = llm_block["retry_limit"]
 
     if "cloud" in current_config:
         try:
@@ -614,45 +625,19 @@ def run_core_cmd(cmd_func, args):
 
 
 # cards/settings/pipeline → api_cards.py
-def _peek_agent_backend() -> str:
-    """Read agent_backend without full config expand (history-dir routing)."""
-    try:
-        if CONFIG_PATH.exists():
-            raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            return normalize_agent_backend(raw.get("agent_backend"))
-    except Exception:
-        pass
-    return "openclaw"
-
-
 def get_chat_history_dir() -> Path:
     # 1. 优先使用环境变量自定义路径，极大提升 Docker/容器化部署时的移植性
     env_dir = os.environ.get("AMAZING_DRAW_CHAT_DIR")
     if env_dir:
         return Path(env_dir)
 
-    # 2. 仅 openclaw 后端写入 ~/.openclaw/webui-chat；不因目录存在而误入
-    if _peek_agent_backend() == "openclaw":
-        openclaw_dir = Path.home() / ".openclaw"
-        if openclaw_dir.exists() and openclaw_dir.is_dir():
-            return openclaw_dir / "webui-chat"
-
-    # 3. 兜底使用项目同级 data 目录，确保纯本地独立环境开箱即用，避免污染主目录
-    return Path(__file__).resolve().parent / "data" / "webui-chat"
+    # 2. 默认 ~/.amazingdraw/webui-chat（卡片 jsonl 历史）
+    return amazingdraw_paths.chat_dir()
 
 CHAT_HISTORY_DIR = get_chat_history_dir()
-
-
-@app.on_event("startup")
-def configure_operation_journal() -> None:
-    """Restore durable operation metadata after the history path is final."""
-    from operation_registry import operation_registry
-
-    # Prefer the module global so tests can patch CHAT_HISTORY_DIR without
-    # fighting a fresh get_chat_history_dir() resolution.
-    operation_registry.configure_journal(
-        CHAT_HISTORY_DIR / "operations-v1.json"
-    )
+if amazingdraw_paths.legacy_migration_pending():
+    print("⚠️ 检测到旧数据目录 ~/.openclaw/draw-cards 或 ~/.openclaw/webui-chat 尚未迁移到 ~/.amazingdraw，"
+          "请运行: python3 scripts/amazingdraw_paths.py migrate", flush=True)
 
 
 def safe_chat_id(card_id: Optional[str]) -> str:
@@ -666,52 +651,6 @@ def webui_session_id(card_id: Optional[str]) -> str:
 
 def chat_history_file(card_id: Optional[str]) -> Path:
     return CHAT_HISTORY_DIR / f"{safe_chat_id(card_id)}.jsonl"
-
-
-
-
-
-_SKELETON_CARD_ID_IN_TITLE = re.compile(
-    r"骨架卡\s*[`'\"]?([0-9]{8}_[0-9]{6}_[0-9A-Za-z_]+)[`'\"]?\s*",
-)
-
-
-def display_session_title(raw: str, limit: int = 160) -> str:
-    """列表/页头用的会话标题：去掉用户看不懂的骨架卡 card_id，正文仍保留给 Agent。"""
-    text = str(raw or "").strip()
-    if not text:
-        return ""
-    text = _SKELETON_CARD_ID_IN_TITLE.sub("骨架卡", text, count=1)
-    text = re.sub(r"骨架卡\s+已建好", "骨架卡已建好", text, count=1)
-    text = re.sub(r"[ \t]+", " ", text).strip()
-    return text[:limit].strip()
-
-
-def first_user_line(history_path: Path) -> str:
-    """取会话首句用户提问，用作列表标题。
-
-    只读一行就够，历史文件可能很大，没必要整份载入。
-    """
-    try:
-        with history_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                try:
-                    item = json.loads(line)
-                except ValueError:
-                    continue
-                if item.get("role") == "user":
-                    return str(item.get("content", "")).strip()
-    except Exception:
-        pass
-    return ""
-
-
-
-
-
-
 
 
 _CHAT_HISTORY_LOCKS = {}
@@ -732,101 +671,8 @@ def append_chat_history(card_id: Optional[str], role: str, content: str):
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
-def append_chat_history_once(
-    card_id: Optional[str],
-    operation_id: str,
-    role: str,
-    content: str,
-    *,
-    operation_state: Optional[str] = None,
-) -> bool:
-    """Atomically append one operation/role record at most once."""
-    CHAT_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    path = chat_history_file(card_id)
-    with _chat_history_lock(path):
-        existing = path.read_text(encoding="utf-8") if path.exists() else ""
-        for line in existing.splitlines():
-            try:
-                item = json.loads(line)
-            except (TypeError, ValueError):
-                continue
-            if (
-                item.get("operation_id") == operation_id
-                and item.get("role") == role
-            ):
-                return False
-
-        item = {
-            "operation_id": operation_id,
-            "role": role,
-            "content": content,
-            "time": int(time.time()),
-        }
-        if operation_state:
-            item["operation_state"] = operation_state
-        payload = existing
-        if payload and not payload.endswith("\n"):
-            payload += "\n"
-        payload += json.dumps(item, ensure_ascii=False) + "\n"
-
-        handle = tempfile.NamedTemporaryFile(
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            dir=str(path.parent),
-            mode="w",
-            encoding="utf-8",
-            delete=False,
-        )
-        temp_path = Path(handle.name)
-        try:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-            handle.close()
-            os.replace(temp_path, path)
-        except Exception:
-            handle.close()
-            temp_path.unlink(missing_ok=True)
-            raise
-        return True
-
-
 def clear_chat_history(card_id: Optional[str]):
     chat_history_file(card_id).unlink(missing_ok=True)
-
-
-def extract_session_timestamp(session_id: str, default_time: float) -> float:
-    try:
-        import re as _re, datetime as _datetime
-        match = _re.search(r"(\d{8})_(\d{6})", session_id)
-        if match:
-            date_str, time_str = match.groups()
-            dt = _datetime.datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
-            return dt.timestamp()
-    except:
-        pass
-    return default_time
-
-
-SESSION_TITLE_CACHE = {}
-
-def get_cached_session_title(path: Path) -> str:
-    """按 mtime+size 缓存的会话标题，取自历史文件里的首句提问。"""
-    path_str = str(path.resolve())
-    try:
-        stat = path.stat()
-        mtime = stat.st_mtime
-        size = stat.st_size
-    except Exception:
-        return ""
-
-    cached = SESSION_TITLE_CACHE.get(path_str)
-    if cached and cached[0] == mtime and cached[1] == size:
-        return cached[2]
-
-    title = display_session_title(first_user_line(path))
-    SESSION_TITLE_CACHE[path_str] = (mtime, size, title)
-    return title
 
 
 # chat routes → api_chat.py
@@ -849,10 +695,12 @@ from api_cards import router as cards_router
 from api_queue import router as queue_router
 from api_chat import router as chat_router
 from api_system import router as system_router
+from api_albums import router as albums_router
 app.include_router(cards_router)
 app.include_router(queue_router)
 app.include_router(chat_router)
 app.include_router(system_router)
+app.include_router(albums_router)
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 

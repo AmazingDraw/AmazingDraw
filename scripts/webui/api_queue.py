@@ -36,8 +36,6 @@ from card_cli_commands import cmd_progress
 from card_config import TMP_DIR
 from card_io import card_path
 from card_status_service import restore_card_after_cancel
-from agent_install_paths import resolve_openclaw_bin, resolve_openclaw_home
-
 from workflow_convert_lib import (
     _is_api_workflow,
     perform_workflow_conversion,
@@ -108,49 +106,17 @@ _comfy_queue_cache = {
 }
 
 def _telegram_token_configured(cfg: Dict[str, Any]) -> bool:
-    """True if a bot token is available from config, env, or workspace .bot_tokens."""
-    token = str(cfg.get("telegram_bot_token") or "").strip()
-    if token:
+    """True if a bot token is available: config.json telegram_bot_token → env TELEGRAM_BOT_TOKEN.
+
+    Keep the same order as cu-deliver.sh (no .bot_tokens, no other env names).
+    """
+    if str(cfg.get("telegram_bot_token") or "").strip():
         return True
-    for key in (
-        "TELEGRAM_BOT_TOKEN",
-        "TELEGRAM_BOT_TOKEN_DEFAULT",
-        "TELEGRAM_BOT_TOKEN_DRAW",
-        "TELEGRAM_BOT_TOKEN_DAILY",
-    ):
-        if (os.environ.get(key) or "").strip():
-            return True
-    # Same fallback as cu-deliver.sh: <workspace>/.bot_tokens → default=
-    try:
-        ws_raw = str(cfg.get("openclaw_workspace_dir") or "").strip()
-        ws = Path(os.path.expanduser(ws_raw)) if ws_raw else (Path.home() / ".openclaw" / "workspace")
-        token_file = ws / ".bot_tokens"
-        if token_file.is_file():
-            for line in token_file.read_text(encoding="utf-8", errors="ignore").splitlines():
-                line = line.strip()
-                if line.startswith("default=") and line.split("=", 1)[1].strip():
-                    return True
-    except Exception:
-        pass
-    return False
+    return bool("".join((os.environ.get("TELEGRAM_BOT_TOKEN") or "").split()))
 
 
 def _cheap_integrations_status() -> Dict[str, bool]:
     """Configured + locally present (not a live network ping)."""
-    openclaw = False
-    try:
-        if (resolve_openclaw_home() / "openclaw.json").exists():
-            openclaw = True
-        elif _MODELS_CACHE.get("openclaw_models"):
-            openclaw = True
-        else:
-            oc_bin = resolve_openclaw_bin() or ""
-            # Bare name (e.g. "openclaw") means not resolved to a real path.
-            if oc_bin and Path(oc_bin).name != oc_bin and Path(oc_bin).is_file():
-                openclaw = True
-    except Exception:
-        openclaw = False
-
     telegram = False
     obsidian = False
     try:
@@ -169,8 +135,16 @@ def _cheap_integrations_status() -> Dict[str, bool]:
     except Exception:
         pass
 
+    llm_ok = False
+    try:
+        from card_llm_client import list_models
+        llm_ok = bool(list_models(load_system_config()))
+    except Exception:
+        llm_ok = False
+
     return {
-        "openclaw": bool(openclaw),
+        "llm": bool(llm_ok),
+        "openclaw": bool(llm_ok),  # 旧前端字段，等同 llm
         "telegram": bool(telegram),
         "obsidian": bool(obsidian),
     }
@@ -178,7 +152,7 @@ def _cheap_integrations_status() -> Dict[str, bool]:
 
 @router.get("/api/config/integrations")
 def get_integrations_status():
-    """Lightweight OpenClaw / Telegram / Obsidian readiness for settings chips."""
+    """LLM / Telegram / Obsidian readiness for settings chips."""
     return {"integrations": _cheap_integrations_status()}
 
 @router.get("/api/queue/status")
@@ -662,7 +636,7 @@ def remove_queue_job(job_id: str):
 
 @router.post("/api/queue/terminate")
 def terminate_queue_api():
-    """终止队列与绘图服务：效果等同于 /draw_terminate 且重置卡片状态"""
+    """停当前任务并退出 ComfyUI。队列和卡文件保留，只清草稿。与 /draw_terminate 相同。"""
     import subprocess
     cmd = [sys.executable, str(_gpu_pipeline_script("cu-control.py")), "terminate"]
     try:
@@ -670,27 +644,8 @@ def terminate_queue_api():
         if res.returncode != 0:
             raise HTTPException(
                 status_code=500,
-                detail=res.stderr.strip() or res.stdout.strip() or "终止队列失败",
+                detail=res.stderr.strip() or res.stdout.strip() or "终止任务失败",
             )
-        
-        # 将所有瞬态卡恢复到各自提交前的稳定状态。
-        for f in CARDS_DIR.glob("*.json"):
-            try:
-                card = json.loads(f.read_text(encoding="utf-8"))
-                if card.get("status") in ["submitted", "queued", "rendering"]:
-                    queue_job_id = str(
-                        ((card.get("render") or {}).get("queue_job_id"))
-                        or ""
-                    )
-                    restore_card_after_cancel(
-                        str(card.get("card_id") or f.stem),
-                        reason="queue_terminated",
-                        fallback_status="draft",
-                        expected_job_id=queue_job_id or None,
-                    )
-            except Exception:
-                pass
-                
         return {
             "status": "terminated",
             "stdout": res.stdout,
@@ -722,13 +677,7 @@ def get_logs(lines: int = 80):
 _MODELS_CACHE = {
     "scanned": True,
     "openclaw_models": [],
-    # 退役占位：旧前端曾读 cliproxy_models；现恒为空，UI 只消费 openclaw_models
-    "cliproxy_models": []
-}
-_MODELS_SCANNING = False
-_LAST_SCAN_TIME = 0
-_LAST_CONFIG_MTIMES = {
-    "openclaw": 0
+    "cliproxy_models": [],
 }
 
 def _resolve_bin_path(name: str) -> str:
@@ -736,125 +685,30 @@ def _resolve_bin_path(name: str) -> str:
     from agent_install_paths import resolve_bin_path
     return resolve_bin_path(name)
 
-def _bg_scan_models():
-    global _MODELS_CACHE, _MODELS_SCANNING, _LAST_SCAN_TIME
-    from pathlib import Path
-    import subprocess
-    import json
-    
-    openclaw_models = []
-
-    
-    black_list = ["image", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney", "mj", "drawing", "painting", "cogview", "sd-v", "sd3", "photomaker"]
-    
-    # 1. 获取 openclaw 模型 (先尝试命令行)
-    try:
-        openclaw_bin = resolve_openclaw_bin()
-        res = subprocess.run([openclaw_bin, "models", "list", "--json"], capture_output=True, text=True, timeout=15)
-        if res.returncode == 0:
-            data = json.loads(res.stdout)
-            for m in data.get("models", []):
-                model_id = m.get("key", "")
-                model_id_lower = model_id.lower()
-                tags = m.get("tags", [])
-                if "configured" in tags:
-                    if not any(kw in model_id_lower for kw in black_list):
-                        if model_id not in openclaw_models:
-                            openclaw_models.append(model_id)
-    except Exception:
-        pass
-
-    # 1b. 兜底直接读取 openclaw.json 配置文件
-    if not openclaw_models:
-        try:
-            config_path = resolve_openclaw_home() / "openclaw.json"
-            if config_path.exists():
-                data = json.loads(config_path.read_text(encoding="utf-8"))
-                
-                # Scan providers
-                providers = data.get("models", {}).get("providers", {}) or {}
-                for provider_name, provider_data in providers.items():
-                    for m in provider_data.get("models", []) or []:
-                        model_id = f"{provider_name}/{m.get('id')}"
-                        model_id_lower = model_id.lower()
-                        if not any(kw in model_id_lower for kw in black_list):
-                            if model_id not in openclaw_models:
-                                openclaw_models.append(model_id)
-                                
-                # Scan agent defaults models
-                agent_models = data.get("agents", {}).get("defaults", {}).get("models", {}) or {}
-                for model_id in agent_models.keys():
-                    model_id_lower = model_id.lower()
-                    if not any(kw in model_id_lower for kw in black_list):
-                        if model_id not in openclaw_models:
-                            openclaw_models.append(model_id)
-        except Exception:
-            pass
-
-    _MODELS_CACHE = {
-        "scanned": True,
-        "openclaw_models": openclaw_models,
-        # 退役占位（恒空）；勿再暗示独立连 cliproxy
-        "cliproxy_models": []
-    }
-    _LAST_SCAN_TIME = time.time()
-    _MODELS_SCANNING = False
-
 @router.get("/api/config/models")
 def list_available_models():
-    """获取本地代理所拥有的可用 AI 对话模型列表（排除绘图模型）"""
-    global _MODELS_SCANNING, _LAST_SCAN_TIME, _MODELS_CACHE, _LAST_CONFIG_MTIMES
-    from pathlib import Path
-    now = time.time()
-    
-    openclaw_json = resolve_openclaw_home() / "openclaw.json"
-    current_openclaw_mtime = openclaw_json.stat().st_mtime if openclaw_json.exists() else 0
-    config_changed = (
-        current_openclaw_mtime != _LAST_CONFIG_MTIMES["openclaw"]
-    )
-    
-    if config_changed or (now - _LAST_SCAN_TIME > 300):
-        # 1. 快速进行文件级解析（同步，非常快）
-        quick_openclaw = []
-        black_list = ["image", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney", "mj", "drawing", "painting", "cogview", "sd-v", "sd3", "photomaker"]
-        
-        # 1a. 解析 openclaw.json
-        try:
-            if openclaw_json.exists():
-                import json
-                data = json.loads(openclaw_json.read_text(encoding="utf-8"))
-                
-                # Scan providers
-                providers = data.get("models", {}).get("providers", {}) or {}
-                for provider_name, provider_data in providers.items():
-                    for m in provider_data.get("models", []) or []:
-                        model_id = f"{provider_name}/{m.get('id')}"
-                        model_id_lower = model_id.lower()
-                        if not any(kw in model_id_lower for kw in black_list):
-                            if model_id not in quick_openclaw:
-                                quick_openclaw.append(model_id)
-                                
-                # Scan agent defaults models
-                agent_models = data.get("agents", {}).get("defaults", {}).get("models", {}) or {}
-                for model_id in agent_models.keys():
-                    model_id_lower = model_id.lower()
-                    if not any(kw in model_id_lower for kw in black_list):
-                        if model_id not in quick_openclaw:
-                            quick_openclaw.append(model_id)
-        except Exception:
-            pass
-            
-        # 2. 更新缓存（空列表也写入，禁止回落到打包机写死的模型 id）
-        _MODELS_CACHE["openclaw_models"] = quick_openclaw
-
-        _LAST_CONFIG_MTIMES["openclaw"] = current_openclaw_mtime
-        
-        # 3. 异步启动完整的 CLI 后台扫描确认
-        if not _MODELS_SCANNING:
-            _MODELS_SCANNING = True
-            threading.Thread(target=_bg_scan_models, daemon=True).start()
-            
-    return _MODELS_CACHE
+    """从 llm.base_url 拉取可用文本模型。"""
+    cfg = load_system_config()
+    try:
+        from card_llm_client import list_models, resolve_llm_config
+        models = list_models(cfg)
+        llm = resolve_llm_config(cfg)
+        return {
+            "scanned": True,
+            "models": models,
+            "openclaw_models": models,
+            "cliproxy_models": models,
+            "base_url": llm.get("base_url"),
+        }
+    except Exception as exc:
+        print(f"⚠️ LLM 模型目录获取失败: {exc}", flush=True)
+        return {
+            "scanned": True,
+            "models": [],
+            "openclaw_models": [],
+            "cliproxy_models": [],
+            "error": str(exc),
+        }
 
 @router.get("/api/docs/{doc_name}")
 def get_doc(doc_name: str):

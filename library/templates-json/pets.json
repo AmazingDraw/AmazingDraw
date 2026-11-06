@@ -15,7 +15,7 @@
     "| 🎯 使用原则 | 宠物运用铁律 | 必读 |",
     "| 🐱 猫咪 | 12 个细分项 | JAV 第一宠物 |",
     "| 🐶 狗狗 | 10 个细分项 | 温馨/日常 |",
-    "| 🐰 兔子 | 6 个细分项 | 兔女郎/可爱 |",
+    "| 🐰 兔子 | 兔子 | 少女/可爱 |",
     "| 🐹 小型哺乳 | 仓鼠/刺猬/花栗鼠/雪貂 | 少女/反差萌 |",
     "| 🐦 鸟类 | 鹦鹉/文鸟/猫头鹰/鸡 | 森系/异域 |",
     "| 🐟 水族 | 热带鱼/金鱼/水母/龙虾 | 蓝光氛围 |",
@@ -23,7 +23,6 @@
     "| 🦋 昆虫 | 蝴蝶/蜻蜓/萤火虫 | 唯美/点缀 |",
     "| 🐺 幻想生物 | 狼/狐/鹿/精灵 | 幻想/兽人 |",
     "| 🐙 海洋动物 | 章鱼/海豚/海星 | 特殊/幻想 |",
-    "| 👻 COSPLAY 动物元素 | 兽耳/尾巴/爪子/花纹 | cosplay 必备 |",
     "| 🔀 宠物×场景速查 | 经典搭配方案 | 一键组合 |",
     "",
     "---"
@@ -40,9 +39,9 @@
     "- 主要用 **背景/边缘/身体旁** 的方式出现",
     "- 动物的「状态」反映场景情绪（猫蜷缩 = 慵懒，狗盯着 = 闯入感）"
   ],
-  "铁律三：COSPLAY ≠ 真动物": [
-    "兽耳猫尾等装饰元素属于 **服装/COSPLAY**，不是动物道具。",
-    "但可以搭配真实动物制造反差（戴猫耳的女生抱着真猫 = 元猫感）。"
+  "铁律三：COSPLAY ≠ 动物": [
+    "兽耳、装饰尾、肉垫手套等穿戴件在 **`10-发型饰品.md`（COSPLAY 动物元素）**，本库只收活物。",
+    "可搭配制造反差（戴猫耳的女生抱着猫 = 元猫感）。"
   ],
   "铁律四：数量精简": [
     "- 同一画面最多 **1-2 只**动物",
@@ -56,32 +55,32 @@
   "基础猫咪": [
     "| 中文名 | 英文提示词 | 画面建议 |",
     "|--------|-----------|---------|",
-    "| **膝上猫** | `cat sitting on lap, feline resting on thighs` | 慵懒/居家 |",
-    "| **床上猫** | `cat sleeping on bed, kitten curled beside pillow` | 事后/温馨 |",
-    "| **蹭腿猫** | `cat rubbing against bare leg, cat nuzzling ankle` | 亲昵/触感联想 |",
-    "| **窗台猫** | `cat on windowsill, cat silhouetted by light` | 构图框架/光影 |",
-    "| **脚边猫** | `cat at her feet, cat sitting on floor looking up` | 仰视/守护 |",
-    "| **键盘猫** | `cat on keyboard, cat blocking laptop` | OL/居家/搞笑 |"
+    "| **膝上猫** | `small cream cat curled on her lap at the edge of the frame, occupying a corner of the thighs, eyes half-closed` | 慵懒/居家 |",
+    "| **床上猫** | `small kitten curled beside the pillow at the far side of the bed, tiny in frame, asleep` | 事后/温馨 |",
+    "| **蹭腿猫** | `small cat rubbing its cheek against her bare ankle at the bottom of the frame, tail along the floor` | 亲昵/触感联想 |",
+    "| **窗台猫** | `small cat silhouette on the windowsill at the side of the frame, backlit, not the subject` | 构图框架/光影 |",
+    "| **脚边猫** | `small cat sitting at her feet looking up, occupying the lower corner of the frame` | 仰视/守护 |",
+    "| **键盘猫** | `small cat loafed on the laptop keyboard at the desk edge, blocking a corner of the keys` | OL/居家/搞笑 |"
   ],
   "色系猫咪": [
     "| 中文名 | 英文提示词 | 画面建议 |",
     "|--------|-----------|---------|",
-    "| **黑猫** | `black cat, sleek dark feline, green eyes` | 暗黑/哥特/神秘 |",
-    "| **白猫** | `white cat, fluffy persian, cream-colored` | 纯洁/奢华/清纯 |",
-    "| **橘猫** | `orange tabby cat, ginger cat, chubby` | 暖色调/温馨 |",
-    "| **灰猫** | `grey cat, russian blue, silver fur` | 冷淡/高级感 |",
-    "| **三花猫** | `calico cat, tricolor cat` | 日系/经典 |",
-    "| **虎斑猫** | `tabby cat, striped pattern` | 野性/自然 |"
+    "| **黑猫** | `sleek black cat sitting at her feet at the edge of the frame, green eyes, small in the shot` | 暗黑/哥特/神秘 |",
+    "| **白猫** | `fluffy white cat on the windowsill at the side of the frame, cream fur catching light, small in shot` | 纯洁/奢华/清纯 |",
+    "| **橘猫** | `chubby orange tabby curled beside her hip at the edge of the bed, small in frame` | 暖色调/温馨 |",
+    "| **灰猫** | `silver-grey cat loafed on the floor near her feet, occupying a lower corner` | 冷淡/高级感 |",
+    "| **三花猫** | `small calico cat sitting on the tatami at the edge of the frame, looking aside` | 日系/经典 |",
+    "| **虎斑猫** | `striped tabby walking past her ankles at the bottom of the frame, tail up` | 野性/自然 |"
   ],
   "特殊猫咪姿态": [
     "| 中文名 | 英文提示词 | 画面建议 |",
     "|--------|-----------|---------|",
-    "| **猫趴胸口** | `cat lying on her chest, cat on bare skin` | 亲昵/呼吸感 |",
-    "| **猫钻被窝** | `cat under blanket, cat peeking from sheets` | 慵懒/温暖 |",
-    "| **猫看镜头** | `cat staring at camera, cat making eye contact` | 第四面墙/反差 |",
-    "| **猫伸懒腰** | `cat stretching, cat yawning` | 慵懒/镜像 |",
-    "| **猫尾巴翘起** | `cat with tail up, cat walking with raised tail` | 优雅/暗示 |",
-    "| **幼猫** | `tiny kitten, newborn kitten in palm` | 少女/脆弱感 |",
+    "| **猫趴胸口** | `small cat lying on her chest, paws on bare skin, occupying the upper torso corner not the face` | 亲昵/呼吸感 |",
+    "| **猫钻被窝** | `small cat peeking from under the sheet at her hip, only the head visible at the frame edge` | 慵懒/温暖 |",
+    "| **猫看镜头** | `small cat at the bedside looking at camera, occupying a lower corner, not blocking her` | 第四面墙/反差 |",
+    "| **猫伸懒腰** | `small cat stretching on the mattress near her calves, long in a bottom strip of the frame` | 慵懒/镜像 |",
+    "| **猫尾巴翘起** | `small cat walking past the edge of the frame, tail raised, body small against the floor` | 优雅/暗示 |",
+    "| **幼猫** | `tiny kitten asleep in her palm at the lower corner of the frame, smaller than her hand` | 少女/脆弱感 |",
     "",
     "---"
   ],
@@ -103,24 +102,23 @@
   "狗狗场景": [
     "| 中文名 | 英文提示词 | 画面建议 |",
     "|--------|-----------|---------|",
-    "| **脚边趴卧** | `dog lying at her feet, dog on floor` | 陪伴/守护 |",
-    "| **沙发同坐** | `dog on couch beside her, dog sharing sofa` | 放松/日常 |",
-    "| **床尾睡觉** | `dog sleeping at foot of bed` | 温馨/生活感 |",
-    "| **散步归来** | `dog with leash, returning from walk` | 户外/运动 |",
-    "| **门口迎接** | `dog at door, dog waiting` | 回家/温暖 |",
-    "| **叼球玩耍** | `dog holding ball, playful dog` | 活力/可爱 |",
+    "| **脚边趴卧** | `small dog lying at her feet on the floor, occupying the lower corner of the frame` | 陪伴/守护 |",
+    "| **沙发同坐** | `small dog curled on the sofa beside her hip, not covering her torso` | 放松/日常 |",
+    "| **床尾睡觉** | `small dog asleep at the foot of the bed, a compact shape at the frame edge` | 温馨/生活感 |",
+    "| **散步归来** | `small dog at the doorway with a slack leash, standing in a lower corner` | 户外/运动 |",
+    "| **门口迎接** | `small dog waiting just inside the door at the edge of the frame, looking up` | 回家/温暖 |",
+    "| **叼球玩耍** | `small dog holding a ball at her feet, play confined to the lower corner` | 活力/可爱 |",
     "",
     "---"
   ],
   "兔子系列": [
-    "> 兔 = 兔女郎 cosplay 的天然搭档，也是少女系的可爱锚点。",
+    "> 兔 = 少女系可爱锚点。兔耳/兔尾穿戴件在饰品词库，不在本表。",
     "",
     "| 中文名 | 英文提示词 | 画面建议 |",
     "|--------|-----------|---------|",
     "| **膝上兔** | `rabbit on lap, bunny sitting on her legs` | 少女/温柔 |",
     "| **枕边兔** | `rabbit beside pillow, bunny on bed` | 温馨/睡眠 |",
     "| **草丛兔** | `rabbit in grass, bunny outdoors` | 户外/自然 |",
-    "| **兔子耳朵道具** | `rabbit ears headband, bunny ear accessory` | cosplay 对照 |",
     "| **垂耳兔** | `lop-eared rabbit, floppy ears bunny` | 柔软/可爱 |",
     "| **白色巨兔** | `large white rabbit, fluffy angora bunny` | 对比感/纯白 |",
     "",
@@ -241,41 +239,6 @@
     "",
     "---"
   ],
-  "COSPLAY 动物元素": [
-    "> 纯装饰性动物元素。不是真动物，是「人变成动物」的视觉符号。"
-  ],
-  "兽耳系列": [
-    "| 中文名 | 英文提示词 | 画面建议 |",
-    "|--------|-----------|---------|",
-    "| **猫耳** | `cat ears headband, neko ears` | 最常见兽耳 |",
-    "| **狗耳** | `dog ears headband, puppy ears` | 忠犬/可爱 |",
-    "| **兔耳** | `rabbit ears headband, bunny ears` | 兔女郎 |",
-    "| **狐耳** | `fox ears headband, kitsune ears` | 妖狐/诱惑 |",
-    "| **狼耳** | `wolf ears headband, grey wolf ears` | 野性 |",
-    "| **鹿耳** | `deer ears headband, antler headband` | 森林/精灵 |"
-  ],
-  "尾巴系列": [
-    "> 装饰尾须写附着点：腰饰用 `attached at lower back/waist belt`；**尾巴肛塞**须绑肛（见下）。禁悬空尾。",
-    "",
-    "| 中文名 | 英文提示词 | 画面建议 |",
-    "|--------|-----------|---------|",
-    "| **猫尾巴** | `cat tail accessory attached at lower back/waist belt, swishing tail` | 搭配猫耳；腰饰附着 |",
-    "| **狐尾** | `fox tail attached at lower back/waist belt, fluffy orange tail` | 妖狐；腰饰附着 |",
-    "| **兔尾** | `cotton tail attached at lower back/waist, fluffy white ball` | 兔女郎；腰饰附着 |",
-    "| **狼尾** | `wolf tail attached at lower back/waist belt, grey bushy tail` | 兽人；腰饰附着 |",
-    "| **尾巴肛塞** | `tail butt plug inserted in anus, animal tail hanging from between buttocks` | 唯一强制绑肛（与13道具一致） |"
-  ],
-  "其他兽化元素": [
-    "| 中文名 | 英文提示词 | 画面建议 |",
-    "|--------|-----------|---------|",
-    "| **肉垫手套** | `paw gloves, cat paw mittens` | 可爱/互动 |",
-    "| **兽爪** | `claw gloves, animal claws` | 野性/攻击 |",
-    "| **花纹面绘** | `cat whisker face paint, nose whiskers` | 简易猫妆 |",
-    "| **项圈铃铛** | `collar with bell, cat bell collar` | 猫娘标配 |",
-    "| **兽化牙** | `fangs, vampire teeth, cat fangs` | 俏皮/暗黑 |",
-    "",
-    "---"
-  ],
   "宠物×场景速查表": [
     "> 一键搭配方案。宠物选择要和场景、情绪匹配。",
     "",
@@ -291,7 +254,7 @@
     "| 🌙 **夜景** | 黑猫 / 萤火虫 / 猫头鹰 | 暗黑+神秘+氛围 |",
     "| 🎮 **宅女** | 猫（键盘上） / 柴犬 | 反差+可爱+日常 |",
     "| 🏥 **诊所** | 无宠物（或鱼缸） | 冷感+清洁+隔离 |",
-    "| 🎀 **兔女郎** | 真兔 + 兔耳头饰 | 元感+可爱+cosplay |",
+    "| 🎀 **兔女郎** | 兔子 + 兔耳头饰 | 元感+可爱+cosplay |",
     "| 🐍 **暗黑调教** | 蛇缠身 / 黑猫 | 禁忌+危险+诱惑 |",
     "| 🏡 **独居** | 猫 / 仓鼠 / 金鱼 | 孤独+陪伴+温馨 |",
     "| 🎄 **圣诞** | 驯鹿元素 / 白色博美 | 节日+可爱+北欧 |",
@@ -319,11 +282,13 @@
     "| 萤火虫 | 点状暖光 | `firefly light spots in dark room` |",
     "| 蜡烛旁的猫 | 暖光+主体 | `cat beside candle, warm glow on fur` |"
   ],
-  "技巧三：COSPLAY+真动物的「元感」": [
+  "技巧三：COSPLAY+动物的「元感」": [
+    "兽耳/兔耳词条在饰品库。本表只记与动物叠用的画面效果。",
+    "",
     "| 组合 | 效果 | 英文示例 |",
     "|------|------|---------|",
-    "| 猫耳 + 真猫 | 元猫/第四面墙 | `cat ears headband, real cat on lap, looking at each other` |",
-    "| 兔耳 + 真兔 | 可爱叠加 | `bunny ears, rabbit on pillow beside her` |",
+    "| 猫耳 + 猫 | 元猫/第四面墙 | `cat ears headband, cat on lap, looking at each other` |",
+    "| 兔耳 + 兔子 | 可爱叠加 | `bunny ears, rabbit on pillow beside her` |",
     "| 狐耳 + 狐狸摆件 | 妖狐氛围 | `fox ears, kitsune figurine on shelf` |",
     "| 蛇 + 蛇纹内衣 | 危险美学 | `snake around neck, snake print lingerie` |",
     "",

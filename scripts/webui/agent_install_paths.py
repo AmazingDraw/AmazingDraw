@@ -1,42 +1,10 @@
-"""Resolve OpenClaw install home + CLI binary (Windows-friendly discovery)."""
+"""Locate CLI binaries; Windows-aware for .cmd/.bat and npm dirs."""
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
-
-_SCRIPT_DIR = Path(__file__).resolve().parent
-_CONFIG_PATH = _SCRIPT_DIR.parent / "config.json"
-
-
-def _load_cfg(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    if cfg is not None:
-        return cfg
-    if _CONFIG_PATH.exists():
-        try:
-            data = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
-        except Exception:
-            pass
-    return {}
-
-
-def resolve_openclaw_home(cfg: Optional[Dict[str, Any]] = None) -> Path:
-    """Directory that contains openclaw.json.
-
-    Order: config openclaw_home, env OPENCLAW_HOME, then ~/.openclaw.
-    """
-    data = _load_cfg(cfg)
-    raw = data.get("openclaw_home")
-    if isinstance(raw, str) and raw.strip():
-        return Path(os.path.expanduser(raw.strip()))
-    env_raw = (os.environ.get("OPENCLAW_HOME") or "").strip()
-    if env_raw:
-        return Path(os.path.expanduser(env_raw))
-    return Path.home() / ".openclaw"
 
 
 def _win_runnable_without_x_ok(target: Path) -> bool:
@@ -71,7 +39,7 @@ def _windows_search_dirs(home: Path, name: str) -> list:
     programs = localappdata / "Programs"
     if programs.is_dir():
         try:
-            for child in programs.glob("openclaw*"):
+            for child in programs.glob(f"{name}*"):
                 if child.is_dir():
                     dirs.append(child)
         except Exception:
@@ -124,17 +92,3 @@ def resolve_bin_path(name: str) -> str:
 
 
 _resolve_bin_path = resolve_bin_path
-
-
-def resolve_openclaw_bin(cfg: Optional[Dict[str, Any]] = None) -> str:
-    """Absolute path to openclaw / openclaw.cmd when possible."""
-    data = _load_cfg(cfg)
-    raw = data.get("openclaw_bin")
-    if isinstance(raw, str) and raw.strip():
-        p = Path(os.path.expanduser(raw.strip()))
-        if p.exists():
-            try:
-                return str(p.resolve())
-            except Exception:
-                return str(p)
-    return resolve_bin_path("openclaw")

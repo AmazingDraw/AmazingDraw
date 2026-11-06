@@ -2,16 +2,17 @@
 """
 cu-template-bundle.py — 结构化 JSON 词库打包加载器（v3.0）
 ===========================================================
-整合并过滤 AI 组装 Prompt 所需的各类组件模板（饰品、道具、宠物、纹身），
+整合并过滤 AI 组装 Prompt 所需的各类组件模板（饰品、宠物、纹身），
 不包含具体的场景数据库（场景由卡片引擎前端/配置库主导）。
+道具走场景库 `prop_hint`，不再走独立 JSON 词库。
 
 使用示例：
-  ① 一键智能提取（自动加载四类词库的常用章节）：
-     python3 cu-template-bundle.py --auto
+  ① 无场景兜底（甜美/项链/耳饰/眼镜）。create/chain 的 `--bundle auto` 不走这里，而走场景路由：
+    python3 cu-template-bundle.py --auto
 
   ② 精准定向提取（按需拉取指定文件的指定章节）：
-     python3 cu-template-bundle.py --sections "props:振动棒|假阳具,tattoo:图案速查"
-     → 返回：定向过滤后的章节内容
+    python3 cu-template-bundle.py --sections "tattoo:图案速查|皮肤融合,pets:猫"
+    → 返回：定向过滤后的章节内容
 
   ③ 仅返回词库索引（轻量化导航目录）：
      python3 cu-template-bundle.py --index-only
@@ -47,7 +48,6 @@ JSON_TEMPLATE_DIR = SKILL_DIR / "library" / "templates-json"
 TEMPLATE_FILES = [
     "accessories.json",
     "tattoo.json",
-    "props.json",
     "pets.json",
 ]
 
@@ -66,13 +66,9 @@ SKIP_SECTION_PATTERNS = [
 # ⚠️  --auto 模式自动加载的章节（按文件前缀 → 章节名关键词列表）
 # 这些是 AI 组装 prompt 时几乎必读的章节，自动返回可省第二步调用。
 # 模板文件增删章节时，如果 AI 的「必读」范围变化，更新此字典。
+# 无场景时的 CLI `--auto` 兜底（create/chain 的 `--bundle auto` 走场景路由 expand_auto_bundle_spec）
 AUTO_SECTIONS = {
-    "accessories":   ["甜美", "性感情趣", "和风", "项链", "耳饰", "身体饰品"],
-    "tattoo":        ["CJK", "书写模板", "所有权", "侮辱", "指令", "状态", "计数", "部位标注", "下贱短语", "位置×文字", "皮肤融合", "安全写法"],
-    # props：氛围/日常章节优先；性玩具仅末尾低频保留 1 类（跳蛋），避免 --auto 满眼振动棒/假阳具
-    # 风俗/SM/玩具主题可用 --sections "props:振动棒|假阳具|跳蛋|束缚" 按需拉全量
-    "props":         ["使用原则", "道具×场景速查", "酒", "食物", "蜡烛", "花瓣", "枕头", "手机", "影像", "娱乐", "日用", "跳蛋"],
-    "pets":          ["猫", "狗", "兽耳", "尾巴"],
+    "accessories": ["甜美", "项链", "耳饰", "眼镜"],
 }
 
 
@@ -185,7 +181,7 @@ def main():
     p = argparse.ArgumentParser(description="词库一键加载")
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--auto", action="store_true",
-                      help="智能模式：自动加载纹身/宠物/道具/饰品四类词库的常用章节（AUTO_SECTIONS 定义）")
+                      help="无场景兜底：只加载饰品甜美/项链/耳饰/眼镜。带场景请用 create --bundle")
     mode.add_argument("--sections", default=None,
                       help="按需加载章节: '文件前缀:关键词|关键词,...'")
     mode.add_argument("--index-only", action="store_true",

@@ -72,7 +72,7 @@ async function loadQueueStatus() {
       qBadge.className = q.local_queue.length > 0 ? "badge-text warning" : "badge-text success";
     }
     
-    // 1b. 更新 ComfyUI 状态指示灯（仅顶栏；侧栏改展示 OpenClaw/Telegram/Obsidian）
+    // 1b. 更新 ComfyUI 状态指示灯（仅顶栏）
     const comfyDot = document.getElementById("comfy-status-dot");
     if (q.comfyui_online) {
       if (comfyDot) { comfyDot.className = "comfy-status-dot online"; comfyDot.parentNode.title = "ComfyUI 在线"; }
@@ -256,15 +256,15 @@ async function cancelCurrentTask() {
 }
 // 切换到"发送中"状态 (全局状态器，供常规对话与直投逻辑调用)
 async function terminateQueue() {
-  showToast("正在发送终止指令...", "info");
+  showToast("正在停止任务…", "info");
   try {
     const res = await fetch("/api/queue/terminate", { method: "POST" });
     if (res.ok) {
-      showToast("✅ 渲染队列及相关进程已成功终止！", "success");
+      showToast("已停任务并退出 ComfyUI，队列保留", "success");
       loadQueueStatus();
       loadCards();
     } else {
-      showToast("终止队列失败", "error");
+      showToast("终止任务失败", "error");
     }
   } catch (err) {
     showToast("网络请求失败，请稍后重试", "error");

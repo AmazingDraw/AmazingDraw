@@ -2,7 +2,7 @@
    依赖 shell.js 的 switchView / renderChatModeButtons / updateSidebarViewMode；
    由 index.html 在 shell 之后加载。 */
 
-const WEBUI_ONBOARDING_KEY = "amazingdraw_webui_onboarding_v3";
+const WEBUI_ONBOARDING_KEY = "amazingdraw_webui_onboarding_v6";
 
 const _tour = {
   open: false,
@@ -14,20 +14,62 @@ const _tour = {
   overlay: null,
 };
 
-async function _tourScrollSettingsAnchor(anchorId) {
-  const el = document.getElementById(anchorId);
-  if (!el) return;
-  // 同步左侧快速跳转高亮
-  document.querySelectorAll(".sidebar-anchor-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.getAttribute("data-anchor") === anchorId);
+function _tourFrames(n) {
+  const count = Math.max(1, n | 0);
+  return new Promise((resolve) => {
+    const tick = (left) => {
+      if (left <= 0) return resolve();
+      requestAnimationFrame(() => tick(left - 1));
+    };
+    tick(count);
   });
+}
+
+function _tourIsUsable(el) {
+  if (!el || typeof el.getBoundingClientRect !== "function") return false;
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return false;
+  const st = window.getComputedStyle(el);
+  if (st.display === "none" || st.visibility === "hidden" || Number(st.opacity) === 0) return false;
+  return true;
+}
+
+function _tourCollectTargets(selector) {
+  if (!selector) return [];
   try {
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    return Array.from(document.querySelectorAll(selector)).filter(_tourIsUsable);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function _tourWaitTargets(selector, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 900);
+  let found = _tourCollectTargets(selector);
+  while (!found.length && Date.now() < deadline) {
+    await _tourFrames(1);
+    found = _tourCollectTargets(selector);
+  }
+  return found;
+}
+
+function _tourScrollEl(el, block) {
+  if (!el) return;
+  try {
+    el.scrollIntoView({ behavior: "auto", block: block || "nearest", inline: "nearest" });
   } catch (_) {
     el.scrollIntoView(true);
   }
-  // 等布局稳定后再量 spotlight
-  await new Promise((r) => setTimeout(r, 320));
+}
+
+async function _tourScrollSettingsAnchor(anchorId) {
+  const el = document.getElementById(anchorId);
+  if (!el) return;
+  document.querySelectorAll(".sidebar-anchor-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.getAttribute("data-anchor") === anchorId);
+  });
+  _tourScrollEl(el, "start");
+  await _tourFrames(2);
 }
 
 const WEBUI_ONBOARDING_STEPS = [
@@ -35,7 +77,7 @@ const WEBUI_ONBOARDING_STEPS = [
     id: "welcome",
     title: "欢迎使用 Amazing Draw",
     html: `<ul>
-      <li>主界面分为三块：<strong>左侧</strong>历史列表与快捷操作、<strong>中间</strong>对话与结果区、<strong>右侧</strong>模式栏 + 参数看板。</li>
+      <li>主界面分为三块：<strong>左侧</strong>卡片列表与快捷说明、<strong>中间</strong>预览与出卡区、<strong>右侧</strong>模式栏 + 参数看板。</li>
       <li>左上角品牌区的<strong>魔法棒图标</strong>可切换<strong>深色 / 浅色</strong>主题。</li>
       <li>首次打开会自动走完本导览；之后顶栏右侧有一个<strong>?</strong> 图标，可随时重看。</li>
       <li>可点「跳过」提前结束；结束后会恢复进入前的视图与模式。</li>
@@ -44,84 +86,97 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: "cards",
     target: ".sidebar-brand",
     placement: "right",
+    pad: 4,
+    scroll: "nearest",
   },
   {
     id: "mode-rail",
     title: "右侧模式栏",
     html: `<ul>
-      <li><strong>卡片</strong>：浏览、筛选、预览历史卡片与参数；适合整理与复盘。</li>
-      <li><strong>抽卡</strong>：AI 对话驱动建卡 / 连抽 / 常规流程（通常需要 OpenClaw）。</li>
+      <li><strong>卡片</strong>：浏览、筛选、预览历史卡片与参数；出卡只用直投 / 精选。</li>
+      <li><strong>相册</strong>：成品库，可建专辑、拖卡片归档。</li>
       <li><strong>配置</strong>与<strong>文档</strong>：环境设置与完整说明。导览会在后续步骤自动跳转，无需手动点。</li>
     </ul>`,
     view: "chat",
     mode: "cards",
-    target: "#chat-mode-selector",
+    target: "#chat-mode-selector .chat-mode-btn",
     placement: "left",
+    pad: 6,
+    scroll: "nearest",
   },
   {
     id: "cards-sidebar",
     title: "卡片模式 · 左侧列表",
     html: `<ul>
-      <li>点「新建卡片骨架」可先搭结构再填内容。</li>
-      <li>下方是历史卡片列表，可用状态筛选（草稿 / 定稿 / 失败 / 完成）与月份过滤。</li>
+      <li>出卡请用中间输入区的<strong>直投</strong>或<strong>精选</strong>。</li>
+      <li>左侧是历史卡片列表：状态筛选（草稿 / 定稿 / 失败 / 完成）与月份过滤。</li>
       <li>选中卡片后，右侧参数看板会展示对应配置。</li>
     </ul>`,
     view: "chat",
     mode: "cards",
-    target: ".sidebar-actions",
+    target: "#sidebar-card-filters",
     placement: "right",
+    pad: 6,
+    scroll: "nearest",
   },
   {
     id: "chat-center",
-    title: "中间 · 对话与结果",
+    title: "中间 · 预览与出卡",
     html: `<ul>
-      <li>对话流、助手回复、出图结果都在中间主区展示。</li>
-      <li>卡片模式下可结合左侧选中卡理解上下文；抽卡模式下以会话历史为主。</li>
-      <li>滚动区域即当前对话正文，导览高亮的是消息列表主体。</li>
+      <li>选中卡片后的预览、出图结果都在中间主区展示。</li>
+      <li>WebUI 出卡只用下方直投 / 精选；连抽与常规请用 CLI。</li>
+      <li>导览高亮的是中间内容区。</li>
     </ul>`,
     view: "chat",
     mode: "cards",
     target: "#chat-body",
     placement: "left",
+    pad: 6,
+    scroll: "nearest",
   },
   {
     id: "input-tools",
     title: "输入区 · 直投与精选",
     html: `<ul>
-      <li><strong>直投</strong>（闪电）：输入完整英文 prompt，可直接建卡并提交渲染，<em>不依赖 OpenClaw</em>。</li>
-      <li><strong>精选</strong>（骰子）：从 Obsidian 灵感库随机取笔记建卡并入队；需在配置里填好 Obsidian 保管箱路径。</li>
-      <li>发送 / 停止按钮在同一行；抽卡模式下还可配合右侧快捷入口走常规 / 连抽对话流程。</li>
+      <li><strong>直投</strong>（闪电）：在输入框写入完整英文 prompt 再点闪电，建卡并提交渲染。</li>
+      <li><strong>精选</strong>（骰子）：从 Obsidian 灵感库随机取笔记建卡并入队；需在配置里填好保管箱路径。精选不必在输入框打字。</li>
     </ul>`,
     view: "chat",
     mode: "cards",
     target: ".chat-input-row",
     placement: "top",
+    pad: 6,
+    scroll: "nearest",
   },
   {
-    id: "draw-mode",
-    title: "抽卡模式 · 会话列表",
+    id: "album-view",
+    title: "相册 · 成品库",
     html: `<ul>
-      <li>切换到抽卡后，左侧变为会话 / 抽卡历史列表（同一侧栏区域）。</li>
-      <li><strong>AI 连抽 / 常规</strong>需要已安装并可用的 OpenClaw；未安装时，配置页「AI 对话模型」会显示「请先安装 OpenClaw」。</li>
-      <li>直投、精选仍可在输入区旁使用，不装 OpenClaw 也能建卡出图。</li>
+      <li>右侧模式栏的「相册」进入成品库：默认只显示已出图完成卡。</li>
+      <li>点「新建专辑」弹出命名；也可按角色浏览（少见角色收在「其他」）。删专辑不会删卡。</li>
+      <li>鼠标悬停卡片会出现收藏与删除。收藏进「我的收藏」，不用确认；删除要二次确认。</li>
+      <li>点「工作台打开」回到卡片页查看原卡。直投 / 精选仍在工作台。</li>
     </ul>`,
-    view: "chat",
-    mode: "draw",
-    target: "#sidebar-chat-sub",
+    view: "album",
+    mode: null,
+    target: "#album-sidebar-tools",
     placement: "right",
+    pad: 10,
+    scroll: "nearest",
   },
   {
     id: "param-queue",
     title: "参数看板与渲染队列",
     html: `<ul>
       <li>右侧参数看板：在卡片模式下选中一张卡，可查看 / 核对出图相关参数。</li>
-      <li>下方是<strong>渲染队列</strong>：可查看排队与运行中任务，并使用「终止队列」「清空队列」。</li>
-      <li>进入配置 / 文档页时看板会自动收起；回到对话视图会再展开。</li>
+      <li>下方是<strong>渲染队列</strong>：可查看排队与运行中任务。「终止任务」只停当前渲染并退出 ComfyUI，队列保留；「清空队列」才移除等待任务。</li>
+      <li>进入配置 / 文档页时看板会自动收起；回到工作台会再展开。</li>
     </ul>`,
     view: "chat",
     mode: "cards",
     target: "#param-panel",
     placement: "left",
+    pad: 4,
     prepare: async () => {
       if (typeof setParamPanelCollapsed === "function") setParamPanelCollapsed(false);
       await new Promise((r) => setTimeout(r, 200));
@@ -139,19 +194,24 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-nav",
     placement: "right",
+    pad: 6,
+    scroll: "nearest",
   },
   {
     id: "settings-core",
     title: "配置 · 核心服务",
     html: `<ul>
       <li>出图依赖 <strong>ComfyUI</strong>：填写服务地址与本机安装根目录（本区分块靠下也有相关项）。</li>
-      <li><strong>AI 对话模型</strong>：未装 OpenClaw 时这里会提示「请先安装 OpenClaw」；装好后即可选择模型。</li>
-      <li>没装 OpenClaw 也能直投、精选、建卡出图；只有 AI 连抽 / 常规对话需要它。</li>
+      <li><strong>LLM Base URL / 模型</strong>：填 OpenAI 兼容 <code>/v1</code> 端点；模型列表从该地址的 <code>/v1/models</code> 拉取，拉不到会提示无法列出模型。</li>
+      <li>直投、精选出图走 ComfyUI；填槽 / 判定走上面的 LLM 端点，共用同一个模型。</li>
     </ul>`,
     view: "settings",
     mode: null,
     target: "#settings-anchor-core",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-core");
     },
@@ -168,6 +228,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-server",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-server");
     },
@@ -184,6 +247,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-workflow",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-workflow");
     },
@@ -200,6 +266,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-paths",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-paths");
     },
@@ -216,6 +285,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-delivery",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-delivery");
     },
@@ -232,6 +304,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-resolution",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-resolution");
     },
@@ -248,6 +323,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-algorithm",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-algorithm");
     },
@@ -264,6 +342,9 @@ const WEBUI_ONBOARDING_STEPS = [
     mode: null,
     target: "#settings-anchor-scene",
     placement: "left",
+    pad: 8,
+    scroll: "start",
+    maxHeight: 420,
     prepare: async () => {
       await _tourScrollSettingsAnchor("settings-anchor-scene");
     },
@@ -272,27 +353,31 @@ const WEBUI_ONBOARDING_STEPS = [
     id: "docs",
     title: "文档页",
     html: `<ul>
-      <li>这里是完整操作说明、依赖与安装相关文档的阅读区。</li>
-      <li>遇到 OpenClaw、工作流、路径等问题可先查文档再改配置。</li>
+      <li>左侧目录切换说明文档；右侧是正文阅读区。</li>
+      <li>遇到工作流、路径等问题可先查文档再改配置。</li>
       <li>以后想重看导览：点顶栏右侧<strong>?</strong> 图标即可。</li>
     </ul>`,
     view: "docs",
     mode: null,
-    target: "#docs-reader-content-page",
-    placement: "left",
+    target: "#docs-sidebar-tabs",
+    placement: "right",
+    pad: 6,
+    scroll: "nearest",
   },
   {
     id: "done",
     title: "导览结束",
     html: `<ul>
-      <li>你已经走完主界面、抽卡、参数队列、配置与文档的关键路径。</li>
+      <li>你已经走完主界面、出卡、参数队列、配置与文档的关键路径。</li>
       <li>重看入口：顶栏右侧这个<strong>?</strong>（鼠标悬停会显示「新手导览」）。</li>
-      <li>点「完成」后，会恢复进入导览前的视图与聊天模式。</li>
+      <li>点「完成」后，会恢复进入导览前的视图与模式。</li>
     </ul>`,
     view: "chat",
     mode: "cards",
-    target: ".chat-header-actions .btn-onboarding-launch",
+    target: "#view-chat .chat-header-actions .btn-onboarding-launch",
     placement: "bottom",
+    pad: 6,
+    scroll: "nearest",
   },
 ];
 
@@ -494,13 +579,38 @@ function _tourEscapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-function _tourFindTarget(selector) {
-  if (!selector) return null;
-  try {
-    return document.querySelector(selector);
-  } catch (_) {
-    return null;
+function _tourUnionVisibleRect(els, pad) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    const visL = Math.max(0, r.left);
+    const visT = Math.max(0, r.top);
+    const visR = Math.min(vw, r.right);
+    const visB = Math.min(vh, r.bottom);
+    if (visR - visL < 1 || visB - visT < 1) continue;
+    left = Math.min(left, visL);
+    top = Math.min(top, visT);
+    right = Math.max(right, visR);
+    bottom = Math.max(bottom, visB);
   }
+  if (!isFinite(left)) return null;
+  const margin = 6;
+  const p = Number.isFinite(pad) ? pad : 6;
+  left = Math.max(margin, left - p);
+  top = Math.max(margin, top - p);
+  right = Math.min(vw - margin, right + p);
+  bottom = Math.min(vh - margin, bottom + p);
+  return {
+    top,
+    left,
+    width: Math.max(20, right - left),
+    height: Math.max(20, bottom - top),
+  };
 }
 
 function _tourPositionUI(step) {
@@ -512,26 +622,22 @@ function _tourPositionUI(step) {
     el.classList.remove("onboarding-target-alive");
   });
 
-  const target = step && step.target ? _tourFindTarget(step.target) : null;
-  const pad = 8;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const targets = step && step.target ? _tourCollectTargets(step.target) : [];
+  const hole = targets.length ? _tourUnionVisibleRect(targets, step.pad) : null;
+  if (hole && step.maxHeight && hole.height > step.maxHeight) {
+    hole.height = step.maxHeight;
+  }
 
-  if (target) {
-    const r = target.getBoundingClientRect();
-    const top = Math.max(8, r.top - pad);
-    const left = Math.max(8, r.left - pad);
-    const width = Math.min(vw - left - 8, r.width + pad * 2);
-    const height = Math.min(vh - top - 8, r.height + pad * 2);
+  if (hole) {
+    targets.forEach((el) => el.classList.add("onboarding-target-alive"));
+    const radius = Math.max(8, Math.min(14, Math.round(Math.min(hole.width, hole.height) * 0.08)));
     spotlight.classList.add("is-visible");
-    spotlight.style.top = `${top}px`;
-    spotlight.style.left = `${left}px`;
-    spotlight.style.width = `${Math.max(24, width)}px`;
-    spotlight.style.height = `${Math.max(24, height)}px`;
-    target.classList.add("onboarding-target-alive");
-
-    const placement = (step && step.placement) || "auto";
-    _tourPlaceCard(card, { top, left, width, height }, placement);
+    spotlight.style.top = `${Math.round(hole.top)}px`;
+    spotlight.style.left = `${Math.round(hole.left)}px`;
+    spotlight.style.width = `${Math.round(hole.width)}px`;
+    spotlight.style.height = `${Math.round(hole.height)}px`;
+    spotlight.style.borderRadius = `${radius}px`;
+    _tourPlaceCard(card, hole, (step && step.placement) || "auto");
   } else {
     spotlight.classList.remove("is-visible");
     spotlight.style.width = "0px";
@@ -544,44 +650,47 @@ function _tourPositionUI(step) {
 }
 
 function _tourPlaceCard(card, hole, placement) {
-  const gap = 14;
+  const gap = 12;
   const cw = card.offsetWidth || 420;
-  const ch = card.offsetHeight || 240;
+  const ch = Math.min(card.offsetHeight || 240, Math.min(window.innerHeight * 0.7, 560));
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  const candidates = [];
-  const push = (name, top, left) => candidates.push({ name, top, left });
+  const clamp = (top, left) => ({
+    top: Math.min(Math.max(12, top), Math.max(12, vh - ch - 12)),
+    left: Math.min(Math.max(12, left), Math.max(12, vw - cw - 12)),
+  });
+  const overlapArea = (top, left) => {
+    const x = Math.max(0, Math.min(left + cw, hole.left + hole.width) - Math.max(left, hole.left));
+    const y = Math.max(0, Math.min(top + ch, hole.top + hole.height) - Math.max(top, hole.top));
+    return x * y;
+  };
 
-  push("right", hole.top, hole.left + hole.width + gap);
-  push("left", hole.top, hole.left - cw - gap);
-  push("bottom", hole.top + hole.height + gap, hole.left);
-  push("top", hole.top - ch - gap, hole.left);
-
+  const raw = {
+    right: { top: hole.top, left: hole.left + hole.width + gap },
+    left: { top: hole.top, left: hole.left - cw - gap },
+    bottom: { top: hole.top + hole.height + gap, left: hole.left },
+    top: { top: hole.top - ch - gap, left: hole.left },
+  };
   let order = ["right", "left", "bottom", "top"];
   if (placement && placement !== "auto") {
     order = [placement].concat(order.filter((x) => x !== placement));
   }
 
-  let chosen = null;
+  let best = null;
   for (const name of order) {
-    const c = candidates.find((x) => x.name === name);
-    if (!c) continue;
-    let top = c.top;
-    let left = c.left;
-    if (left < 12) left = 12;
-    if (left + cw > vw - 12) left = Math.max(12, vw - cw - 12);
-    if (top < 12) top = 12;
-    if (top + ch > vh - 12) top = Math.max(12, vh - ch - 12);
+    const c = clamp(raw[name].top, raw[name].left);
+    const ov = overlapArea(c.top, c.left);
     const fits =
-      c.left >= 8 &&
-      c.left + cw <= vw - 8 &&
-      c.top >= 8 &&
-      c.top + ch <= vh - 8;
-    chosen = { name, top, left, fits };
-    if (fits) break;
+      raw[name].left >= 8 &&
+      raw[name].left + cw <= vw - 8 &&
+      raw[name].top >= 8 &&
+      raw[name].top + ch <= vh - 8;
+    const score = (fits ? 1e7 : 0) - ov;
+    if (!best || score > best.score) best = { name, top: c.top, left: c.left, score };
+    if (fits && ov === 0) break;
   }
-  if (!chosen) {
+  if (!best) {
     card.style.top = "50%";
     card.style.left = "50%";
     card.style.transform = "translate(-50%, -50%)";
@@ -589,9 +698,9 @@ function _tourPlaceCard(card, hole, placement) {
     return;
   }
   card.style.transform = "none";
-  card.style.top = `${chosen.top}px`;
-  card.style.left = `${chosen.left}px`;
-  card.dataset.placement = chosen.name;
+  card.style.top = `${Math.round(best.top)}px`;
+  card.style.left = `${Math.round(best.left)}px`;
+  card.dataset.placement = best.name;
 }
 
 async function showWebuiOnboardingStep(stepIndex) {
@@ -618,8 +727,12 @@ async function showWebuiOnboardingStep(stepIndex) {
     } catch (_) {}
   }
 
-  // 再等一帧让视图 class / 侧栏切换完成
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await _tourFrames(2);
+  if (step.target) {
+    const els = await _tourWaitTargets(step.target, 1000);
+    if (els[0]) _tourScrollEl(els[0], step.scroll || "nearest");
+    await _tourFrames(2);
+  }
 
   const isFirst = idx === 0;
   const isLast = idx === steps.length - 1;
@@ -638,11 +751,15 @@ async function showWebuiOnboardingStep(stepIndex) {
     nextBtn.textContent = isLast ? "完成" : "下一步";
   }
 
+  const spotlight = document.getElementById("onboarding-spotlight");
+  if (spotlight) spotlight.classList.add("is-jump");
   _tourPositionUI(step);
-  // 部分目标（参数看板、设置滚动）稍后尺寸会变，再测一次
+  await _tourFrames(1);
+  _tourPositionUI(step);
+  if (spotlight) spotlight.classList.remove("is-jump");
   setTimeout(() => {
     if (_tour.open && _tour.stepIndex === idx) _tourPositionUI(step);
-  }, 120);
+  }, 80);
 }
 
 function bindWebuiOnboardingReplay() {

@@ -7,7 +7,7 @@ templates-jav/ 下的 markdown 是词库真相源；templates-json/ 下的 JSON
 
 用法：
   python3 md2json.py            # 转换全部注册词库
-  python3 md2json.py tattoo     # 只转指定词库（accessories/tattoo/props/pets）
+  python3 md2json.py tattoo     # 只转指定词库（accessories/tattoo/pets）
   python3 md2json.py --check    # 只对比不写入，报告 md 与 JSON 是否漂移
 
 转换规则：
@@ -29,7 +29,6 @@ JSON_DIR = SKILL_DIR / "library" / "templates-json"
 LIBRARIES = {
     "accessories": "10-发型饰品.md",
     "tattoo":      "12-纹身标记.md",
-    "props":       "13-道具专项.md",
     "pets":        "14-宠物动物.md",
 }
 
