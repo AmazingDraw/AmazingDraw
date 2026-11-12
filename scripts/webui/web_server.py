@@ -189,7 +189,7 @@ app.add_middleware(
 )
 
 
-CONFIG_PATH = SCRIPT_DIR.parent / "config.json"
+CONFIG_PATH = amazingdraw_paths.config_file()
 
 # 已废弃的配置键：读取时剔除、保存时不写回，避免旧 config.json 长期携带无人消费的字段
 DEPRECATED_CONFIG_KEYS = (
@@ -206,7 +206,6 @@ DEPRECATED_CONFIG_KEYS = (
     "llm_fallback_models",
     "openclaw_ws_timeout_seconds",
 )
-PRESETS_DIR = SCRIPT_DIR.parent / "presets"
 
 
 def _hydrate_llm_config(user_config: Dict[str, Any]) -> None:
@@ -219,7 +218,7 @@ def _hydrate_llm_config(user_config: Dict[str, Any]) -> None:
             "base_url": "http://127.0.0.1:8317/v1",
             "api_key": "",
             "model": str(user_config.get("llm_model") or ""),
-            "timeout_seconds": 30,
+            "timeout_seconds": 10,
             "retry_limit": int(user_config.get("llm_retry_limit") or 1),
         }
     disk_llm = user_config.get("llm") if isinstance(user_config.get("llm"), dict) else {}
@@ -235,6 +234,26 @@ def _hydrate_llm_config(user_config: Dict[str, Any]) -> None:
     user_config["llm_retry_limit"] = resolved["retry_limit"]
 
 
+def _load_builtin_workflows_safe() -> dict:
+    try:
+        from card_config import load_builtin_workflows
+        return load_builtin_workflows()
+    except Exception:
+        return {}
+
+
+def _get_default_workflow_from_builtin() -> str:
+    return _load_builtin_workflows_safe().get("default_workflow", "moody_zib_zit")
+
+
+def _get_aliases_from_builtin() -> dict:
+    return dict(_load_builtin_workflows_safe().get("aliases", {}))
+
+
+def _get_workflows_from_builtin() -> dict:
+    return dict(_load_builtin_workflows_safe().get("workflows", {}))
+
+
 def load_system_config() -> Dict[str, Any]:
     """载入本地 config.json，自带默认值兜底"""
     defaults = {
@@ -248,7 +267,7 @@ def load_system_config() -> Dict[str, Any]:
             "base_url": "http://127.0.0.1:8317/v1",
             "api_key": "",
             "model": "",
-            "timeout_seconds": 30,
+            "timeout_seconds": 10,
             "retry_limit": 1,
         },
         "delivery_telegram": True,
@@ -304,44 +323,25 @@ def load_system_config() -> Dict[str, Any]:
             }
         },
         "exposure_limit": ["half_covered", "half_nude"],
-        "restrict_roles": True,
         "disabled_celebrities": [],
         "enable_ai_check": False,
+        "enable_independent_llm": True,
+        "llm_calls": {
+            "route_hint": True,
+            "multi_roles": True,
+            "body_classify": True,
+            "metadata": True,
+        },
+        "enable_cjk_sanitization": True,
         "cloud": {
             "enabled": False,
             "image_backend": "comfy",
             "delivery": "telegram",
             "exposure_allowed_modes": ["half_covered"],
         },
-        "default_workflow": "moody",
-        "workflows_aliases": {
-            "moody": "moody_zib_zit"
-        },
-        "workflows": {
-            "moody_zib_zit": {
-                "name": "Moody ZIB+ZIT",
-                "workflow_path": "workflows/Moody_ZIB_ZIT_20步_CFG3_512x768.json",
-                "filename_prefix": "Moody",
-                "prompt_nodes": ["620", "627", "660"],
-                "negative_nodes": ["674"],
-                "negative_text": "low quality, worst quality, blurry, jpeg artifacts, watermark, deformed, bad anatomy, bad mouth, bad teeth, weird tongue, distorted lips, extra limbs, extra fingers, mutated hands, bad proportions, ugly, disfigured, cropped, out of frame, semen on chin, cum on chin, fluid on chin",
-                "lora_nodes": ["632", "671"],
-                "seed_nodes": ["654", "649", "688"],
-                "size_nodes": ["606"],
-                "seed_type": "rgthree",
-                "deforum_fix": True,
-                "link_key": "links",
-                "node_key": "nodes",
-                "prompt_style": "photorealistic_portrait",
-                "description": "Moody ZIB+ZIT 双阶段素人/明星写真，20有效步，512x768初始→768x1152输出，支持 girls_like_zi LoRA",
-                "lora_subdir": "girls_like_zi",
-                "lora_input_key": "LORA_1",
-                "node_input_overrides": {},
-                "default_steps": 20,
-                "default_width": 512,
-                "default_height": 768
-            }
-        }
+        "default_workflow": _get_default_workflow_from_builtin(),
+        "workflows_aliases": _get_aliases_from_builtin(),
+        "workflows": _get_workflows_from_builtin(),
     }
     
     # 智能检测：如果默认 output_dir 不存在，降级到用户 Pictures（仅作代码层占位，本机路径以 config.json 为准）
@@ -359,6 +359,11 @@ def load_system_config() -> Dict[str, Any]:
             user_config.pop("agent_backend", None)
             user_config["chat_mode"] = "cards"
             _hydrate_llm_config(user_config)
+            try:
+                from card_llm_client import hydrate_independent_llm_config
+                hydrate_independent_llm_config(user_config)
+            except Exception:
+                pass
             for key in DEPRECATED_CONFIG_KEYS:
                 user_config.pop(key, None)
             try:
@@ -374,8 +379,7 @@ def load_system_config() -> Dict[str, Any]:
                     val = os.path.expanduser(config[k])
                     if val.strip() and not os.path.isabs(val):
                         try:
-                            config_real_dir = CONFIG_PATH.resolve().parent
-                            val = str((config_real_dir / val).resolve())
+                            val = str((SCRIPT_DIR.parent.resolve() / val).resolve())
                         except Exception:
                             pass
                     config[k] = val
@@ -396,8 +400,7 @@ def load_system_config() -> Dict[str, Any]:
             val = os.path.expanduser(config[k])
             if val.strip() and not os.path.isabs(val):
                 try:
-                    config_real_dir = CONFIG_PATH.resolve().parent
-                    val = str((config_real_dir / val).resolve())
+                    val = str((SCRIPT_DIR.parent.resolve() / val).resolve())
                 except Exception:
                     pass
             config[k] = val
@@ -515,6 +518,20 @@ def save_system_config(config_data: Dict[str, Any]):
         if current_config.get("scene_registry", {}).get("libraries"):
             config_data = dict(config_data)
             config_data.pop("scene_registry", None)
+
+    # 防护：旧前端页面整包回传 workflows 时，禁止把磁盘已配置的明星 LoRA 节点抹空
+    incoming_wfs = config_data.get("workflows")
+    existing_wfs = current_config.get("workflows")
+    if isinstance(incoming_wfs, dict) and isinstance(existing_wfs, dict):
+        from card_config import merge_preserved_workflows
+        config_data = dict(config_data)
+        config_data["workflows"] = merge_preserved_workflows(
+            existing_wfs,
+            incoming_wfs,
+            replace=bool(config_data.get("_replace_workflows")),
+        )
+    config_data = dict(config_data)
+    config_data.pop("_replace_workflows", None)
             
     for k, v in config_data.items():
         current_config[k] = v

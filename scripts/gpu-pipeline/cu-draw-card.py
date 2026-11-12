@@ -10,7 +10,7 @@ cu-draw-card.py — GPU 渲染执行脚本
 - 提示词组装、check、review、交互数字位都在 card-engine 层完成；这里不再重复那套逻辑
 
 相关路径：
-- 工作流元数据：`scripts/config.json` → `workflows` / `default_workflow` / `workflows_aliases`（唯一真相源）
+- 工作流元数据：`~/.amazingdraw/config.json` → `workflows` / `default_workflow` / `workflows_aliases`（唯一真相源），以 `card-engine/config/workflows.json` 为只读基底
 - Comfy 图 JSON：`{comfyui_dir}/workflows/...`（由 config 里 workflow_path 指向）
 - 调用链：`card_cli_commands.py (cmd_submit) -> cu-submit.sh -> cu-worker.sh -> cu-draw-card.py -> cu-deliver.sh`
 
@@ -20,27 +20,18 @@ cu-draw-card.py — GPU 渲染执行脚本
 - `python3 cu-draw-card.py --prompt-file /tmp/p.txt --amateur`
 """
 
-import sys
-from pathlib import Path as _Path
-for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
-    _native = _p / 'card_engine_core' / 'native'
-    if _native.is_dir() and (
-        list(_native.glob('card_asset_loader*.so'))
-        or list(_native.glob('card_asset_loader*.pyd'))
-    ):
-        if str(_native) not in sys.path:
-            sys.path.insert(0, str(_native))
-        break
 import hashlib, json, os, random, re, sys, time, argparse
 from pathlib import Path
-from card_config import TMP_DIR, CARDS_DIR
 import requests
 import logging
 import logging.handlers
 from collections import deque
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-SYSTEM_CONFIG_PATH = SCRIPT_DIR.parent / "config.json"
+if str(SCRIPT_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR.parent))
+import amazingdraw_paths  # noqa: E402
+SYSTEM_CONFIG_PATH = amazingdraw_paths.config_file()
 STATE_DIR = TMP_DIR
 RANDOM_HISTORY_FILE = STATE_DIR / "random-history.json"
 RECENT_CELEBRITY_WINDOW = 3
@@ -48,10 +39,11 @@ API = "http://127.0.0.1:8188"
 LOG_FILE = str(TMP_DIR) + "/cu-draw-card.log"
 
 def load_global_config() -> dict:
-    """加载 scripts/config.json（全局 + workflows 元数据）。"""
-    if SYSTEM_CONFIG_PATH.exists():
+    """加载 ~/.amazingdraw/config.json（全局 + workflows 元数据）。"""
+    cfg_path = amazingdraw_paths.config_file()
+    if cfg_path.exists():
         try:
-            with open(SYSTEM_CONFIG_PATH, encoding="utf-8") as f:
+            with open(cfg_path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
@@ -102,19 +94,47 @@ from resolver import role_resolver
 
 celebs_data = role_resolver.load_celebrities()
 CELEBRITY_MAP = celebs_data.get("z", {})
+KREA2_CELEBRITY_MAP = celebs_data.get("krea2", {})
 FLUX_CELEBRITY_MAP = celebs_data.get("flux", {})
 
 
 RGTHREE_CONTROLS = {'randomize', 'fixed', 'increment', 'decrement', 'randomize (GPU)', 'fixed (GPU)'}
+def _resolve_builtin_aliases() -> dict:
+    try:
+import sys
+from pathlib import Path as _Path
+for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
+    _native = _p / 'card_engine_core' / 'native'
+    if _native.is_dir() and (
+        list(_native.glob('card_asset_loader*.so'))
+        or list(_native.glob('card_asset_loader*.pyd'))
+    ):
+        if str(_native) not in sys.path:
+            sys.path.insert(0, str(_native))
+        break
+        from card_config import get_builtin_aliases
+        return get_builtin_aliases()
+    except Exception:
+        return {
+            "zi": "moody_zib_zit",
+            "z": "moody_zib_zit",
+            "krea": "krea2_turbo",
+            "moss": "moody_moss",
+        }
+
+
+BUILTIN_WORKFLOW_ALIASES = _resolve_builtin_aliases()
 
 def load_workflow_defaults() -> dict:
-    """默认工作流与别名：唯一来源 scripts/config.json。"""
+    """默认工作流与别名：实时读取 ~/.amazingdraw/config.json 并以基底配置兜底。"""
+    live_cfg = load_global_config() or GLOBAL_CONFIG
+    merged_aliases = _resolve_builtin_aliases()
+    if isinstance(live_cfg.get("workflows_aliases"), dict):
+        merged_aliases.update(live_cfg["workflows_aliases"])
     return {
-        "default_workflow": GLOBAL_CONFIG.get("default_workflow", "moody_zib_zit"),
-        "lock_size_to_workflow": GLOBAL_CONFIG.get("lock_size_to_workflow", True),
-        "aliases": GLOBAL_CONFIG.get("workflows_aliases") or {
-            "moody": "moody_zib_zit",
-        },
+        "default_workflow": live_cfg.get("default_workflow", "moody_zib_zit"),
+        "lock_size_to_workflow": live_cfg.get("lock_size_to_workflow", True),
+        "aliases": merged_aliases,
     }
 
 
@@ -122,6 +142,8 @@ def load_workflow_defaults() -> dict:
 WIDGET_NAMES = {
     "SaveImage": ["filename_prefix"],
     "LoraLoader": ["lora_name", "strength_model", "strength_clip"],
+    "LoraLoaderModelOnly": ["lora_name", "strength_model"],
+    "CLIPTextEncode": ["text"],
     "UnetLoaderGGUF": ["unet_name"],
     "DualCLIPLoaderGGUF": ["clip_name1", "clip_name2", "type"],
     "VAELoader": ["vae_name"],
@@ -132,6 +154,9 @@ WIDGET_NAMES = {
     "CLIPLoader": ["clip_name", "type", "device"],
     "EmptyLatentImage": ["width", "height", "batch_size"],
     "KSampler": ["seed", "control_after_generate", "steps", "cfg", "sampler_name", "scheduler", "denoise"],
+    "KSamplerAdvanced": ["add_noise", "noise_seed", "control_after_generate", "steps", "cfg", "sampler_name", "scheduler", "start_at_step", "end_at_step", "return_with_leftover_noise"],
+    "ModelSamplingAuraFlow": ["shift"],
+    "SeedNode": ["seed", "control_after_generate"],
 }
 
 
@@ -200,51 +225,68 @@ def pick_non_repeating_celebrity_auto():
 
 def pick_celebrity(args):
     model_type = getattr(args, 'model_type', 'auto')
-    if args.lora and args.lora in CELEBRITY_MAP:
-        return args.lora, *CELEBRITY_MAP[args.lora], 'z'
-    if args.lora and args.lora in FLUX_CELEBRITY_MAP:
-        return args.lora, *FLUX_CELEBRITY_MAP[args.lora], 'flux'
+    if model_type == 'auto':
+        model_type = role_resolver.celebrity_pool_name_for_workflow(
+            getattr(args, 'mode', None) or get_default_workflow_name()
+        )
+    pool_maps = {
+        'z': (CELEBRITY_MAP, 'z'),
+        'krea2': (KREA2_CELEBRITY_MAP, 'krea2'),
+        'flux': (FLUX_CELEBRITY_MAP, 'flux'),
+    }
+    pool, pool_name = pool_maps.get(model_type, (CELEBRITY_MAP, 'z'))
+    if args.lora and args.lora in pool:
+        return args.lora, *pool[args.lora], pool_name
     if args.trigger:
-        for k, (n, t) in CELEBRITY_MAP.items():
+        for k, (n, t) in pool.items():
             if args.trigger in t or args.trigger in n:
-                return k, n, t, 'z'
-        for k, (n, t) in FLUX_CELEBRITY_MAP.items():
-            if args.trigger in t or args.trigger in n:
-                return k, n, t, 'flux'
-    # 随机抽：目前仅支持 Z-Image 独占，最近3次不重复
-    if model_type == 'z':
-        return pick_non_repeating_celebrity(CELEBRITY_MAP, 'z')
-    elif model_type == 'flux':
-        return pick_non_repeating_celebrity(FLUX_CELEBRITY_MAP, 'flux')
-    else:  # auto
-        return pick_non_repeating_celebrity_auto()
+                return k, n, t, pool_name
+        raise ValueError(f"{pool_name} 明星池没有「{args.trigger}」")
+    if not pool:
+        raise RuntimeError(f"{pool_name}_celebrity_pool_empty")
+    return pick_non_repeating_celebrity(pool, pool_name)
 
 
 def normalize_workflow_name(mode: str) -> str:
     defaults = load_workflow_defaults()
     aliases = defaults.get('aliases') or {}
-    mode = mode or defaults.get('default_workflow') or 'moody_zib_zit'
-    return aliases.get(mode, mode)
+    raw = str(mode or defaults.get('default_workflow') or 'moody_zib_zit').strip()
+    lowered = raw.lower()
+    if lowered in aliases:
+        return aliases[lowered]
+    return aliases.get(raw, raw)
 
 
 def get_default_workflow_name() -> str:
     defaults = load_workflow_defaults()
-    return defaults.get('default_workflow') or 'moody_zib_zit'
+    return normalize_workflow_name(defaults.get('default_workflow') or 'moody_zib_zit')
 
 
 def load_workflow_config(mode: str) -> dict:
-    """加载指定工作流元数据：唯一来源 scripts/config.json → workflows。"""
+    """加载指定工作流元数据：实时读取 ~/.amazingdraw/config.json → workflows，若无则从基底 workflows.json 读取。"""
     mode = normalize_workflow_name(mode)
-    workflows = GLOBAL_CONFIG.get("workflows")
+    live_cfg = load_global_config() or GLOBAL_CONFIG
+    workflows = live_cfg.get("workflows")
     cfg = None
     if isinstance(workflows, dict) and mode in workflows and isinstance(workflows[mode], dict):
         cfg = dict(workflows[mode])
+        cfg["_workflow_id"] = mode
+
+    if not cfg:
+        try:
+            from card_config import load_workflow_config as _load_base_wf
+            base_cfg = _load_base_wf(mode)
+            if base_cfg and isinstance(base_cfg, dict):
+                cfg = dict(base_cfg)
+                cfg["_workflow_id"] = mode
+        except Exception:
+            pass
 
     if not cfg:
         available = sorted(workflows.keys()) if isinstance(workflows, dict) else []
         print(
             f"❌ 工作流配置不存在: {mode}\n"
-            f"   请在 scripts/config.json 的 workflows 中配置。\n"
+            f"   请在 ~/.amazingdraw/config.json 的 workflows 中配置，或确认是否属于 workflows.json 基底。\n"
             f"   当前可用: {', '.join(available) if available else '(无)'}",
             file=sys.stderr,
         )
@@ -252,7 +294,7 @@ def load_workflow_config(mode: str) -> dict:
 
     cfg.setdefault("name", mode)
     validate_config_and_workflow(mode, cfg)
-    log.info(f"WORKFLOW_CFG_SOURCE | config.json#workflows.{mode}")
+    log.info(f"WORKFLOW_CFG_SOURCE | ~/.amazingdraw/config.json#workflows.{mode}")
     return cfg
 
 
@@ -337,6 +379,8 @@ def convert_ui_to_api(workflow_data: dict) -> dict:
     api = {}
     for nid_str, node in nodes.items():
         class_type = node.get("class_type", node.get("type", ""))
+        if class_type in {"MarkdownNote", "Note", "Label (rgthree)"}:
+            continue
         inputs = {}
         input_defs = node.get("inputs", [])
         wv = node.get("widgets_values", [])
@@ -375,7 +419,18 @@ def convert_ui_to_api(workflow_data: dict) -> dict:
             elif is_widget:
                 inputs[name] = ""
 
+        # 补充 widgets_values_named 或 known_names 中尚未填入 inputs 的控件
+        wvn = node.get("widgets_values_named")
+        if isinstance(wvn, dict):
+            for k, val in wvn.items():
+                if k not in inputs and val is not None:
+                    inputs[k] = val
         known_names = WIDGET_NAMES.get(class_type, [])
+        for i, name in enumerate(known_names):
+            if name not in inputs and i < len(wv):
+                val = wv[i]
+                if val is not None:
+                    inputs[name] = val
         for i in range(widget_idx, len(wv)):
             if i < len(known_names) and known_names[i] not in inputs:
                 val = wv[i]
@@ -393,11 +448,46 @@ def inject_and_submit(cfg: dict, prompt_text: str, lora_file: str = None, seed: 
     with open(resolve_workflow_path(cfg.get("workflow_path"))) as f:
         data = json.load(f)
 
+    # 0.5 明星 LoRA 与目标工作流架构对齐（zi <-> krea2 同名自动重映射，异构缺失显式阻断）
+    if lora_file:
+        wf_identity = cfg.get("_workflow_id") or cfg.get("name") or ""
+        try:
+            lora_file = role_resolver.resolve_lora_for_workflow(lora_file, wf_identity)
+        except ValueError as exc:
+            print(f"❌ {exc}", file=sys.stderr)
+            sys.exit(1)
+
     # 1. UI→API 格式转换
     if "nodes" in data and "links" in data:
         api = convert_ui_to_api(data)
     else:
         api = data
+
+    # 1.1 素人无人物包时，仅摘除静态挂载类明星 LoRA 节点（LoraLoader / LoraLoaderModelOnly，如 Krea@23），
+    #     将下游连回其上游；Power Lora Loader (rgthree) 空槽天然直通，原样保留。
+    if not lora_file and cfg.get("lora_input_key", "LORA_1") == "lora_name":
+        static_loras_cfg = cfg.get("static_loras") or {}
+        for nid in cfg.get("lora_nodes") or []:
+            nid_str = str(nid)
+            if nid_str in static_loras_cfg or nid_str not in api:
+                continue
+            cls_name = api[nid_str].get("class_type")
+            if cls_name not in {"LoraLoader", "LoraLoaderModelOnly"}:
+                continue
+            node_in = api[nid_str].get("inputs") or {}
+            up_model = node_in.get("model")
+            up_clip = node_in.get("clip")
+            for other in api.values():
+                other_in = other.get("inputs")
+                if not isinstance(other_in, dict):
+                    continue
+                for k, v in list(other_in.items()):
+                    if isinstance(v, list) and len(v) == 2 and str(v[0]) == nid_str:
+                        if int(v[1]) == 0 and up_model is not None:
+                            other_in[k] = up_model
+                        elif int(v[1]) == 1 and up_clip is not None:
+                            other_in[k] = up_clip
+            del api[nid_str]
 
 
     # 1.5. 自动注入纹身皮肤融合词（有纹身但缺融合词时补齐）
@@ -464,9 +554,16 @@ def inject_and_submit(cfg: dict, prompt_text: str, lora_file: str = None, seed: 
             if not lora_path:
                 continue
 
+            disk_lora = Path(COMFYUI_DIR) / "models" / "loras" / lora_path
+            if not disk_lora.is_file():
+                print(f"❌ LoRA 权重文件不存在: {disk_lora}", file=sys.stderr)
+                sys.exit(1)
+
             if lora_input_key == "lora_name":
-                # Flux LoraLoader 格式：直接设 lora_name widget
+                # LoraLoader / LoraLoaderModelOnly：子目录相对 models/loras
                 api[nid_str]["inputs"]["lora_name"] = lora_path
+                if "strength_model" in api[nid_str].get("inputs", {}) or api[nid_str].get("class_type") == "LoraLoaderModelOnly":
+                    api[nid_str]["inputs"]["strength_model"] = 1.0
             else:
                 # Z-Image PowerLoraLoader 格式：LORA_1 dict
                 api[nid_str]["inputs"]["LORA_1"] = {
@@ -740,8 +837,8 @@ def main():
     p.add_argument("--trigger")
     p.add_argument("--prompt")
     p.add_argument("--prompt-file")
-    p.add_argument("--model-type", dest="model_type", default="auto", choices=["auto","z","flux"],
-                        help="z=Z-Image, flux=Flux GGUF, auto=随机选")
+    p.add_argument("--model-type", dest="model_type", default="auto", choices=["auto","z","krea2","flux"],
+                        help="z=Z-Image, krea2=Krea 人物包, flux=Flux GGUF, auto=跟工作流走")
     p.add_argument("--mode", default=get_default_workflow_name())
     p.add_argument("--seed", type=int, default=None,
                         help="指定种子（不传则随机）")
@@ -867,7 +964,7 @@ if __name__ == "__main__":
 #
 # 新增 LoRA 节点 (PowerLoraLoader)：
 #   1. ComfyUI 里加入节点，连线，保存 workflow JSON 到 {comfyui_dir}/workflows/...
-#   2. 打开 `scripts/config.json` → workflows.<name>
+#   2. 打开 `~/.amazingdraw/config.json`（或 `card-engine/config/workflows.json`）→ workflows.<name>
 #   3. 把新节点的 ID 追加到 `lora_nodes` 数组里
 #   4. 完成；如有多套 workflow，分别同步。
 #

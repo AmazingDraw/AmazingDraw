@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 import json
 import random
 import logging
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
 RESOLVER_DIR = Path(__file__).resolve().parent
 ROOT_DIR = RESOLVER_DIR.parent
 CONFIG_DIR = ROOT_DIR / 'config'
+if str(ROOT_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR.parent))
+import amazingdraw_paths  # noqa: E402
 
 logger = logging.getLogger("role_resolver")
 
@@ -105,11 +111,27 @@ def _merge_custom_presets(presets: dict) -> dict:
     return presets
 
 
+def _resolve_config_path() -> Path:
+    return amazingdraw_paths.config_file()
+
+
+def _read_default_workflow_from_config() -> str:
+    try:
+        cfg_path = _resolve_config_path()
+        if cfg_path.exists():
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+            if isinstance(cfg, dict):
+                return str(cfg.get("default_workflow") or "moody_zib_zit").strip()
+    except Exception:
+        pass
+    return "moody_zib_zit"
+
+
 def get_disabled_celebrity_candidates() -> set:
     """获取当前配置中所有被禁用的明星标识集合（含中文名/触发词/lora键及归一化形式）。"""
     disabled_set = set()
     try:
-        cfg_path = ROOT_DIR.parent / "config.json"
+        cfg_path = _resolve_config_path()
         if cfg_path.exists():
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
             disabled_raw = cfg.get("disabled_celebrities") or []
@@ -155,14 +177,79 @@ def is_celebrity_disabled(identifier: str) -> bool:
     return False
 
 
+CELEBRITY_POOL_ORDER = ("z", "krea2", "flux")
+
+
+def celebrity_pool_name_for_workflow(workflow_name: str | None) -> str:
+    """根据目标工作流配置（celebrity_pool 属性）路由明星池，实现完全解耦。"""
+    try:
+        from card_config import load_workflow_config
+        wf = load_workflow_config(workflow_name)
+        if isinstance(wf, dict) and wf.get("celebrity_pool"):
+            return str(wf["celebrity_pool"]).strip().lower()
+    except Exception:
+        pass
+    name = str(workflow_name or "").strip().lower()
+    if "krea" in name:
+        return "krea2"
+    if "moss" in name:
+        return "moss"
+    if "flux" in name:
+        return "flux"
+    return "z"
+
+
+def resolve_lora_for_workflow(lora_key: str | None, workflow_name: str | None) -> str:
+    """校验或映射明星 LoRA 到目标工作流架构池（zi <-> krea2 同名明星自动切换，异构缺失则显式报错）。"""
+    raw = str(lora_key or "").strip()
+    if not raw:
+        return ""
+    stem = Path(raw).stem if raw.endswith(".safetensors") else Path(raw).name
+    target_pool_name = celebrity_pool_name_for_workflow(workflow_name)
+    celebs = load_celebrities()
+    target_pool = celebs.get(target_pool_name) or {}
+
+    if stem in target_pool:
+        return stem
+
+    matched_person = None
+    for pool_name in CELEBRITY_POOL_ORDER:
+        pool = celebs.get(pool_name) or {}
+        if stem in pool:
+            val = pool[stem]
+            matched_person = val[0] if isinstance(val, (list, tuple)) and val else str(val)
+            break
+
+    if matched_person:
+        for cand_lora, val in target_pool.items():
+            cand_name = val[0] if isinstance(val, (list, tuple)) and val else str(val)
+            if cand_name == matched_person:
+                return cand_lora
+        avail = "、".join(
+            v[0] for v in target_pool.values() if isinstance(v, (list, tuple)) and v
+        )
+        pool_label = "Krea" if target_pool_name == "krea2" else ("Flux" if target_pool_name == "flux" else "Z-Image")
+        raise ValueError(
+            f"{pool_label} 明星池没有「{matched_person}」（原 LoRA: {stem}）。已接入：{avail or '（空）'}"
+        )
+
+    lower_stem = stem.lower()
+    if target_pool_name == "krea2" and ("_zi_" in lower_stem or lower_stem.startswith("girlslike_zi")):
+        raise ValueError(f"Z-Image 专属 LoRA「{stem}」不能用于 Krea 工作流")
+    if target_pool_name == "z" and ("_krea" in lower_stem or lower_stem.startswith("girlslike_krea")):
+        raise ValueError(f"Krea 专属 LoRA「{stem}」不能用于 Z-Image 工作流")
+    return raw
+
+
 def load_celebrities() -> dict:
+    empty = {k: {} for k in CELEBRITY_POOL_ORDER}
     celebs_path = CONFIG_DIR / "celebrities.json"
     if not celebs_path.exists():
-        return {"z": {}, "flux": {}}
+        return empty
     try:
         data = json.loads(celebs_path.read_text(encoding="utf-8"))
     except Exception:
-        return {"z": {}, "flux": {}}
+        return empty
 
     # 支持从 config.json 读取 disabled_celebrities 黑名单（可填中文名、触发词或 lora 键名）
     disabled_set = get_disabled_celebrity_candidates()
@@ -267,34 +354,50 @@ def pick_celebrity_role(person: str = None, trigger: str = None, lora: str = Non
         )
 
     celebs = load_celebrities()
-    z_pool = celebs.get("z", {})
-    flux_pool = celebs.get("flux", {})
+    effective_model_type = model_type
+    if not effective_model_type or effective_model_type == "auto":
+        effective_model_type = celebrity_pool_name_for_workflow(_read_default_workflow_from_config())
+    if effective_model_type in celebs:
+        search_pools = [(effective_model_type, celebs.get(effective_model_type) or {})]
+        model_type = effective_model_type
+    else:
+        search_pools = [(name, celebs.get(name) or {}) for name in CELEBRITY_POOL_ORDER]
 
     # 1. 如果指定了 LoRA，直接解析
     if lora:
-        if lora in z_pool:
-            return {"celebrity": z_pool[lora][0], "lora": lora, "trigger": z_pool[lora][1], "model_type": "z"}
-        if lora in flux_pool:
-            return {"celebrity": flux_pool[lora][0], "lora": lora, "trigger": flux_pool[lora][1], "model_type": "flux"}
-        # 兼容不带后缀和路径的 LoRA 键
-        for pool_name, pool in [("z", z_pool), ("flux", flux_pool)]:
+        for pool_name, pool in search_pools:
+            if lora in pool:
+                return {"celebrity": pool[lora][0], "lora": lora, "trigger": pool[lora][1], "model_type": pool_name}
+        for pool_name, pool in search_pools:
             for k, val in pool.items():
                 if lora in k:
                     return {"celebrity": val[0], "lora": k, "trigger": val[1], "model_type": pool_name}
+        if model_type == "krea2":
+            raise ValueError(f"Krea 明星池没有 LoRA「{lora}」")
 
     # 2. 如果指定了 trigger 词或姓名，进行模糊查找
     search_term = trigger or person
     if search_term:
-        for pool_name, pool in [("z", z_pool), ("flux", flux_pool)]:
+        for pool_name, pool in search_pools:
             for k, (name, trig) in pool.items():
                 if (trig and search_term in trig) or (name and search_term in name):
                     return {"celebrity": name, "lora": k, "trigger": trig, "model_type": pool_name}
+        if model_type == "krea2":
+            names = "、".join(v[0] for v in (celebs.get("krea2") or {}).values() if isinstance(v, (list, tuple)) and v)
+            raise ValueError(
+                f"Krea 明星池没有「{search_term}」。已接入：{names or '（空）'}"
+            )
 
     # 3. 随机抽取
-    if model_type == 'z':
-        lora_key, name, trig, mtype = pick_non_repeating_celebrity(z_pool, 'z')
-    elif model_type == 'flux':
-        lora_key, name, trig, mtype = pick_non_repeating_celebrity(flux_pool, 'flux')
+    if model_type == "krea2":
+        pool = celebs.get("krea2") or {}
+        if not pool:
+            raise RuntimeError("krea2_celebrity_pool_empty")
+        lora_key, name, trig, mtype = pick_non_repeating_celebrity(pool, "krea2")
+    elif model_type == "z":
+        lora_key, name, trig, mtype = pick_non_repeating_celebrity(celebs.get("z") or {}, "z")
+    elif model_type == "flux":
+        lora_key, name, trig, mtype = pick_non_repeating_celebrity(celebs.get("flux") or {}, "flux")
     else:
         lora_key, name, trig, mtype = pick_non_repeating_celebrity_auto(celebs)
 

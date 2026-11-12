@@ -5,7 +5,7 @@ mkdir -p "$CARD_ENGINE_TMP"
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/../config.json"
+CONFIG_FILE="${CU_CONFIG_FILE:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get config_file 2>/dev/null || echo "${SCRIPT_DIR}/../config.json")}"
 CU_API="http://127.0.0.1:8188"
 if [ -f "$CONFIG_FILE" ]; then
   CU_API=$(python3 -c "import json; print(json.load(open('${CONFIG_FILE}')).get('comfyui_host', 'http://127.0.0.1:8188'))")

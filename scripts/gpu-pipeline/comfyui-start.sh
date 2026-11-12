@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-CONFIG_FILE="$(dirname "$0")/../config.json"
+_START_SCRIPTS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+CONFIG_FILE="${CU_CONFIG_FILE:-$(python3 "${_START_SCRIPTS_DIR}/amazingdraw_paths.py" get config_file 2>/dev/null || echo "${_START_SCRIPTS_DIR}/config.json")}"
 
 # 默认值
 COMFYUI_DIR="$HOME/ComfyUI"

@@ -412,8 +412,7 @@ function Invoke-OptionalWebUISetup([string]$Exe) {
     Write-Host "== WebUI（可选）=="
     Write-Host "  WebUI 不是必须的：只用 Skill / CLI / Agent 时不必安装。"
     Write-Host "  WebUI 进程只需 fastapi/uvicorn（本步 pip 只装这两样）。"
-    Write-Host "  填槽 / 连抽走 config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）；本引导不安装 LLM 网关。"
-    Write-Host "  不侦测、不安装 dsh 网桥或 OpenClaw 对话后端。"
+    Write-Host "  填槽 / 连抽走 ~/.amazingdraw/config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）；本引导不安装 LLM 网关。"
     Write-Host "  出图另需 ComfyUI+模型（不自动装）。"
     if (Test-WebUIDepsPresent $Exe) {
         Write-Info "  该 Python 已能 import fastapi、uvicorn，跳过 pip。"

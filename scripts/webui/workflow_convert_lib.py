@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Standalone ComfyUI UI-JSON → API-JSON conversion (no FastAPI / web_server deps).
 
-Shared by AmazingDraw WebUI (`api_queue.convert_workflow_api`) and comfyui-ops CLI
-(`convert_workflow.py`). Keep behavior identical to the former inlined helpers.
+Shared by AmazingDraw WebUI (`api_queue.convert_workflow_api`) and
+`scripts/webui/convert_workflow.py`. Keep behavior identical.
 """
 
 from __future__ import annotations

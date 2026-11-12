@@ -63,10 +63,10 @@ except Exception:
     websockets = None
 
 _GPU_DIR = Path(__file__).resolve().parent
-_CONFIG_FILE = _GPU_DIR.parent / "config.json"
 if str(_GPU_DIR.parent) not in sys.path:
     sys.path.insert(0, str(_GPU_DIR.parent))
 import amazingdraw_paths  # noqa: E402  自有数据目录唯一解析入口（固定 ~/.amazingdraw）
+_CONFIG_FILE = amazingdraw_paths.config_file()
 
 
 def _load_config() -> dict:
@@ -436,6 +436,50 @@ def ws_live_progress(prompt_id: str) -> dict:
         return {}
 
 
+def make_progress_bar(pct: int, length: int = 10) -> str:
+    if pct is None or pct <= 0:
+        return '▱' * length
+    if pct >= 100:
+        return '▰' * length
+    filled = min(length - 1, max(1, round(pct / 100.0 * length)))
+    return '▰' * filled + '▱' * (length - filled)
+
+
+def parse_comfyui_log_progress() -> dict:
+    log_path = Path('/tmp/comfyui-headless.log')
+    if not log_path.exists():
+        return {}
+    try:
+        with open(log_path, 'rb') as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 8192))
+            tail = f.read().decode('utf-8', errors='ignore')
+        matches = list(re.finditer(r'(\d+)%\|.*?\|\s*(\d+)/(\d+)\s*\[([^<]+)<([^,\]]+)', tail))
+        if matches:
+            last = matches[-1]
+            pct_str, cur_str, total_str, elapsed_str, eta_str = last.groups()
+
+            def parse_time_str(ts: str) -> int:
+                parts = ts.strip().split(':')
+                if len(parts) == 2:
+                    return int(parts[0]) * 60 + int(parts[1])
+                elif len(parts) == 3:
+                    return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+                return 0
+
+            return {
+                'pct': int(pct_str),
+                'step_current': int(cur_str),
+                'step_total': int(total_str),
+                'eta_seconds': parse_time_str(eta_str),
+                'source': 'live-stdout'
+            }
+    except Exception:
+        pass
+    return {}
+
+
 def render_progress(runtime: dict) -> dict:
     start_epoch = int(runtime.get('start_epoch') or 0)
     if not start_epoch:
@@ -447,65 +491,82 @@ def render_progress(runtime: dict) -> dict:
     eta_seconds = None
     source = 'estimate'
     node_label = ''
+    step_current = None
+    step_total = None
 
     if stage == 'delivering':
         pct = 98
         eta_seconds = 20
         source = 'stage'
+        step_total = int(comfy.get('total_steps') or 25) if comfy else 25
+        step_current = step_total
     elif comfy:
-        prompt_id = str(comfy.get('prompt_id') or '')
-        live = ws_live_progress(prompt_id)
-        progress_state = live.get('progress_state') or {}
-        progress = live.get('progress') or {}
-        sampler_steps = comfy.get('sampler_steps') or {}
-        total_sampler_steps = sum(int(v or 0) for v in sampler_steps.values()) or int(comfy.get('total_steps') or 28)
-        completed = 0.0
-        running_done = 0.0
-        running_node = ''
-
-        nodes = progress_state.get('nodes') or {}
-        for node_id, info in nodes.items():
-            if str(node_id) not in sampler_steps:
-                continue
-            configured_steps = int(sampler_steps.get(str(node_id)) or 0)
-            state = str((info or {}).get('state') or '')
-            value = float((info or {}).get('value') or 0)
-            maxv = float((info or {}).get('max') or 0)
-            if state == 'finished':
-                completed += configured_steps
-            elif state == 'running':
-                running_node = str(node_id)
-                if maxv > 0:
-                    running_done = configured_steps * min(1.0, value / maxv)
-                else:
-                    running_done = min(configured_steps, value)
-
-        if not running_done and progress:
-            node_id = str(progress.get('node') or '')
-            configured_steps = int(sampler_steps.get(node_id) or 0)
-            value = float(progress.get('value') or 0)
-            maxv = float(progress.get('max') or 0)
-            running_node = node_id
-            if configured_steps and maxv > 0:
-                running_done = configured_steps * min(1.0, value / maxv)
-
-        if total_sampler_steps > 0 and (completed > 0 or running_done > 0):
-            exact_pct = round(((completed + running_done) / total_sampler_steps) * 100)
-            pct = min(97, max(1, exact_pct))
-            typical_seconds = max(120, int(total_sampler_steps * 28))
-            if pct > 0:
-                projected_total = max(elapsed, int(elapsed / max(0.01, pct / 100)))
-                eta_seconds = max(0, projected_total - elapsed)
-            else:
-                eta_seconds = max(0, typical_seconds - elapsed)
-            source = 'websocket'
-            node_label = running_node
+        # 首先尝试从 ComfyUI 实时 stdout 进度条抓取（最准确，不受每步长间隔影响）
+        log_prog = parse_comfyui_log_progress()
+        if log_prog and log_prog.get('step_total'):
+            pct = log_prog['pct']
+            step_current = log_prog['step_current']
+            step_total = log_prog['step_total']
+            eta_seconds = log_prog['eta_seconds']
+            source = 'live-stdout'
         else:
-            total_steps = int(comfy.get('total_steps') or 28)
-            typical_seconds = max(120, int(total_steps * 28))
-            pct = min(97, max(1, round(elapsed / typical_seconds * 100)))
-            eta_seconds = max(0, typical_seconds - elapsed)
-            source = 'steps-estimate'
+            prompt_id = str(comfy.get('prompt_id') or '')
+            live = ws_live_progress(prompt_id)
+            progress_state = live.get('progress_state') or {}
+            progress = live.get('progress') or {}
+            sampler_steps = comfy.get('sampler_steps') or {}
+            total_sampler_steps = sum(int(v or 0) for v in sampler_steps.values()) or int(comfy.get('total_steps') or 28)
+            step_total = total_sampler_steps
+            completed = 0.0
+            running_done = 0.0
+            running_node = ''
+
+            nodes = progress_state.get('nodes') or {}
+            for node_id, info in nodes.items():
+                if str(node_id) not in sampler_steps:
+                    continue
+                configured_steps = int(sampler_steps.get(str(node_id)) or 0)
+                state = str((info or {}).get('state') or '')
+                value = float((info or {}).get('value') or 0)
+                maxv = float((info or {}).get('max') or 0)
+                if state == 'finished':
+                    completed += configured_steps
+                elif state == 'running':
+                    running_node = str(node_id)
+                    if maxv > 0:
+                        running_done = configured_steps * min(1.0, value / maxv)
+                    else:
+                        running_done = min(configured_steps, value)
+
+            if not running_done and progress:
+                node_id = str(progress.get('node') or '')
+                configured_steps = int(sampler_steps.get(node_id) or 0)
+                value = float(progress.get('value') or 0)
+                maxv = float(progress.get('max') or 0)
+                running_node = node_id
+                if configured_steps and maxv > 0:
+                    running_done = configured_steps * min(1.0, value / maxv)
+
+            if total_sampler_steps > 0 and (completed > 0 or running_done > 0):
+                exact_pct = round(((completed + running_done) / total_sampler_steps) * 100)
+                pct = min(97, max(1, exact_pct))
+                step_current = min(total_sampler_steps, round(completed + running_done))
+                typical_seconds = max(120, int(total_sampler_steps * 100))
+                if pct > 0:
+                    projected_total = max(elapsed, int(elapsed / max(0.01, pct / 100)))
+                    eta_seconds = max(0, projected_total - elapsed)
+                else:
+                    eta_seconds = max(0, typical_seconds - elapsed)
+                source = 'websocket'
+                node_label = running_node
+            else:
+                total_steps = int(comfy.get('total_steps') or 28)
+                step_total = total_steps
+                # 未进入采样器（加载模型/文本编码阶段），明确显示为准备中
+                pct = min(15, max(1, round(elapsed / 60 * 10)))
+                step_current = 0
+                eta_seconds = max(0, total_steps * 100 - elapsed)
+                source = 'loading-phase'
     else:
         avg_m = typical_render_minutes()
         if avg_m and avg_m > 0:
@@ -525,6 +586,8 @@ def render_progress(runtime: dict) -> dict:
         'source': source,
         'stage': stage,
         'node_label': node_label,
+        'step_current': step_current,
+        'step_total': step_total,
     }
 
 
@@ -594,14 +657,21 @@ def cmd_status() -> int:
         if progress:
             pct = progress.get("progress_pct")
             stage_label = stage_map.get(progress.get("stage"), "处理中")
+            step_current = progress.get("step_current")
+            step_total = progress.get("step_total")
+
+            if step_current is not None and step_total:
+                lines.append(f'> • 步数：{step_current} / {step_total} 步')
+            elif step_total:
+                lines.append(f'> • 步数：准备中（共 {step_total} 步）')
+
             if pct is None:
                 progress_text = f'进行中（{stage_label}，暂无均时样本）'
             else:
-                progress_text = f'{pct}%（{stage_label}）'
-                if progress.get('source') == 'websocket':
-                    progress_text += ' [实时]'
-                elif progress.get('source') == 'delivery-avg':
-                    progress_text += ' [均时]'
+                bar = make_progress_bar(pct, 10)
+                progress_text = f'{bar} {pct}%'
+                if stage_label != '渲染中':
+                    progress_text += f'（{stage_label}）'
             lines.append(f'> • 进度：{progress_text}')
             lines.append(f'> • 已渲染：{human_duration(progress.get("elapsed_seconds", 0))}')
             eta = progress.get("eta_seconds")

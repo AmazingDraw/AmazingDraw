@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # AmazingDraw 发行版安装引导
-# 自动创建数据目录 + 生成权威配置 + 侦测 ComfyUI / LLM 端点（默认 127.0.0.1:8317）+ 校验运行环境
+# 自动创建数据目录 + 生成运行期配置（~/.amazingdraw/config.json）+ 侦测 ComfyUI / LLM 端点（默认 127.0.0.1:8317）+ 校验运行环境
 # Releases 提供两套包，文件名里的 cp39 / cp312 就是 Python 主版本。
 # 跑 WebUI/CLI 的 Python 必须和 zip 标签一致。
 # Apple 自带 /usr/bin/python3 是 3.9，请下 cp39；本机 3.12 请下 cp312。
@@ -29,8 +29,7 @@ for _a in "$@"; do
       echo "  AMAZINGDRAW_INSTALL_NONINTERACTIVE=1   等同于 --non-interactive"
       echo "  COMFYUI_DIR=...                        指定 ComfyUI 本地根目录"
       echo ""
-      echo "填槽 / 连抽走 config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）。"
-      echo "不安装 dsh / OpenClaw 对话后端。"
+      echo "填槽 / 连抽走 ~/.amazingdraw/config.json 的 llm.base_url（默认 http://127.0.0.1:8317/v1）。"
       exit 0
       ;;
     --non-interactive|--noninteractive)
@@ -399,22 +398,34 @@ else
 fi
 
 # 自有数据目录固定为 ~/.amazingdraw（cards / custom_presets / webui-chat / install-report…）；
-# 单项覆盖只走 scripts/config.json 的 cards_dir / custom_presets_dir，不再有环境变量入口。
+# 运行期只认 ~/.amazingdraw/config.json；包内 scripts/config.json 是首次迁入种子 / 安装过程工作副本。
+# 单项覆盖只走运行期配置的 cards_dir / custom_presets_dir，不再有环境变量入口。
 DATA_DIR="$HOME/.amazingdraw"
 # 旧版（≤0.1.18）数据目录，仅用于一次性迁移 / 旧配置迁入提示（不是安装 OpenClaw）
 LEGACY_DATA_DIR="$HOME/.openclaw/draw-cards"
-# 权威配置：发行包内 scripts/config.json（引擎 / WebUI 亦读此路径）
+# 安装时把种子、运行期文件、native 旁路副本对齐；程序启动后只读 GLOBAL_CONFIG。
 CONFIG_DST="$ROOT/scripts/config.json"
+GLOBAL_CONFIG="$DATA_DIR/config.json"
 CONFIG_EXAMPLE="$ROOT/config.example.json"
 LEGACY_CONFIG="$LEGACY_DATA_DIR/config.json"
 CORE_CONFIG="$ROOT/card_engine_core/config.json"
 NATIVE_DIR="$ROOT/card_engine_core/native"
 
-# 权威配置变更后，同步到闭源 native 旁路副本（card_engine_core/config.json）
+# 安装过程改完种子后，同步到运行期 ~/.amazingdraw/config.json 与 native 旁路副本（card_engine_core/config.json）
 _sync_core_config() {
-  if [ -f "$CONFIG_DST" ] && [ -d "$(dirname "$CORE_CONFIG")" ]; then
-    if [ "$CONFIG_DST" != "$CORE_CONFIG" ]; then
-      cp "$CONFIG_DST" "$CORE_CONFIG" 2>/dev/null || true
+  if [ -f "$CONFIG_DST" ]; then
+    mkdir -p "$DATA_DIR"
+    cp "$CONFIG_DST" "$GLOBAL_CONFIG" 2>/dev/null || true
+    if [ -d "$(dirname "$CORE_CONFIG")" ]; then
+      if [ "$CONFIG_DST" != "$CORE_CONFIG" ]; then
+        cp "$CONFIG_DST" "$CORE_CONFIG" 2>/dev/null || true
+      fi
+    fi
+  elif [ -f "$GLOBAL_CONFIG" ]; then
+    mkdir -p "$(dirname "$CONFIG_DST")"
+    cp "$GLOBAL_CONFIG" "$CONFIG_DST" 2>/dev/null || true
+    if [ -d "$(dirname "$CORE_CONFIG")" ]; then
+      cp "$GLOBAL_CONFIG" "$CORE_CONFIG" 2>/dev/null || true
     fi
   fi
 }
@@ -424,7 +435,8 @@ echo "  发行版: $ROOT"
 echo "  平台: $UNAME_S  IS_WIN=$IS_WIN  python=${PY:-（未选定）}"
 echo "  HOME: $HOME"
 echo "  数据目录: $DATA_DIR"
-echo "  权威配置:          $CONFIG_DST"
+echo "  运行期配置:        $GLOBAL_CONFIG"
+echo "  包内种子:          $CONFIG_DST"
 if [ -n "$WANT_PY" ] && [ "$WANT_PY" != "mixed" ]; then
   echo "  本包内核 Python: $WANT_PY"
 fi
@@ -444,25 +456,34 @@ mkdir -p "$DATA_DIR/custom_presets/roles"
 mkdir -p "$DATA_DIR/custom_presets/scenes"
 echo "✓ 目录就绪: $DATA_DIR/{cards,custom_presets/...}"
 
-# ── 2. 权威配置 = 包内 scripts/config.json（保留已有；缺则种子/旧路径迁入）──
-# 数据目录为 ~/.amazingdraw（cards / custom_presets）；配置权威不落 ~/.openclaw/.../config.json
+# ── 2. 运行期配置 ~/.amazingdraw/config.json（包内 scripts/config.json 作种子）──
 CONFIG_MIGRATED_FROM_LEGACY=0
-if [ -f "$CONFIG_DST" ]; then
-  echo "✓ 保留已有权威配置 $CONFIG_DST"
+if [ -f "$GLOBAL_CONFIG" ]; then
+  echo "✓ 优先使用已有全局运行期配置: $GLOBAL_CONFIG"
+  mkdir -p "$(dirname "$CONFIG_DST")"
+  cp "$GLOBAL_CONFIG" "$CONFIG_DST" 2>/dev/null || true
+elif [ -f "$CONFIG_DST" ]; then
+  echo "✓ 用包内种子生成运行期配置: $CONFIG_DST → $GLOBAL_CONFIG"
+  mkdir -p "$DATA_DIR"
+  cp "$CONFIG_DST" "$GLOBAL_CONFIG" 2>/dev/null || true
   if [ -f "$LEGACY_CONFIG" ]; then
-    echo "  [i] 检测到旧路径配置 ${LEGACY_CONFIG}（已不再是权威落点；如需沿用请手动合并到 ${CONFIG_DST}）"
+    echo "  [i] 检测到旧路径配置 ${LEGACY_CONFIG}（已不再是运行期落点；如需沿用请手动合并到 ${GLOBAL_CONFIG}）"
   fi
 elif [ -f "$LEGACY_CONFIG" ]; then
   mkdir -p "$(dirname "$CONFIG_DST")"
+  mkdir -p "$DATA_DIR"
   cp "$LEGACY_CONFIG" "$CONFIG_DST"
+  cp "$LEGACY_CONFIG" "$GLOBAL_CONFIG"
   CONFIG_MIGRATED_FROM_LEGACY=1
-  echo "✓ 已从旧路径一次性迁入权威配置: $LEGACY_CONFIG → $CONFIG_DST"
+  echo "✓ 已从旧路径一次性迁入运行期配置: $LEGACY_CONFIG → $GLOBAL_CONFIG"
 elif [ -f "$CONFIG_EXAMPLE" ]; then
   mkdir -p "$(dirname "$CONFIG_DST")"
+  mkdir -p "$DATA_DIR"
   cp "$CONFIG_EXAMPLE" "$CONFIG_DST"
-  echo "✓ 已从 config.example.json 生成权威配置 $CONFIG_DST"
+  cp "$CONFIG_EXAMPLE" "$GLOBAL_CONFIG"
+  echo "✓ 已从 config.example.json 生成运行期配置 $GLOBAL_CONFIG"
 else
-  echo "⚠ 未找到 ${CONFIG_DST} / ${LEGACY_CONFIG} / ${CONFIG_EXAMPLE}，请手动创建包内 scripts/config.json"
+  echo "⚠ 未找到 ${CONFIG_DST} / ${GLOBAL_CONFIG} / ${LEGACY_CONFIG} / ${CONFIG_EXAMPLE}，请手动创建配置"
 fi
 
 # ── 2.5 Windows：Unix 专属 /tmp 换成系统临时目录 ──
@@ -490,10 +511,10 @@ PY
   echo "✓ Windows tmp_dir: $WIN_TMP"
 fi
 
-# ── 3. 同步权威配置 → card_engine_core/config.json（native .so 旁路读取）──
+# ── 3. 同步运行期配置 → card_engine_core/config.json（native .so 旁路读取）──
 _sync_core_config
-if [ -f "$CONFIG_DST" ] && [ -f "$CORE_CONFIG" ]; then
-  echo "✓ $CORE_CONFIG 已与权威配置对齐"
+if [ -f "$GLOBAL_CONFIG" ] && [ -f "$CORE_CONFIG" ]; then
+  echo "✓ $CORE_CONFIG 已与运行期配置对齐"
 fi
 
 # ── 3.1 旧数据一次性迁移：~/.openclaw/{draw-cards,webui-chat} → ~/.amazingdraw ──
@@ -677,7 +698,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$DETECT_HELPER" ]; then
   if [ "$_detect_rc" -ne 0 ]; then
     echo "  ⚠ 本机依赖侦测脚本异常（已忽略，安装继续）"
   fi
-  # 侦测写入权威配置后，同步 native 旁路副本
+  # 侦测写入种子后，同步运行期配置与 native 旁路副本
   _sync_core_config
   # 读回 comfyui_dir 供工作流复制与安装报告
   COMFYUI_DIR=$($PY -c "import json,os,sys; p=sys.argv[1]; v=json.load(open(p,encoding='utf-8')).get('comfyui_dir') or ''; print(os.path.expanduser(v) if v else '')" "$CFG_PY" 2>/dev/null || true)
@@ -786,7 +807,7 @@ if [ -f "$CONFIG_DST" ] && [ -n "$PY" ] && [ -n "$WIZARD_HELPER" ]; then
     *) echo "  ⚠ 可选路径向导步骤异常（已忽略）" ;;
   esac
 
-  # 向导写入权威配置后，同步 native 旁路副本
+  # 向导写入种子后，同步运行期配置与 native 旁路副本
   _sync_core_config
 elif [ -z "$WIZARD_HELPER" ]; then
   echo "[i] 未找到 install_wizard.py，跳过交互向导（旧包兼容）。"
@@ -988,7 +1009,7 @@ _report_body() {
   echo "  平台: $UNAME_S  IS_WIN=$IS_WIN"
   echo "  解释器: ${PY:-（未选定）}  版本=${PY_MM:-?}  内核ABI=${WANT_PY:-?}"
   echo "  python3 别名: $REPORT_SHIM"
-  echo "  配置: $CONFIG_DST"
+  echo "  运行期配置: $GLOBAL_CONFIG"
   echo "  LLM 端点: ${REPORT_LLM_URL:-http://127.0.0.1:8317/v1}"
   if [ "$AGENT_BACKEND_MIGRATED" = 1 ]; then
     echo "  agent_backend: ${REPORT_AGENT_BACKEND}（已从 $AGENT_BACKEND_BEFORE 迁移）"

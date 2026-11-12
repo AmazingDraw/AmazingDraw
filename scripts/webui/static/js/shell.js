@@ -157,7 +157,7 @@ function initChatModeSelector() {
         const res = await fetch("/api/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(state.settings)
+          body: JSON.stringify({ chat_mode: mode })
         });
         const data = await res.json();
         state.settings = data.settings;

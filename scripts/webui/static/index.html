@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="css/02-layout.css?v=1.11.1">
   <link rel="stylesheet" href="css/03-chat.css?v=1.10.1">
   <link rel="stylesheet" href="css/04-panels.css?v=1.9.7">
-  <link rel="stylesheet" href="css/05-settings.css?v=1.14.8">
+  <link rel="stylesheet" href="css/05-settings.css?v=1.14.9">
   <link rel="stylesheet" href="css/06-components.css?v=1.12.1">
   <link rel="stylesheet" href="css/07-effects.css?v=1.9.7">
 </head>
@@ -307,7 +307,7 @@
                 <div class="settings-column">
                   <div class="settings-card-section" id="settings-anchor-core">
                     <h3 class="section-title">
-                      <i class="fa-solid fa-server"></i> 核心执行与大模型配置
+                      <i class="fa-solid fa-server"></i> LLM 端点与渲染后端
                     </h3>
 
                     <div class="form-grid-2">
@@ -375,10 +375,41 @@
 
                     <div class="form-row">
                       <label class="checkbox-inline">
-                        <input type="checkbox" name="enable_ai_check" id="settings-enable-ai-check">
-                        <span>check 时跑 AI 语义检查</span>
+                        <input type="checkbox" name="enable_independent_llm" id="settings-enable-independent-llm" checked>
+                        <span>引擎独立调用 LLM</span>
                       </label>
-                      <span class="help-text">默认关闭。打开后 check_prompt 会在物理脚本之外再调 LLM 审语义矛盾（多肢、衣长等）。高置信互斥词已由物理脚本拦。</span>
+                      <span class="help-text">默认开启。关闭后建卡路由、多人解析、露点分类、直投/归档元数据不再访问本机 LLM 端点，走正则与词表。导演填槽不受影响。中文改法由主 Agent 写成 <code>--targets-json</code> 英文槽。</span>
+                    </div>
+                    <div class="llm-call-toggles" id="settings-llm-call-toggles">
+                      <label class="checkbox-inline" title="创卡主题模糊时用 LLM 猜场景库">
+                        <input type="checkbox" name="llm_call_route_hint" id="settings-llm-call-route-hint" checked>
+                        <span>场景路由</span>
+                      </label>
+                      <label class="checkbox-inline" title="多人卡解析性别与机位">
+                        <input type="checkbox" name="llm_call_multi_roles" id="settings-llm-call-multi-roles" checked>
+                        <span>多人分镜</span>
+                      </label>
+                      <label class="checkbox-inline" title="只露上/下时裁掉对侧性器官词">
+                        <input type="checkbox" name="llm_call_body_classify" id="settings-llm-call-body-classify" checked>
+                        <span>露点分类</span>
+                      </label>
+                      <label class="checkbox-inline" title="直投标题与归档文件名的中文元数据">
+                        <input type="checkbox" name="llm_call_metadata" id="settings-llm-call-metadata" checked>
+                        <span>直投归档</span>
+                      </label>
+                      <label class="checkbox-inline" title="物理门禁之外再审语义，默认关">
+                        <input type="checkbox" name="enable_ai_check" id="settings-enable-ai-check">
+                        <span>语义检查</span>
+                      </label>
+                      <span class="help-text">总闸关则分项不生效。语义检查默认关。</span>
+                    </div>
+
+                    <div class="form-row">
+                      <label class="checkbox-inline">
+                        <input type="checkbox" name="enable_cjk_sanitization" id="settings-enable-cjk-sanitization" checked>
+                        <span>CJK 中文清洗与校验拦截</span>
+                      </label>
+                      <span class="help-text">默认开启。开启时自动清洗纯英文槽位中文，服装/纹身中文受引号保护；关闭后彻底跳过清洗与连抽中文拦截。</span>
                     </div>
                   </div>
 
@@ -420,22 +451,9 @@
                         <span class="help-text">抽卡生图结果与渲染历史的物理存档目录。</span>
                       </div>
                       <div class="form-row">
-                        <label>自定义预设目录 (custom_presets_dir)</label>
-                        <input type="text" name="custom_presets_dir" placeholder="留空 = ~/.amazingdraw/custom_presets">
-                        <span class="help-text">用户自定义预设 JSON 物理存储路径。</span>
-                      </div>
-                    </div>
-
-                    <div class="form-grid-2">
-                      <div class="form-row">
                         <label>Obsidian保管箱 (obsidian_vault_dir)</label>
                         <input type="text" name="obsidian_vault_dir" placeholder="如 ~/Documents/ObsidianVault">
                         <span class="help-text">Obsidian Vault 保管箱的物理绝对路径。</span>
-                      </div>
-                      <div class="form-row">
-                        <label>工作区目录 (workspace_dir)</label>
-                        <input type="text" name="openclaw_workspace_dir" placeholder="留空则用默认数据目录">
-                        <span class="help-text">仅作后台进程的工作目录（旧配置项，可留空）。</span>
                       </div>
                     </div>
 
@@ -605,13 +623,7 @@
                     </div>
 
 
-                    <div class="form-row">
-                      <label class="checkbox-inline">
-                        <input type="checkbox" name="restrict_roles" id="settings-restrict-roles" checked>
-                        <span>限制角色</span>
-                      </label>
-                      <span class="help-text">打开后限制角色不进入角色库。关掉则恢复。</span>
-                    </div>
+
 
                     <div class="form-grid-2">
                       <div class="form-row">
@@ -897,7 +909,7 @@
   <script src="js/core.js?v=1.11.4"></script>
   <script src="js/shell.js?v=1.11.3"></script>
   <script src="js/onboarding.js?v=1.13.4"></script>
-  <script src="js/settings.js?v=1.11.1"></script>
+  <script src="js/settings.js?v=1.11.2"></script>
   <script src="js/cards.js?v=1.11.0"></script>
   <script src="js/albums.js?v=1.2.7"></script>
   <script src="js/queue.js?v=1.9.9"></script>

@@ -8,7 +8,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / 'card-engine'))
 
-from card_llm_client import chat_completion, extract_json_object
+from card_llm_client import chat_completion, extract_json_object, independent_llm_enabled, offline_prompt_metadata
 from card_validation import has_cjk
 from card_config import load_system_config
 
@@ -81,17 +81,20 @@ def main():
     inferred = {}
 
     if missing_any and prompt:
-        try:
-            # Query LLM to parse/infer
-            user_msg = f"Prompt to parse:\n{prompt}"
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg}
-            ]
-            response_text = chat_completion(messages, max_tokens=1024)
-            inferred = extract_json_object(response_text) or {}
-        except Exception as e:
-            print(f"LLM metadata parsing failed: {e}", file=sys.stderr)
+        if independent_llm_enabled("metadata"):
+            try:
+                user_msg = f"Prompt to parse:\n{prompt}"
+                messages = [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg}
+                ]
+                response_text = chat_completion(messages, max_tokens=1024, feature="metadata")
+                inferred = extract_json_object(response_text) or {}
+            except Exception as e:
+                print(f"LLM metadata parsing failed: {e}", file=sys.stderr)
+                inferred = offline_prompt_metadata(prompt)
+        else:
+            inferred = offline_prompt_metadata(prompt)
 
     # Merge: provided values take absolute priority
     final = {}

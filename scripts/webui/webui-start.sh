@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/../config.json"
+CONFIG_FILE="${CU_CONFIG_FILE:-$(python3 "$SCRIPT_DIR/../amazingdraw_paths.py" get config_file 2>/dev/null || echo "$SCRIPT_DIR/../config.json")}"
 WEBUI_DIR="$SCRIPT_DIR"
 WEBUI_PORT="8318"
 WEBUI_PID_FILE="/tmp/amazing-draw-webui.pid"

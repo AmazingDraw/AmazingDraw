@@ -45,7 +45,7 @@
 
 **WebUI 可选**：Skill / CLI / Agent 不需要。`install.bat` 会问是否 `pip install fastapi uvicorn`（失败只警告）。`-Yes` 默认跳过；要装加 `-WithWebUI` 或 `AMAZINGDRAW_WITH_WEBUI=1`。出图须自备 ComfyUI 与模型。
 
-安装会尽量探测 ComfyUI 与 LLM 端点（默认 `127.0.0.1:8317`）；已有有效配置不覆盖。权威配置是包内 `scripts/config.json`（缺则从 `config.example.json` 生成）。数据在 `~/.amazingdraw/`；从 `~/.openclaw/draw-cards/` 升级时会复制过来并校验，旧目录保留。
+安装会尽量探测 ComfyUI 与 LLM 端点（默认 `127.0.0.1:8317`）；已有有效配置不覆盖。运行期配置是 `~/.amazingdraw/config.json`。包内 `scripts/config.json` 只作首次迁入种子（由 `config.example.json` 生成，不含私人路径）。数据在 `~/.amazingdraw/`；从 `~/.openclaw/draw-cards/` 升级时会复制过来并校验，旧目录保留。
 
 ## 推荐模型
 
@@ -59,7 +59,10 @@
 
 ## 使用
 
-出图走本机 ComfyUI（默认 <http://127.0.0.1:8188>）。`install.sh` 会把工作流拷进探测到的 ComfyUI `workflows/`（Comfy 用它自己的 venv 即可）。
+出图走本机 ComfyUI（默认 <http://127.0.0.1:8188>）。`install.sh` 会把三大官方工作流拷进探测到的 ComfyUI `workflows/`（Comfy 用它自己的 venv 即可）：
+- **moss**：Moody Moss Mix 4.1（默认推荐，MOSS Image DiT，25步CFG3）
+- **krea**：Moody Krea Mix 6（Krea 2 Turbo 极速成片，8步CFG1）
+- **zi**：Moody ZIB+ZIT（Z-Image 真实感双采样）
 
 ### WebUI
 
@@ -83,7 +86,7 @@ python3 card_cli.py featured -h
 
 ## 配置
 
-- 包内 `scripts/config.json`（示例 `config.example.json`）
+- 运行期 `~/.amazingdraw/config.json`（包内种子 `scripts/config.json`，示例 `config.example.json`）
 - 自定义预设：`user_presets/`
 - LLM：`llm.base_url`（默认 `http://127.0.0.1:8317/v1`）；Comfy 路径可在 WebUI 配置页填
 

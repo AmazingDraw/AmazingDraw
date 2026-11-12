@@ -54,8 +54,14 @@ from pathlib import Path
 from typing import Iterator, Optional, Union
 import fcntl
 
+_SCRIPTS_ROOT = str(Path(__file__).resolve().parent.parent)
+if _SCRIPTS_ROOT not in sys.path:
+    sys.path.insert(0, _SCRIPTS_ROOT)
+import amazingdraw_paths  # noqa: E402  自有数据目录唯一解析入口（固定 ~/.amazingdraw）
+
+
 def load_config() -> dict:
-    config_path = Path(__file__).resolve().parent.parent / "config.json"
+    config_path = amazingdraw_paths.canonical_config_path(Path(_SCRIPTS_ROOT))
     if config_path.exists():
         try:
             with open(config_path, encoding="utf-8") as f:
@@ -63,12 +69,6 @@ def load_config() -> dict:
         except Exception:
             pass
     return {}
-
-
-_SCRIPTS_ROOT = str(Path(__file__).resolve().parent.parent)
-if _SCRIPTS_ROOT not in sys.path:
-    sys.path.insert(0, _SCRIPTS_ROOT)
-import amazingdraw_paths  # noqa: E402  自有数据目录唯一解析入口（固定 ~/.amazingdraw）
 
 
 def _cfg_path(key: str, default: str) -> Path:

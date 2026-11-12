@@ -94,7 +94,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/../config.json"
+CONFIG_FILE="${CU_CONFIG_FILE:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get config_file 2>/dev/null || echo "${SCRIPT_DIR}/../config.json")}"
 WORK_DIR="${CU_WORK_DIR:-$(python3 -c "import json,os; c=json.load(open('${CONFIG_FILE}')); print(os.path.expanduser(c.get('tmp_dir') or '/tmp/cu-card'))")}"
 
 # ── 参数解析 ───────────────────────────

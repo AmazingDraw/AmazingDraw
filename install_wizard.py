@@ -40,17 +40,29 @@ EXIT_SKIP = 2
 
 SKIP_TOKENS = frozenset({"", "s", "skip", "稍后", "S", "SKIP"})
 
-# Moody default model checklist (relative to $COMFYUI_DIR/models/)
-MOODY_MODELS: List[Tuple[str, str, str]] = [
-    # (label, filename, subdir under models/)
-    ("一阶段 UNET（ZIB）", "MoodyWildMix-zib-base.safetensors", "diffusion_models"),
-    ("二阶段 UNET（ZIT）", "MoodyRealMix-zit-write.safetensors", "diffusion_models"),
-    ("文本编码器", "qwen_3_4b.safetensors", "text_encoders"),
-    ("VAE", "ae.safetensors", "vae"),
-]
+# Workflow models (relative to $COMFYUI_DIR/models/)
+WORKFLOW_MODELS: Dict[str, List[Tuple[str, str, str]]] = {
+    "moody_zib_zit": [
+        ("一阶段 UNET（ZIB）", "MoodyWildMix-zib-base.safetensors", "diffusion_models"),
+        ("二阶段 UNET（ZIT）", "MoodyRealMix-zit-write.safetensors", "diffusion_models"),
+        ("文本编码器", "qwen_3_4b.safetensors", "text_encoders"),
+        ("VAE", "ae.safetensors", "vae"),
+    ],
+    "krea2_turbo": [
+        ("扩散模型 DiT", "Moody-Krea-Mix-fp8.safetensors", "diffusion_models"),
+        ("文本编码器", "qwen3vl_4b_fp8_scaled.safetensors", "text_encoders"),
+        ("VAE", "qwen_image_vae.safetensors", "vae"),
+    ],
+    "moody_moss": [
+        ("扩散模型 DiT", "MoodyMossMix-fp8.safetensors", "diffusion_models"),
+        ("文本编码器", "qwen3.5_9b_int8_convrot.safetensors", "text_encoders"),
+        ("VAE", "flux2-vae.safetensors", "vae"),
+    ],
+}
+MOODY_MODELS: List[Tuple[str, str, str]] = WORKFLOW_MODELS["moody_zib_zit"]
 
-DEFAULT_WF_JSON = "Moody_ZIB_ZIT_20步_CFG3_512x768.json"
-DEFAULT_WF_ID = "moody_zib_zit"
+DEFAULT_WF_JSON = "Moody_Moss_Standard_25步_CFG3.json"
+DEFAULT_WF_ID = "moody_moss"
 
 
 def _configure_stdio() -> None:
@@ -388,17 +400,19 @@ def check_comfy_venv_aimdo(comfy: Optional[Path]) -> None:
         )
 
 
-def scan_moody_models(comfyui: Optional[Path]) -> List[Tuple[str, str, str, bool]]:
-    """Return list of (label, filename, rel_subdir, found)."""
+def scan_workflow_models(
+    comfyui: Optional[Path], wf_id: str = "moody_zib_zit"
+) -> List[Tuple[str, str, str, bool]]:
+    """Return list of (label, filename, rel_subdir, found) for given workflow."""
     rows: List[Tuple[str, str, str, bool]] = []
     models_root = (comfyui / "models") if comfyui is not None else None
-    for label, fname, sub in MOODY_MODELS:
+    model_list = WORKFLOW_MODELS.get(wf_id, WORKFLOW_MODELS["moody_zib_zit"])
+    for label, fname, sub in model_list:
         found = False
         if models_root is not None:
             target = models_root / sub / fname
             found = target.is_file()
             if not found:
-                # also search under models/ recursively by name
                 try:
                     for hit in models_root.rglob(fname):
                         if hit.is_file():
@@ -410,19 +424,35 @@ def scan_moody_models(comfyui: Optional[Path]) -> List[Tuple[str, str, str, bool
     return rows
 
 
-def print_model_checklist(comfyui: Optional[Path], root: Optional[Path] = None) -> None:
+def scan_moody_models(comfyui: Optional[Path]) -> List[Tuple[str, str, str, bool]]:
+    """Return list of (label, filename, rel_subdir, found)."""
+    return scan_workflow_models(comfyui, "moody_zib_zit")
+
+
+def print_model_checklist(
+    comfyui: Optional[Path], root: Optional[Path] = None, wf_id: str = DEFAULT_WF_ID
+) -> None:
     hints = find_hints_file(root)
-    if hints is not None:
+    if hints is not None and wf_id == "moody_zib_zit":
         try:
             _eprint(hints.read_text(encoding="utf-8"))
         except Exception:
             pass
     else:
-        _eprint("（未找到 install_hints/workflow_moody_zib_zit.txt，打印内置简表）")
-        for label, fname, sub in MOODY_MODELS:
+        wf_names = {
+            "moody_zib_zit": "Moody ZIB+ZIT（Z-Image 双采样）",
+            "krea2_turbo": "Moody Krea Mix 6（Krea 2 Turbo 极速成片）",
+            "moody_moss": "Moody Moss Mix 4.1（MOSS Image DiT 架构）",
+        }
+        wf_name = wf_names.get(wf_id, wf_id)
+        _eprint("============================================================")
+        _eprint("默认工作流 %s 模型清单" % wf_name)
+        _eprint("============================================================")
+        for label, fname, sub in WORKFLOW_MODELS.get(wf_id, MOODY_MODELS):
             _eprint("  - %s: models/%s/%s" % (label, sub, fname))
+        _eprint("============================================================")
 
-    rows = scan_moody_models(comfyui)
+    rows = scan_workflow_models(comfyui, wf_id)
     if comfyui is None:
         _eprint("本机尚未确认 ComfyUI 路径，无法扫描模型文件是否已就位。")
         return
@@ -433,7 +463,7 @@ def print_model_checklist(comfyui: Optional[Path], root: Optional[Path] = None) 
         _eprint("  %s  %s  → models/%s/%s" % (mark, label, sub, fname))
     missing = [r for r in rows if not r[3]]
     if missing:
-        _eprint("  缺 %d 个；装好模型前默认 Moody 出图可能失败。" % len(missing))
+        _eprint("  缺 %d 个；装好模型前默认出图可能失败。" % len(missing))
     else:
         _eprint("  清单内模型均已找到。")
 
@@ -945,26 +975,37 @@ def cmd_workflow_step(args: argparse.Namespace) -> int:
     print_model_checklist(comfy, root=root)
 
     if not interactive:
-        _eprint("ℹ 非交互模式：使用默认 dual-sample（moody_zib_zit），不询问自定义工作流。")
+        _eprint("ℹ 非交互模式：使用默认 Moody Moss Mix（moody_moss），不询问自定义工作流。")
         return EXIT_OK
 
     _eprint("")
     _eprint("工作流选项：")
-    _eprint("  1  使用默认 Moody 双采样（推荐，已复制 JSON + 上表模型清单）")
+    _eprint("  1  使用默认 Moody Moss Mix 4.1（推荐，MOSS Image）")
+    _eprint("  k  切换为 Moody Krea Mix 6（Krea 2 Turbo 极速成片，8步CFG1）")
+    _eprint("  z  切换为 Moody ZIB+ZIT（Z-Image 写真双采样）")
     _eprint("  2  导入我自己的工作流 JSON")
     _eprint("  s  跳过")
-    choice = ask_line("请选择 [1/2/s]（默认 1）：").strip().lower()
+    choice = ask_line("请选择 [1/k/z/2/s]（默认 1）：").strip().lower()
     if choice in SKIP_TOKENS or choice in ("s", "skip", "稍后"):
         _eprint("已跳过工作流步骤。")
         return EXIT_SKIP
-    if choice in ("", "1"):
-        _eprint("✓ 使用默认 moody_zib_zit。请按清单补齐模型后再出图。")
-        # ensure default_workflow key if empty
-        if not str(cfg.get("default_workflow") or "").strip():
-            merge_config(config, {"default_workflow": DEFAULT_WF_ID})
+    if choice in ("", "1", "m", "moss", "moody_moss"):
+        _eprint("✓ 使用默认 moody_moss。请按清单补齐模型后再出图。")
+        merge_config(config, {"default_workflow": "moody_moss"})
+        print_model_checklist(comfy, root=root, wf_id="moody_moss")
+        return EXIT_OK
+    if choice in ("k", "krea", "krea2"):
+        _eprint("✓ 已切换默认工作流为 krea2_turbo。")
+        merge_config(config, {"default_workflow": "krea2_turbo"})
+        print_model_checklist(comfy, root=root, wf_id="krea2_turbo")
+        return EXIT_OK
+    if choice in ("z", "zi"):
+        _eprint("✓ 已切换默认工作流为 moody_zib_zit。")
+        merge_config(config, {"default_workflow": "moody_zib_zit"})
+        print_model_checklist(comfy, root=root, wf_id="moody_zib_zit")
         return EXIT_OK
 
-    if choice != "2":
+    if choice not in ("2", "c", "custom"):
         _eprint("未识别选项，按跳过处理。")
         return EXIT_SKIP
 
@@ -1272,7 +1313,14 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
         pass
     ai_ok = llm_ok
 
-    model_rows = scan_moody_models(comfy)
+    active_wf = str(cfg.get("default_workflow") or DEFAULT_WF_ID).strip()
+    wf_labels = {
+        "moody_moss": "Moody Moss Mix",
+        "krea2_turbo": "Moody Krea Mix",
+        "moody_zib_zit": "Moody ZIB+ZIT",
+    }
+    wf_label = wf_labels.get(active_wf, f"{active_wf} 模型")
+    model_rows = scan_workflow_models(comfy, active_wf)
     models_found = sum(1 for r in model_rows if r[3])
     models_total = len(model_rows)
     models_ok = comfy is not None and models_found == models_total
@@ -1299,16 +1347,16 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
         str(comfy) if comfy is not None else "未配置（无 main.py 根目录）",
     ))
     if comfy is None:
-        _eprint("  Moody 模型:         ✗  无法扫描（先配置 ComfyUI）")
+        _eprint("  %s:         ✗  无法扫描（先配置 ComfyUI）" % wf_label)
     elif models_ok:
-        _eprint("  Moody 模型:         ✓  %d/%d 就位" % (models_found, models_total))
+        _eprint("  %s:         ✓  %d/%d 就位" % (wf_label, models_found, models_total))
     elif models_partial:
         missing = [r[1] for r in model_rows if not r[3]]
-        _eprint("  Moody 模型:         △  %d/%d 就位；缺: %s" % (
-            models_found, models_total, ", ".join(missing),
+        _eprint("  %s:         △  %d/%d 就位；缺: %s" % (
+            wf_label, models_found, models_total, ", ".join(missing),
         ))
     else:
-        _eprint("  Moody 模型:         ✗  0/%d 就位" % models_total)
+        _eprint("  %s:         ✗  0/%d 就位" % (wf_label, models_total))
 
     _eprint("  LLM（填槽/连抽）:    %s  %s" % (
         mark(llm_ok),
@@ -1353,7 +1401,7 @@ def cmd_readiness_summary(args: argparse.Namespace) -> int:
         _eprint("  · 启动示例：bash '%s/scripts/gpu-pipeline/comfyui-start.sh' start" % root)
     if comfy is not None and not models_ok:
         _eprint("  · 无/缺 Moody 模型：按清单下载到 $COMFYUI_DIR/models/ 对应子目录")
-        _eprint("    （见 install_hints/workflow_moody_zib_zit.txt）。缺模型时默认出图可能失败。")
+        _eprint("    （见发行包 install_hints/ 或依赖指南）。缺模型时默认出图可能失败。")
     if not llm_ok:
         _eprint("  · LLM 端点暂不可达：启动本机 OpenAI 兼容网关（默认 127.0.0.1:8317），或改 llm.base_url。")
         _eprint("    直投 / 精选 / 出图可先用。")

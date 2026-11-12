@@ -5,7 +5,7 @@
 >
 > **发行包放哪**：zip 解压到任意固定目录即可（例如 macOS `~/AmazingDraw`，Windows `C:\AmazingDraw`）。解压目录就是运行时（WebUI / CLI / skill），不要拆散、不要放进 ComfyUI，也不要把 `assets.bin` 从 `card_engine_core/native/` 拆走。`install.sh` 只会把工作流拷到 `~/ComfyUI/workflows/`；发行包本身从固定解压目录运行。
 >
-> **配置权威路径**：本地 skill 与发行包都使用各自目录内的 `scripts/config.json`；发行包运行时直接读取包内该文件。
+> **配置权威路径**：运行期只认 `~/.amazingdraw/config.json`。包内 / skill 的 `scripts/config.json` 仅在家里这份还不存在时迁入。可用环境变量 `AMAZING_DRAW_CONFIG_FILE` 覆盖。
 
 ---
 
@@ -87,9 +87,9 @@ python3 -m pip install fastapi uvicorn requests websockets cryptography httpx
 - **项目**：[github.com/comfyanonymous/ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 - **默认根路径**：`~/ComfyUI`（Windows 在 Git Bash 下 `~` 映射到 `C:\Users\<用户名>`，即 `C:\Users\<用户名>\ComfyUI`）
 - **默认监听端口**：`http://127.0.0.1:8188`
-- **配置文件**：修改 `scripts/config.json` 中的 `comfyui_dir` 与 `comfyui_host`。
+- **配置文件**：修改 `~/.amazingdraw/config.json` 中的 `comfyui_dir` 与 `comfyui_host`。
 - **Windows 路径提示**：`config.json` 中所有 POSIX 风格路径（`~/...`、`/tmp/...`）在 Git Bash 内由 `os.path.expanduser` 解析为 Windows 用户目录；`cryptography`/模型路径建议显式写 Windows 绝对路径（`C:${HOME}/...`）避免歧义。
-- **本机模型清单**（命名与下载页）：`~/ComfyUI/models/README.md`
+- **本机模型清单**（命名与下载页）：ComfyUI 安装目录 `models/`（文件名需与配置一致）
 
 ### 自带启停与管理脚本
 
@@ -110,35 +110,68 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 模型和 LoRA 都放在 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 自己的目录里（`models/diffusion_models`、`models/text_encoders`、`models/vae`、`models/loras`），启动不再另挂 extra-models yaml。
 
-### 4.1 默认工作流
+### 4.1 支持的工作流（`config/workflows.json`）
 
-当前默认工作流 id 是 `moody_zib_zit`（别名 `moody`）：
+当前内置支持三大生产级工作流（只读基底 `scripts/card-engine/config/workflows.json`，运行期通过 `~/.amazingdraw/config.json` 的 `default_workflow` 选择）：
 
-- **Moody ZIB+ZIT**（主打写真）：`~/ComfyUI/workflows/Moody_ZIB_ZIT_20步_CFG3_512x768.json`
-- 双阶段：先 [Moody Wild Mix（ZIB Base）](https://civitai.red/models/2384856/moody-wild-mix)，再 [Moody Real Mix（ZIT Turbo）](https://civitai.com/models/621441)
-- 角色 LoRA 子目录：`girls_like_zi`
+1. **Moody Moss Mix 4.1 (MOSS Image)**（默认，id: `moody_moss`，简称 `moss`）：
+   - 25 步 CFG3 DiT 架构，原生支持 Qwen 3.5 9B int8 编码器与 Flux2 VAE
+   - 工作流文件：`~/ComfyUI/workflows/Moody_Moss_Standard_25步_CFG3.json`
+   - 专用 LoRA 目录：`models/loras/moss/`
+2. **Moody Krea Mix 6 (Krea 2 Turbo)**（id: `krea2_turbo`，简称 `krea`）：
+   - 8 步 CFG1 极速成片，底模 `Moody-Krea-Mix-fp8.safetensors` + 官方标量文本编码器 `qwen3vl_4b_fp8_scaled.safetensors`
+   - 工作流文件：`~/ComfyUI/workflows/Krea2_Turbo_fp8_8步_CFG1_768x1152.json`
+   - 明星 LoRA 目录：`models/loras/girls_like_krea2/`
+3. **Z-Image Turbo 写真**（id: `moody_zib_zit`，简称 `zi`）：
+   - 双阶段：先 [Moody Wild Mix（ZIB Base）](https://civitai.com/models/2384856/moody-wild-mix-zibzid)，再 [Moody Real Mix（ZIT Turbo）](https://civitai.com/models/621441/moody-real-mix)
+   - 工作流文件：`~/ComfyUI/workflows/Moody_ZIB_ZIT_20步_CFG3_512x768.json`
+   - 明星 LoRA 目录：`models/loras/girls_like_zi/`（136 人）
 
-### 4.2 默认 Moody 工作流用到的模型
+> 💡 **简称规则**：切换工作流统一使用 `zi` / `krea` / `moss`。
+
+### 4.2 工作流模型依赖
+
+#### A. Z-Image (Moody ZIB+ZIT) 模型
 
 | 用途 | 文件 | 放置目录 | 来源 |
 | :--- | :--- | :--- | :--- |
-| 一阶段 UNET（ZIB） | `MoodyWildMix-zib-base.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Wild Mix](https://civitai.red/models/2384856/moody-wild-mix) |
-| 二阶段 UNET（ZIT） | `MoodyRealMix-zit-write.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Real Mix](https://civitai.com/models/621441) |
-| 文本编码器 | `qwen_3_4b.safetensors` | `models/text_encoders/` | [Hugging Face · Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo) |
-| VAE | `ae.safetensors` | `models/vae/` | [Hugging Face · Comfy-Org/z_image_turbo](https://huggingface.co/Comfy-Org/z_image_turbo) |
+| 一阶段 UNET（ZIB） | `MoodyWildMix-zib-base.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Wild Mix](https://civitai.com/models/2384856/moody-wild-mix-zibzid) |
+| 二阶段 UNET（ZIT） | `MoodyRealMix-zit-write.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Real Mix](https://civitai.com/models/621441/moody-real-mix) |
+| 文本编码器 | `qwen_3_4b.safetensors` | `models/text_encoders/` | [HF · Comfy-Org/Z-Image-Turbo · text_encoders](https://huggingface.co/Comfy-Org/Z-Image-Turbo/tree/main/split_files/text_encoders) |
+| VAE | `ae.safetensors` | `models/vae/` | [HF · Comfy-Org/Z-Image-Turbo · vae](https://huggingface.co/Comfy-Org/Z-Image-Turbo/tree/main/split_files/vae) |
+
+#### B. MOSS Image (Moody Moss Mix) 模型
+
+| 用途 | 文件 | 放置目录 | 来源 |
+| :--- | :--- | :--- | :--- |
+| 扩散模型 DiT | `MoodyMossMix-fp8.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Moss Mix](https://civitai.com/models/3007871/moody-moss-mix-free-download) |
+| 文本编码器 | `qwen3.5_9b_int8_convrot.safetensors` | `models/text_encoders/` | [HF · Comfy-Org/MOSS-Image · text_encoders](https://huggingface.co/Comfy-Org/MOSS-Image/tree/main/text_encoders) |
+| VAE | `flux2-vae.safetensors` | `models/vae/` | [HF · Comfy-Org/MOSS-Image · vae](https://huggingface.co/Comfy-Org/MOSS-Image/tree/main/vae) |
+
+#### C. Krea 2 Turbo (Moody Krea Mix 6) 模型
+
+| 用途 | 文件 | 放置目录 | 来源 |
+| :--- | :--- | :--- | :--- |
+| 扩散模型 DiT | `Moody-Krea-Mix-fp8.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Krea 2 Mix](https://civitai.com/models/2731187) |
+| 文本编码器 | `qwen3vl_4b_fp8_scaled.safetensors` | `models/text_encoders/` | [HF · Comfy-Org/Krea-2 · text_encoders](https://huggingface.co/Comfy-Org/Krea-2/tree/main/text_encoders) |
+| VAE | `qwen_image_vae.safetensors` | `models/vae/` | [HF · Comfy-Org/Krea-2 · vae](https://huggingface.co/Comfy-Org/Krea-2/tree/main/vae) |
+
+> 推荐采样参数：KSamplerAdvanced · 8 步 · CFG 1.0 · euler_ancestral / beta · 默认画幅 768 × 1152。CLIPLoader type 选 `krea2`。
 
 > CLIPLoader type 选 `lumina2`。推荐采样参数以 CivitAI 模型页为准（ZIB 约 CFG 4 · 40 步；ZIT 约 CFG 1 · 8 步）。
 
-### 4.3 角色 LoRA（`girls_like_zi`）
+### 4.3 角色 LoRA 架构映射
 
-常规素人与明星写真依赖 GirlsLike 人物 LoRA：
+常规素人无 LoRA（引擎自动旁路）；明星写真根据当前工作流架构自动路由到对应权重目录：
 
-- **画廊**：[GirlsLike LoRA Gallery](https://huggingface.co/spaces/ifmylove2011/girlslike_lora_gallery)
-- **物理存放**：`~/ComfyUI/models/loras/girls_like_zi/`
-- **本机全表**：`~/ComfyUI/models/loras/README.md`
-- **抽卡键名**：`scripts/card-engine/config/celebrities.json` 的 `z`
+- **Z-Image 明星 LoRA**：`~/ComfyUI/models/loras/girls_like_zi/`（对应池 `z`）
+- **Krea 2 明星 LoRA**：`~/ComfyUI/models/loras/girls_like_krea2/`（对应池 `krea2`）
+- **MOSS Image 专属 LoRA**：`~/ComfyUI/models/loras/moss/`（对应池 `moss`）
+- **画廊参考**：[GirlsLike LoRA Gallery](https://huggingface.co/spaces/ifmylove2011/girlslike_lora_gallery)
+- **本机全表**：`~/ComfyUI/models/loras/`（按架构分子目录，文件名需与 celebrities 映射一致）
+- **抽卡键名映射**：`scripts/card-engine/config/celebrities.json`
 
-文件名不要改。触发词跟文件名绑定，并写进 `celebrities.json` 才能抽到。
+触发词与文件名严格绑定，引擎会根据当前激活工作流由 `role_resolver` 自动对齐架构，杜绝跨架构混载。
 
 ---
 
@@ -146,7 +179,7 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 
 标题提取、场景路由等独立调用走 **OpenAI 兼容 HTTP**：`POST {llm.base_url}/chat/completions`。Base URL、Key、模型在配置页填写，按这台机器实际端点来，不要假设端口或软件名。模型列表来自该端点的 `GET /v1/models`。出图只走 ComfyUI。
 
-端点不可用时：直投 / 精选 / 渲染仍可进 Comfy；依赖 LLM 的步骤会降级为正则 / 占位 / 放行。没有总开关关掉独立调用；仅 `enable_ai_check`（默认关）跳过 AI 语义门禁。
+端点不可用或总闸关闭时：直投 / 精选 / 渲染仍可进 Comfy；依赖 LLM 的步骤立刻降级为正则 / 词表 / 占位，不发 HTTP。设置页「引擎独立调用 LLM」是总闸（默认开）；分项在总闸下面。`enable_ai_check` 默认关，且总闸关时也不跑。中文改法由主 Agent 写 `--targets-json`，不走独立 LLM。
 
 
 ---

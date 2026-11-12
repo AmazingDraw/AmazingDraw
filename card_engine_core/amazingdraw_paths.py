@@ -6,6 +6,7 @@
 仍可作为覆盖项，默认值落在根目录下：
 
     ~/.amazingdraw/
+      config.json             全局运行期主配置（跨端唯一真相源）
       cards/                  卡片 JSON
       custom_presets/         第三方角色/场景预设
       cloud_preview/          云端出图预览
@@ -36,13 +37,51 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-DEFAULT_CONFIG_PATH = SCRIPTS_DIR / "config.json"
 MIGRATION_MARKER_NAME = ".migrated-from-openclaw.json"
 
 
 def amazingdraw_home() -> Path:
     """固定数据根目录 ~/.amazingdraw。"""
     return Path(os.path.expanduser("~")) / ".amazingdraw"
+
+
+def config_file(local_scripts_dir: Optional[Path] = None) -> Path:
+    """运行期 config.json 唯一路径：~/.amazingdraw/config.json。
+
+    - 支持 AMAZING_DRAW_CONFIG_FILE 覆盖（容器 / 单测）。
+    - 若传入临时测试沙箱目录（非本模块所在目录）且沙箱内已有 config.json，优先使用沙箱配置。
+    - 首次访问时若 ~/.amazingdraw/config.json 尚不存在，自动从旧位置 scripts/config.json 原子迁入。
+    """
+    env = os.environ.get("AMAZING_DRAW_CONFIG_FILE")
+    if isinstance(env, str) and env.strip():
+        return Path(os.path.expanduser(env.strip()))
+
+    if local_scripts_dir is not None:
+        base = Path(local_scripts_dir).resolve()
+        sandbox_cfg = base / "config.json"
+        if base != SCRIPTS_DIR and sandbox_cfg.is_file():
+            return sandbox_cfg
+
+    home = amazingdraw_home()
+    target = home / "config.json"
+    if not target.exists():
+        legacy = SCRIPTS_DIR / "config.json"
+        if legacy.is_file():
+            try:
+                home.mkdir(parents=True, exist_ok=True)
+                tmp = target.with_name(f"config.json.tmp.{os.getpid()}")
+                shutil.copy2(str(legacy), str(tmp))
+                os.replace(str(tmp), str(target))
+            except Exception:
+                return legacy
+    return target
+
+
+def canonical_config_path(local_scripts_dir: Optional[Path] = None) -> Path:
+    return config_file(local_scripts_dir)
+
+
+DEFAULT_CONFIG_PATH = config_file()
 
 
 def legacy_openclaw_data_dir() -> Path:
@@ -269,6 +308,7 @@ def _main(argv: List[str]) -> int:
         cfg = load_config()
         table: Dict[str, Path] = {
             "home": amazingdraw_home(),
+            "config_file": config_file(),
             "cards_dir": cards_dir(cfg),
             "custom_presets_dir": custom_presets_dir(cfg),
             "chat_dir": chat_dir(),

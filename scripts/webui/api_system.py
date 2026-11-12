@@ -329,7 +329,13 @@ def _check_required_loras(
     if not isinstance(declared, (list, tuple)):
         return [], []
     names = [str(item).strip() for item in declared if str(item).strip()]
-    missing = [name for name in names if not (lora_root / name).is_file()]
+    search_roots = [lora_root]
+    if lora_root.name != "loras":
+        search_roots.append(lora_root.parent)
+    missing = [
+        name for name in names
+        if not any((root / name).is_file() for root in search_roots)
+    ]
     return names, missing
 
 
@@ -376,7 +382,7 @@ def _classify_llm_error(message: str, backend: Optional[str] = None) -> str:
     return "调用失败"
 
 
-def _probe_llm(model: Optional[str] = None) -> Dict[str, Any]:
+def _probe_llm(model: Optional[str] = None, cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """真实打一枪。任何异常都收敛成结构化结果，绝不向上抛。"""
     started = time.time()
     result: Dict[str, Any] = {
@@ -389,25 +395,30 @@ def _probe_llm(model: Optional[str] = None) -> Dict[str, Any]:
         "checked_at": None,
     }
     try:
-        from card_llm_client import chat_completion
+        from card_llm_client import IndependentLLMDisabled, chat_completion, independent_llm_master_enabled
     except Exception as exc:  # 引擎模块缺失/损坏
         result["reason"] = "找不到 LLM 客户端模块（card_llm_client）"
         result["error"] = str(exc)[:240]
     else:
         try:
-            content = chat_completion(
-                _LLM_PROBE_MESSAGES,
-                max_tokens=_LLM_PROBE_MAX_TOKENS,
-                timeout=_LLM_PROBE_TIMEOUT,
-                model=(model or "").strip() or None,
-            )
+            if not independent_llm_master_enabled(cfg):
+                result["reason"] = "引擎独立调用 LLM 已关闭"
+            else:
+                content = chat_completion(
+                    _LLM_PROBE_MESSAGES,
+                    max_tokens=_LLM_PROBE_MAX_TOKENS,
+                    timeout=_LLM_PROBE_TIMEOUT,
+                    model=(model or "").strip() or None,
+                    feature="probe",
+                )
+                result["ok"] = True
+                result["sample"] = str(content or "")[:_LLM_PROBE_SAMPLE_CHARS]
+                result["reason"] = "连通成功"
+        except IndependentLLMDisabled:
+            result["reason"] = "引擎独立调用 LLM 已关闭"
         except Exception as exc:
             result["reason"] = _classify_llm_error(str(exc))
             result["error"] = str(exc)[:400]
-        else:
-            result["ok"] = True
-            result["sample"] = str(content or "")[:_LLM_PROBE_SAMPLE_CHARS]
-            result["reason"] = "连通成功"
 
     result["latency_ms"] = int((time.time() - started) * 1000)
     result["checked_at"] = time.time()
@@ -452,7 +463,14 @@ def get_environment():
     # ── 灯 1: API（§6：以「测试连通成功」为准，字段非空不算绿）──
     llm_model = str(cfg.get("llm_model") or "").strip()
     probed = dict(_LAST_LLM_PROBE)
-    if not llm_model:
+    try:
+        from card_llm_client import independent_llm_master_enabled
+        llm_master_on = independent_llm_master_enabled(cfg)
+    except Exception:
+        llm_master_on = True
+    if not llm_master_on:
+        api_green, api_reason = False, "引擎独立调用 LLM 已关闭"
+    elif not llm_model:
         api_green, api_reason = False, "未配置 AI 对话模型（llm_model 为空；灯 1 门槛键）"
     elif not probed:
         api_green, api_reason = False, "尚未实测连通，请点「测试连通」"
@@ -588,7 +606,11 @@ def test_llm(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     只读契约不变：不写配置；结果缓存供 §6 灯 1 引用。字段非空不算绿。
     """
     body = payload if isinstance(payload, dict) else {}
-    result = _probe_llm(body.get("model"))
+    try:
+        cfg = _load_config()
+    except Exception:
+        cfg = None
+    result = _probe_llm(body.get("model"), cfg=cfg)
     _LAST_LLM_PROBE.clear()
     _LAST_LLM_PROBE.update(result)
     return result
@@ -667,7 +689,7 @@ def select_path(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     * 只做 `/system_stats` 快检（`_HTTP_TIMEOUT`，6s）决定灯色，**不拉** 15s 的
       `/object_info`：用户刚改完配置不该等 15 秒；完整四灯以
       `GET /api/system/environment` 为准，避免两处判定逻辑各自漂移。
-    * 配置改完**即时生效**：WebUI 与 Card Engine 都从 `scripts/config.json` 按次读盘
+    * 配置改完**即时生效**：WebUI 与 Card Engine 都从 `~/.amazingdraw/config.json` 按次读盘
       （`load_system_config` 无缓存），不需要重启。
     """
     body = payload if isinstance(payload, dict) else {}

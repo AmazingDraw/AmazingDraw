@@ -1,6 +1,6 @@
 # 配置文件使用指南
 
-运行时只认当前程序目录下的 `scripts/config.json`（本地 skill 与发行包都是这份；本机文件不进 git）。不能写 `//` 注释。WebUI 保存设置会整文件重写，手动加的未知字段也会被擦掉。
+运行时只认 `~/.amazingdraw/config.json`（由 `amazingdraw_paths.config_file()` 解析）。旧位置 `scripts/config.json` 仅在目标文件还不存在时自动迁入。环境变量 `AMAZING_DRAW_CONFIG_FILE` 可覆盖路径（容器 / 单测）。模板见 `config.example.json`（skill 在 `scripts/`，发行包在仓根）。不能写 `//` 注释。WebUI 保存设置会整文件重写，手动加的未知字段也会被擦掉。本机文件不进 git。
 
 ---
 
@@ -19,11 +19,10 @@
 | :--- | :--- |
 | `comfyui_dir` | 本机 ComfyUI 根目录，`comfyui-start.sh` 用 |
 | `obsidian_vault_dir` | Obsidian 库根。提交后写 markdown；精选从 `灵感库/` 抽 `.md`，图在 `attachments/`。空则精选不可用 |
-| `custom_presets_dir` | 第三方角色 / 场景。空则 `~/.amazingdraw/custom_presets`。子目录 `amateurs/`、`roles/`、`scenes/`。名为 `template.json` 的文件会被跳过 |
+| `custom_presets_dir` | 第三方角色 / 场景。空则 `~/.amazingdraw/custom_presets`。子目录 `amateurs/`、`roles/`、`scenes/`。名为 `template.json` 的文件会被跳过。不在 WebUI 设置页展示 |
 | `recording_dir` | 抽卡历史 MD（submit 通过后写入） |
 | `cards_dir` | 卡片 JSON。空则 `~/.amazingdraw/cards`（数据根目录固定为 `~/.amazingdraw`，无独立配置键；旧数据用 `python3 scripts/amazingdraw_paths.py migrate` 从 `~/.openclaw/draw-cards`、`~/.openclaw/webui-chat` 复制过来） |
 | `tmp_dir` | 临时目录。空则 `/tmp/cu-card`（Windows 由 `install.sh` 改成系统临时目录） |
-| `openclaw_workspace_dir` | 旧配置项，仅作后台进程 cwd；空则用 `~/.amazingdraw`，可不填。支持 `~` |
 
 ---
 
@@ -45,8 +44,9 @@
 | `llm.base_url` | OpenAI 兼容 `/v1` 端点，按本机填写 |
 | `llm.api_key` | 可空；端点不需要 key 时留空 |
 | `llm.model` / `llm_model` | 唯一模型，设置页从 `/v1/models` 拉取。所有 LLM 调用共用 |
+| `llm.timeout_seconds` | 单次请求超时秒数，代码默认 `10` |
 | `llm.retry_limit` / `llm_retry_limit` | 单个候选最大尝试次数（含首次），代码默认 `1` |
-| `chat_mode` | 遗留键；WebUI 运行时固定为工作台 `cards` |
+| `chat_mode` | 读盘时强制为工作台 `cards`；写入会被下次加载覆盖 |
 
 ---
 
@@ -56,30 +56,33 @@
 | :--- | :--- |
 | `exposure_allowed_modes` | 允许的裸露档集合，优先。例 `["upper","lower","half_nude"]`。WebUI chips 写入，至少一项 |
 | `exposure_limit` | 兼容区间 `[min, max]`。没有 `exposure_allowed_modes` 时用。WebUI 保存 chips 时会派生写入 |
-| `restrict_roles` | 默认 `true`。WebUI「限制角色」：打开后限制角色不进角色库 |
+| `perspective_exposure_bindings` | 特殊视角允许的裸露档。缺省：颜射 `upper`/`half_covered`，后入 `lower`/`half_nude`，丝袜 `half_nude`/`half_covered`，偷拍 `lower`/`half_nude` |
 | `disabled_celebrities` | 默认 `[]`。禁用明星名单：支持填中文名（例 `"高叶"`）或 LoRA 键（例 `"girlslike_zi_gy"`），填入后不进入随机抽取池与候选列表 |
-| `enable_ai_check` | 默认 `false`。打开后 `check_prompt.sh` 在物理门禁之外再调 LLM 语义检查。WebUI 在服务参数区 |
+| `enable_independent_llm` | 默认 `true`。引擎独立调用总闸。关闭后节点 ①②④⑤⑦⑧ 不发 HTTP。环境变量 `AMAZING_DRAW_NO_INDEPENDENT_LLM=1` 强制关。WebUI 在服务参数区 |
+| `llm_calls` | 分项，默认全 `true`：`route_hint` / `multi_roles` / `body_classify` / `metadata`。总闸关时不生效。不含翻译 |
+| `enable_ai_check` | 默认 `false`。打开后 `check_prompt.sh` 在物理门禁之外再调 LLM 语义检查。还要求总闸开。WebUI 在独立调用分项里 |
 | `scene_cooldown_window` | 连续 N 张内避免同一具体场景，默认 `9` |
-| `auto_horizontal_for_multi` | 检测到多人时是否自动切横版，默认 `true` |
-| `scene_library_weights` | 子库抽样权重，键名带 `_scenes`：`school_scenes` / `general_scenes` / `medical_scenes` / `workplace_scenes` / `sm_scenes` / `special_scenes` / `perspective_scenes` |
+| `auto_horizontal_for_multi` | 仅当检测到 **>=3 人**（3P、双洞、三人合影等）时是否自动切横版，默认 `true`。双人（含深喉第一人称 / 第三人称机位）保持竖屏 |
+| `scene_library_weights` | 子库抽样权重，键名带 `_scenes`：`school_scenes` / `general_scenes` / `medical_scenes` / `workplace_scenes` / `sm_scenes` / `special_scenes` / `ancient_scenes` / `perspective_scenes`（日常混合池里 `perspective_scenes` 应为 `0`） |
 | `scene_registry` | 场景库注册（enabled / 中文名 / 文件名）。WebUI 权重面板依赖它 |
-| `resolution_presets` | 版式像素。常见键 `vertical` 512×768、`horizontal` 768×512、`square` 640×640、`widescreen` 1088×464 |
-| `perspective_metrics_enabled` | 默认 `true`。特殊视角指标打点统计（可在环境变量通过 `AMAZING_DRAW_PERSPECTIVE_METRICS` 覆盖），不记录完整 prompt |
+| `resolution_presets` | 全局回退版式像素（常见 `vertical` 512×768、`horizontal` 768×512、`square` 640×640、`widescreen` 1088×464）。`lock_size_to_workflow` 为 `true` 时优先用当前工作流自己的预设（ZIB/ZIT 512×768，Krea / Moss 768×1152） |
+| `perspective_metrics_enabled` | 默认 `true`。特殊视角指标打点统计（可用环境变量 `AMAZING_DRAW_PERSPECTIVE_METRICS` 覆盖），不记录完整 prompt |
 
 ---
 
-## 工作流
+## 工作流架构与配置
 
-已不再使用独立的 `workflow_defaults.json`。
+工作流元数据采用 **只读基底 + 状态/差异覆盖**：
+
+- **系统只读基底**：`scripts/card-engine/config/workflows.json`（内置 `moody_zib_zit`、`krea2_turbo`、`moody_moss` 的完整节点与参数，随 Git 代码库升级）。
+- **用户运行期覆盖**：写在 `~/.amazingdraw/config.json` 的 `default_workflow` / `workflows_aliases` / `workflows`。无需覆写时 `workflows` 可为 `{}`。
 
 | 键 | 说明 |
 | :--- | :--- |
-| `default_workflow` | 默认工作流 id，例如 `moody_zib_zit` |
-| `workflows_aliases` | 短名，例如 `{"moody":"moody_zib_zit"}` |
-| `workflows` | id → 元数据（路径、节点、默认宽高） |
-| `lock_size_to_workflow` | 卡片尺寸是否跟工作流走，默认 `true` |
-
-发行包工作流在仓根 `workflows/*.json`。
+| `default_workflow` | 默认工作流 id（`moody_zib_zit` / `krea2_turbo` / `moody_moss`，可用 `card_cli.py workflow --set zi` / `krea` / `moss` 切换） |
+| `workflows_aliases` | （可选）自定义短名别名；基底已预置 `zi`、`krea`、`moss` 等 |
+| `workflows` | （可选）用户自定义工作流或覆写基底项。无需覆写时为空 `{}` |
+| `lock_size_to_workflow` | 卡片尺寸是否跟工作流走，默认 `true`。优先使用工作流自己的 `resolution_presets` |
 
 ---
 
@@ -107,7 +110,7 @@
 
 ## 云端出图（可选，默认关）
 
-叠加在建卡流程上的**出图策略**：开启后交给外部渲染。缺省 `enabled: false`，现网 Comfy + Telegram 不变。
+叠加在建卡流程上的出图策略：开启后交给外部渲染。缺省 `enabled: false`，现网 Comfy + Telegram 不变。
 
 ```json
 "cloud": {
@@ -126,11 +129,12 @@ AI / bot：**不要**只靠 CLI help；开云端后的步骤、停在 check 后�
 
 ## 可选覆盖（不写就用内置）
 
-| 键 | 缺省 |
-| :--- | :--- |
-| `direction_map` | `scripts/card-engine/config/direction-map.json` |
-| `auto_direction_pool` | 代码 `DIRECTION_POOL` |
-| `validation_rules` | 代码门禁阈值 |
+| 键 | 缺省 | 说明 |
+| :--- | :--- | :--- |
+| `enable_cjk_sanitization` | `true` | 是否启用 CJK 中文清洗与校验拦截。默认开启；设为 `false` 则关闭对非白名单槽位的中文清洗与连抽中文拦截（适用于原生支持中文的底层模型） |
+| `direction_map` | `scripts/card-engine/config/direction-map.json` | 方向覆盖表 |
+| `auto_direction_pool` | 代码 `DIRECTION_POOL` | 自动方向池 |
+| `validation_rules` | 代码门禁阈值 | 校验门禁阈值 |
 
 ---
 

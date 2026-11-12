@@ -5,7 +5,7 @@
 说明：
 - single 独有命令：create / patch / options / present
 - chain 独有命令：chain (带子选项 --resume / --count) / mend
-- 共用命令：fill / render / check / submit / direct / featured / archive / record / search / progress / resolve / queue / doc
+- 共用命令：fill / render / check / submit / direct / featured / archive / record / search / progress / resolve / queue / doc / workflow
 
 这里只合并入口层，不混淆 single / chain 的业务流程；
 真实逻辑仍由 card_core.py 中各命令处理。
@@ -41,6 +41,7 @@ from card_cli_commands import (
     cmd_resolve,
     cmd_search,
     cmd_submit,
+    cmd_workflow,
 )
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -81,24 +82,24 @@ SINGLE_COMMANDS = {
 
 # ── chain-only commands ───────────────────────────────────────────────────────
 def _get_aspect_help_text():
-    from card_config import load_system_config
+    from card_config import load_system_config, load_workflow_config, resolve_aspect_presets
     cfg = load_system_config()
-    presets = cfg.get("resolution_presets", {})
-    v_w = presets.get("vertical", {}).get("width", 512)
-    v_h = presets.get("vertical", {}).get("height", 768)
-    h_w = presets.get("horizontal", {}).get("width", 768)
-    h_h = presets.get("horizontal", {}).get("height", 512)
-    sq = presets.get("square", {}).get("width", 640)
-    w_w = presets.get("widescreen", {}).get("width", 1088)
-    w_h = presets.get("widescreen", {}).get("height", 464)
-    return f"常用画幅预设(当前配置)：portrait={v_w}x{v_h} landscape={h_w}x{h_h} square={sq}x{sq} widescreen={w_w}x{w_h}"
+    aspect = resolve_aspect_presets(load_workflow_config(), cfg)
+    v_w, v_h = aspect["portrait"]
+    h_w, h_h = aspect["landscape"]
+    sq_w, sq_h = aspect["square"]
+    w_w, w_h = aspect["widescreen"]
+    return (
+        f"常用画幅预设(当前默认工作流)：portrait={v_w}x{v_h} "
+        f"landscape={h_w}x{h_h} square={sq_w}x{sq_h} widescreen={w_w}x{w_h}"
+    )
 
 CHAIN_COMMANDS = {"chain"}
 
 # ── shared commands ───────────────────────────────────────────────────────────
 SHARED_COMMANDS = {
     "fill", "render", "check", "submit", "archive", "record",
-    "search", "progress", "resolve", "queue", "doc", "mend",
+    "search", "progress", "resolve", "queue", "doc", "mend", "workflow",
 }
 
 
@@ -106,6 +107,15 @@ SHARED_COMMANDS = {
 def add_shared_parsers(sub):
     """共用命令：single / chain 都可复用。"""
     sub.add_parser("progress", help="查看当前进度/健康状态")
+    c_workflow = sub.add_parser(
+        "workflow",
+        help="查询或切换默认抽卡工作流（zi = Z-Image，krea = Krea2 Turbo，moss = MOSS Image）",
+    )
+    c_workflow.add_argument(
+        "--set",
+        default="",
+        help="切换默认工作流：zi / krea / moss（也可写 moody_zib_zit / krea2_turbo / moody_moss）。省略则只查询。",
+    )
     c_doc = sub.add_parser("doc", help="查阅提示词、绘图、避坑、命令速查或配置指南")
     c_doc.add_argument(
         "name",
@@ -116,7 +126,7 @@ def add_shared_parsers(sub):
 
     c_search = sub.add_parser(
         "search",
-        help="查地点 / 主题 / 视角 / 角色；主题与完整视角词原样交给 create/chain 即整池随机",
+        help="查地点 / 主题 / 视角 / 角色 / 特色桥段；主题与完整视角词原样交给 create/chain 即整池随机",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 search 只确认库内有没有。抽卡把同一词传 create/chain --scene。禁止 grep JSON。
@@ -124,6 +134,7 @@ search 只确认库内有没有。抽卡把同一词传 create/chain --scene。�
   地点  --scene 走廊       钉死命中的 label
   主题  --scene 校园       随机整库（医疗/职场/SM/日常/古风/特殊 同理）
   视角  --scene 颜射视角   随机该视角池（必须完整词；特殊视角=视角库全盲盒）
+  桥段  --trope 深喉|鱼眼  深喉：说明、触发词与两档机位；抽卡 --trope 深喉[:机位][:深度]，深度=全插/半插（全入/半入同义）。鱼眼：--trope 鱼眼
   角色  --person 护士      只看 Y·V·U·L；抽卡角色仍直接 --person
   未命中                   原词照传：场景 → manual-custom（fill 必写英文 scene.keywords）；角色直接 --person
 """
@@ -133,6 +144,7 @@ search 只确认库内有没有。抽卡把同一词传 create/chain --scene。�
         help="地点列出 label；主题词或完整视角词列出对应池。抽卡原词给 create/chain 即整池随机。",
     )
     c_search.add_argument("--person", help="按关键字搜索角色库/身份库 (如 '护士', '女大学生', 'ol')；仅展示四轴粗标签(Y·V·U·L)，不暴露真实体型文本")
+    c_search.add_argument("--trope", dest="trope", help="查询特色桥段说明与触发词 (如 '深喉', '鱼眼', '第一人称', '第三人称', '桥段')")
 
     c_resolve = sub.add_parser("resolve", help="resolver 联合解析，输出 fill-ready 字段")
     c_resolve.add_argument("--scene-library", default="general_scenes", help="场景库名")
@@ -216,12 +228,16 @@ SCENE_ARG_HELP = (
     "短词「颜射」「后入」不进池。库外描述→manual-custom。"
 )
 
+TROPE_ARG_HELP = (
+    "指定特色桥段。不带值：全部桥段随机。"
+    "带值：深喉 / 深喉:第一人称 / 深喉:第一人称:全插 / 深喉:半插（全入/半入同义；深度锁死，其余轴仍随机）；鱼眼。"
+)
+
 PERSPECTIVE_TIPS_TEXT = """[tip] 技巧：自带视角特定场景精准命中（视角场景免疫外部裸露指令，只认自身允许的裸露档位）
 在 --scene 中包含以下关键词，可直接抽中全库原生视角特定机位：
   --scene "颜射视角"  -> 命中：诊室医生椅旁(颜射视角)、教室课桌旁(颜射视角)等
   --scene "后入视角"  -> 命中：器材室软垫(后入视角)、更衣室长凳旁(后入视角)等
   --scene "丝袜视角"  -> 命中：闺房床沿(丝袜视角)、浴室地砖(丝袜视角)等
-  --scene "鱼眼视角"  -> 命中：玄关猫眼(鱼眼视角)、试衣间顶角(鱼眼视角)等
   --scene "偷拍视角"  -> 命中：车厢座下(偷拍视角)、隔间蹲位(偷拍视角)等"""
 
 CREATE_EPILOG = f"""
@@ -238,11 +254,11 @@ CREATE_EPILOG = f"""
       * 说「修改内容+数字」  => 先按文字优化，再应用数字方向并 options 轮转重新设计（使用 text_template）
       * 说「6」              => 检查：脚本检查 → AI检查 → 输出修正提示词
       * 说「61」             => 一键生成：检查 → 阻断则修正 / 全通则自动画
-      * 数字组合 (如 27961) => 顺序执行多项修改并轮转（使用 text_template，除非含1则提交）
+      * 数字组合 (如 27961) => Agent 按位多次 --direction 并轮转（使用 text_template，除非含1则提交；不要把原话丢给 patch --user-input）
       * 说「换」或「0」      => 随机换全新场景重抽（使用 text_template）
   R6. 提交生成            -> check -> submit --confirm 确认提交 GPU 队列
 
-🎬 导演摘要（仅常规模式 present 顶部芯片；连抽无此展示）：
+🎬 导演摘要（常规模式 present 顶部摘要）：
   - summary_display 由 theme_zh、人物及 director 各中文短标签组成，排除标点后总纯字数 ≤36 字。
   - theme_zh 填 4~6 字情绪主题短标签；style_recipe_zh / lighting_palette_zh / pose_direction_zh 等各填 4~8 字，严禁长句。
 
@@ -286,6 +302,14 @@ def add_single_parsers(sub):
     c_create.add_argument("--no-bundle", action="store_true", dest="no_bundle", help="关闭场景自动词库（也不加载 --bundle）")
     c_create.add_argument("--no-blind", action="store_true", help="关闭体型盲盒（降级为传统明文 slots.body_shape）")
     c_create.add_argument("--stage", dest="stage", help="显式指定角色年龄阶段 Y1~Y5（Y1含苞初绽/Y2豆蔻含春/Y3韶华舒展/Y4风姿绰约/Y5丰润韵致，多人卡支持逗号分隔如 'Y5,Y2'）")
+    c_create.add_argument(
+        "--trope",
+        dest="trope",
+        nargs="?",
+        const="*",
+        default=None,
+        help=TROPE_ARG_HELP,
+    )
 
     FILL_EPILOG = """
 📦 体型盲盒规则（默认开启）：
@@ -334,7 +358,7 @@ def add_single_parsers(sub):
     c_patch = sub.add_parser("patch", help="局部修改卡面")
     c_patch.add_argument("--card", required=True)
     c_patch.add_argument("--direction", help="方向编号 0/1/6/9 或动态位 2/3/4/5/7/8")
-    c_patch.add_argument("--user-input", help="组合指令，如 51 / 5 1 / 加大尺度 5 1")
+    c_patch.add_argument("--user-input", help="记录文字意图 / 裸露指令；不解析数字方向（方向请用 --direction）")
     c_patch.add_argument("--set", help="字段路径如 slots.tattoo")
     c_patch.add_argument("--value", help="修改值（同值写入所有 target）")
     c_patch.add_argument("--intent", help="修改意图描述")
@@ -550,6 +574,14 @@ def add_chain_parsers(sub):
     c_chain.add_argument("--no-bundle", action="store_true", dest="no_bundle", help="关闭场景自动词库")
     c_chain.add_argument("--no-blind", action="store_true", help="关闭体型盲盒（降级为传统明文 slots.body_shape）")
     c_chain.add_argument("--stage", dest="stage", help="显式指定角色年龄阶段 Y1~Y5（Y1含苞初绽/Y2豆蔻含春/Y3韶华舒展/Y4风姿绰约/Y5丰润韵致，多人卡支持逗号分隔如 'Y5,Y2'）")
+    c_chain.add_argument(
+        "--trope",
+        dest="trope",
+        nargs="?",
+        const="*",
+        default=None,
+        help=TROPE_ARG_HELP,
+    )
 
 
 # ── command dispatch ──────────────────────────────────────────────────────────
@@ -576,6 +608,7 @@ COMMANDS = {
     "queue": cmd_queue,
     "doc": cmd_doc,
     "search": cmd_search,
+    "workflow": cmd_workflow,
 }
 
 

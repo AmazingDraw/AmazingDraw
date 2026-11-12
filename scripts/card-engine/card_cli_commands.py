@@ -15,8 +15,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from card_autofix import CAMERA_MAP, SAFE_CUMS, SAFE_TATTOOS
-
 # Import variables and helper APIs from card_core.py
 from card_core import (
     build_user_constraints,
@@ -31,7 +29,8 @@ from card_core import (
     write_chain_fill_templates,
     CARDS_DIR,
     SLOT_RENDER_ORDER,
-    SLOT_CLEAN_EXCEPT_TATTOO,
+    CJK_ALLOWED_SLOTS,
+    CJK_CLEAN_TARGET_SLOTS,
     DIRECTION_POOL,
 )
 
@@ -55,6 +54,16 @@ from card_blind_body import (
     reveal_render_prompt,
     strip_unauthorized_body_words,
 )
+
+
+def _ai_fill_lock_hint(card=None, *, celebrity=False, indent=""):
+    """扫库禁令始终打印；盲盒托管句只给真正进盲盒的卡。"""
+    prefix = f"{indent}🔒 [AI 提示] 严禁 grep 扫库检索配置！"
+    if celebrity or (isinstance(card, dict) and not is_blind_card(card)):
+        return prefix
+    return f"{prefix}体型已由盲盒托管，直接按模板进行 fill 填槽即可。"
+
+
 from card_scene_router import (
     scene_requests_sm_theme, scene_requests_workplace_theme,
     scene_requests_school_theme, scene_requests_medical_theme, scene_requests_general_theme,
@@ -78,11 +87,15 @@ from card_identity import (
 from card_config import (
     SCRIPT_DIR,
     get_default_workflow_name,
+    normalize_workflow_name,
     load_workflow_config,
     load_workflow_defaults,
+    resolve_aspect_presets,
     load_system_config,
     load_direction_map,
     load_validation_rules,
+    describe_default_workflow,
+    set_default_workflow,
 )
 
 def run_script(script_name, *args, **kwargs):
@@ -163,46 +176,32 @@ def cmd_create(args):
         n_libs = len(secs)
         n_secs = sum(len(v) if isinstance(v, list) else 0 for v in secs.values())
         print(f"  词库参考: {n_libs} 库 / {n_secs} 条可选")
-        for lib, names in secs.items():
-            if isinstance(names, list) and names:
-                print(f"    · {lib}: {', '.join(names[:6])}{'…' if len(names) > 6 else ''}")
+        picks = card.get("_bundle_picks") or []
+        if not picks:
+            # 旧卡只有 _bundle_pick
+            one = card.get("_bundle_pick") or {}
+            if isinstance(one, dict) and one.get("zh"):
+                picks = [one]
+        if picks:
+            for pick in picks:
+                sec = (pick.get("section") or "").strip()
+                print(f"    · {pick.get('lib') or 'lib'}: {sec + ' · ' if sec else ''}{pick.get('zh') or ''}")
+        else:
+            for lib, names in secs.items():
+                if isinstance(names, list) and names:
+                    print(f"    · {lib}: {', '.join(names[:6])}{'…' if len(names) > 6 else ''}")
         if card.get('_bundle_sidecar'):
             print(f"  词库旁路: {card['_bundle_sidecar']}")
-        print("  → fill 可将 guidance.library_bundle 的 1 条写入对应槽，也可留空")
+        print("  → fill 可将 guidance.library_bundle 的 1～2 条写入对应槽，也可留空")
     else:
         print("  词库参考: 无")
     if is_custom_scene:
         print(f"\n  💡 [SYSTEM TIPS] 场景「{card['scene']['name']}」为库外场景，请在 fill 写入英文 scene.keywords，尽情发挥，禁止留空。")
     if is_custom_person:
         print(f"\n  💡 [SYSTEM TIPS] 人物「{args.person}」为库外角色，请根据角色特质，尽情发挥，自由大胆。")
-        # 多人角色提示：检测是否包含多人关键词
-        multi_person_keywords = [
-            # 家庭关系（明确包含两人）
-            '母女', '父女', '母子', '姐妹', '兄妹', '姐弟',
-            # 明确多人组合
-            '双胞胎', '姐妹花', '三姐妹', '闺蜜', '合影', '合照',
-            # 明确多人行为
-            '双飞', '3p', '4p', '群P', '多人', '双人', '三人', '四人', '五人',
-            '乱交', '轮奸', '群交', '后宫团',
-        ]
-        if any(kw in args.person for kw in multi_person_keywords):
-            # 根据关键词动态生成格式示例
-            # 有男有女的关键词
-            mixed_gender_keywords = ['父女', '母子', '兄妹', '姐弟']
-            # 三人场景
-            three_person_keywords = ['三姐妹', '三人', '3p']
-            
-            if any(kw in args.person for kw in mixed_gender_keywords):
-                # 有男有女场景
-                print("  💡 [SYSTEM TIPS] 检测到多人角色（有男有女），请在 body_shape 中为每个人物分别描述体型、年龄、外貌特征（格式如：ONE MAN AND ONE GIRL: (1) 男性描述; (2) 女性描述）。")
-            elif any(kw in args.person for kw in three_person_keywords):
-                # 三人纯女性场景
-                print("  💡 [SYSTEM TIPS] 检测到多人角色，请在 body_shape 中为每个人物分别描述体型、年龄、外貌特征（格式如：THREE GIRLS: (1) 角色A描述; (2) 角色B描述; (3) 角色C描述）。")
-            else:
-                # 双人纯女性场景
-                print("  💡 [SYSTEM TIPS] 检测到多人角色，请在 body_shape 中为每个人物分别描述体型、年龄、外貌特征（格式如：TWO GIRLS: (1) 角色A描述; (2) 角色B描述）。")
-    print("  🔒 [AI 提示] 严禁 grep 扫库检索配置！体型已由盲盒托管，直接按模板进行 fill 填槽即可。")
-    print("  🎬 [摘要展示] present 顶部芯片排除标点后 ≤36 字；theme_zh 4~6 字，各 director *_zh 4~8 字短标签。")
+    print(_ai_fill_lock_hint(card, indent="  "))
+    if getattr(args, 'workflow_mode', None) != 'chain' and card.get('workflow_mode') != 'chain':
+        print("  🎬 [摘要展示] present 顶部摘要排除标点后 ≤36 字；theme_zh 4~6 字，各 director *_zh 4~8 字短标签。")
     print(f"{'='*50}")
 
     # 返回 card_id 便于管道
@@ -326,10 +325,15 @@ def cmd_fill(args):
         for phase_name in ('director', 'slots', 'elevation'):
             progress[phase_name] = bool(progress.get(phase_name))
 
+        from trope_runtime import trope_owns_director_field
+
         required_director = [
             "intent", "exposure_mode", "style_recipe", "lighting_palette",
             "pose_direction", "makeup_direction", "expression_gaze",
             "focus_detail",
+        ]
+        required_director = [
+            f for f in required_director if not trope_owns_director_field(card, f)
         ]
         VALID_EXPOSURE_MODE = {"upper", "lower", "both", "half_nude", "half_covered", "none"}
         required_slots = []
@@ -401,6 +405,37 @@ def cmd_fill(args):
                 if stripped_words:
                     print(f"💡 体型由引擎托管，已从 slots.{slot} 剥离越权体型词: {', '.join(stripped_words[:5])}")
                     val = cleaned_val
+            if (
+                slot == "style_quality"
+                and val
+                and (card.get("_trope") or {}).get("id") == "fisheye"
+            ):
+                from trope_runtime import style_quality_keeps_fisheye_roll
+                ov = card.get("_trope") or {}
+                if not style_quality_keeps_fisheye_roll(str(val)):
+                    print("💡 特色桥段：fill 提交的 style_quality 丢掉鱼眼光学证据，已保留创卡预填")
+                    val = card["slots"].get("style_quality")
+            if (
+                slot == "pose"
+                and val
+                and (card.get("_trope") or {}).get("id") == "deepthroat"
+            ):
+                from trope_runtime import pose_keeps_deepthroat_roll
+                ov = card.get("_trope") or {}
+                if not pose_keeps_deepthroat_roll(
+                    str(val), ov.get("roll") or {}, str(ov.get("variant") or "")
+                ):
+                    print("💡 特色桥段：fill 提交的 pose 丢掉本次深度或机位证据，已保留创卡预填")
+                    val = card["slots"].get("pose")
+            if (card.get("_trope") or {}).get("id") == "deepthroat" and slot in (
+                "expression_gaze",
+                "tattoo",
+            ):
+                from trope_runtime import keep_deepthroat_engine_slot
+                engine_val = keep_deepthroat_engine_slot(card, slot, val)
+                if val is not None and str(val) != engine_val:
+                    print(f"💡 特色桥段：{slot} 由引擎托管，已保留创卡预填")
+                val = engine_val
             allow_clear = (
                 slot in clearable_optional_slots
                 and val == ""
@@ -487,6 +522,14 @@ def cmd_fill(args):
             val = getattr(args, f"dir_{f}", None)
             if val is None:
                 val = payload_director.get(f, None)
+            if trope_owns_director_field(card, f):
+                if val:
+                    print("💡 特色桥段：表情槽由引擎托管，已忽略 director.expression_gaze")
+                owned = str((card.get("slots") or {}).get("expression_gaze") or "").strip()
+                if owned and not str((card.get("director") or {}).get(f) or "").strip():
+                    card["director"][f] = owned
+                    director_changed = True
+                continue
             if val:
                 if card["director"].get(f) != val:
                     director_changed = True
@@ -914,96 +957,9 @@ def cmd_patch(args):
 
         if parsed['text_intent']:
             print(f"📝 已记录文字意图: {parsed['text_intent']}")
-            print("   文字意图交给上层 AI 自由发挥;引擎层这里只顺序执行数字方向。")
-
-        if not parsed['directions']:
-            print("i️ 当前输入不含数字方向;已仅记录原始输入。")
-            return
-
-        for direction in parsed['directions']:
-            print(f"➡️ 执行方向 {direction}")
-            # 若 direction_patch_values 存在，优先使用 AI 编写的具体值
-            card = load_card(args.card)
-            pv = (card.get('direction_patch_values') or {}).get(direction, '')
-            if pv:
-                # 从 option_map 找该方向的 primary target
-                om = card.get('option_map', {}) or {}
-                fixed_map = load_direction_map()["directions"]
-                entry = _normalize_direction_info(
-                    om.get(direction) or fixed_map.get(direction)
-                )
-                if entry and entry.get('targets'):
-                    primary = entry['targets'][0]
-                    tf = fstr(TMP_DIR) + "/patch_{card['card_id']}_{direction}.json"
-                    with open(tf, 'w') as f:
-                        if isinstance(pv, dict):
-                            json.dump(pv, f)
-                        else:
-                            json.dump({primary: pv}, f)
-                    cmd_patch(argparse.Namespace(
-                        card=args.card,
-                        direction=direction,
-                        set=None,
-                        value=None,
-                        intent=None,
-                        targets_file=tf,
-                        targets_json=None,
-                        user_input=None,
-                    ))
-                else:
-                    cmd_patch(argparse.Namespace(
-                        card=args.card,
-                        direction=direction,
-                        set=None,
-                        value=None,
-                        intent=None,
-                        targets_json=None,
-                        targets_file=None,
-                        user_input=None,
-                    ))
-            else:
-                cmd_patch(argparse.Namespace(
-                    card=args.card,
-                    direction=direction,
-                    set=None,
-                    value=None,
-                    intent=None,
-                    targets_json=None,
-                    targets_file=None,
-                    user_input=None,
-                ))
-
-        # R5 交互修改后自动重展示完整上半段(骚话→6维摘要→prompt)
-        # 重新生成 render 缓存以保证 present 可直接读取最新 prompt。
-        with card_lock(args.card, owner="patch-user-render", timeout=20.0):
-            card = load_card(args.card)
-            cmd_render_silent(card)
-            save_card(card)
-
-        # 判断用户指令中是否包含出图指示（"1" 或 "画"）
-        has_draw = False
-        if "1" in parsed['directions']:
-            has_draw = True
-        elif any(k in user_input for k in ["画", "出图", "submit"]):
-            has_draw = True
-
-        print()
-        if has_draw:
-            print("━━━ 修改并提交，当前卡片 ━━━")
-            cmd_present(argparse.Namespace(
-                card=args.card,
-                json=False,
-                compact=True,
-                reply_id=None,
-            ))
+            print("   文字意图交给上层 AI 自由发挥；数字方向请用 --direction。")
         else:
-            print("━━━ 已更新，当前卡片 ━━━")
-            cmd_present(argparse.Namespace(
-                card=args.card,
-                json=False,
-                compact=True,
-                reply_id=None,
-            ))
+            print("i️ 已仅记录原始输入。")
         return
 
     if getattr(args, 'direction', None):
@@ -1537,7 +1493,7 @@ def cmd_check(args):
         chain_mode=getattr(args, 'chain_mode', False),
         render_silent=cmd_render_silent,
         run_bash=run_bash,
-        slot_clean_except_tattoo=SLOT_CLEAN_EXCEPT_TATTOO,
+        cjk_clean_slots=CJK_CLEAN_TARGET_SLOTS,
     )
 
 def cmd_render_silent(card):
@@ -1646,7 +1602,38 @@ def _submit_card_unlocked(args):
         sys.exit(1)
 
     render_cfg = card.setdefault("render", {})
-    submit_workflow = getattr(args, "workflow", None) or render_cfg.get("workflow_config")
+    raw_override_wf = getattr(args, "workflow", None)
+    card_wf = normalize_workflow_name(render_cfg.get("workflow_config") or get_default_workflow_name())
+    submit_workflow = normalize_workflow_name(raw_override_wf) if raw_override_wf else card_wf
+
+    submit_width = render_cfg.get("width")
+    submit_height = render_cfg.get("height")
+    if raw_override_wf and submit_workflow != card_wf and not render_cfg.get("explicit_size"):
+        target_wf_cfg = load_workflow_config(submit_workflow)
+        sys_cfg = load_system_config()
+        presets = resolve_aspect_presets(target_wf_cfg, sys_cfg)
+        if submit_width and submit_height:
+            w_i, h_i = int(submit_width), int(submit_height)
+            if w_i == h_i:
+                submit_width, submit_height = presets["square"]
+            elif w_i > h_i * 1.9:
+                submit_width, submit_height = presets["widescreen"]
+            elif w_i > h_i:
+                submit_width, submit_height = presets["landscape"]
+            else:
+                submit_width, submit_height = presets["portrait"]
+        else:
+            submit_width, submit_height = presets["portrait"]
+
+    submit_lora = (card.get("subject") or {}).get("lora")
+    if submit_lora:
+        from resolver.role_resolver import resolve_lora_for_workflow
+        try:
+            submit_lora = resolve_lora_for_workflow(submit_lora, submit_workflow)
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            sys.exit(1)
+
     submit_seed = (
         getattr(args, "seed", None)
         if getattr(args, "seed", None) is not None
@@ -1672,11 +1659,11 @@ def _submit_card_unlocked(args):
     ).strip()
     if submit_idempotency_key:
         submit_args += ["--idempotency-key", submit_idempotency_key]
-    if render_cfg.get("width") and render_cfg.get("height"):
-        submit_args += ["--width", str(render_cfg["width"]), "--height", str(render_cfg["height"])]
+    if submit_width and submit_height:
+        submit_args += ["--width", str(submit_width), "--height", str(submit_height)]
     reply_id = card.get("delivery", {}).get("reply_id")
-    if card["subject"].get("lora"):
-        submit_args += ["--lora", card["subject"]["lora"]]
+    if submit_lora:
+        submit_args += ["--lora", submit_lora]
     if reply_id not in (None, "", "null"):
         submit_args += ["--reply-id", str(reply_id)]
     user_input = (card.get('creative', {}) or {}).get('last_user_input')
@@ -1882,7 +1869,12 @@ def cmd_chain(args):
         print('→ AI 可直接按模板填 theme_zh / director / slots / story_elevation_zh，再用 fill --json-file 一次导入（连抽勿拆 --phase）')
         print('→ 骨架不贴合时,可在 fill 阶段原地改造,或重抽;展示用场景名须与 scene.keywords 一致')
         print('→ fill 完成后,用 chain --resume <id> 逐个提交')
-        print('🔒 [AI 提示] 严禁 grep 扫库检索配置！体型已由盲盒托管，直接按上方模板 fill 填槽即可。')
+        hint_card = None
+        try:
+            hint_card = load_card(ids[0])
+        except Exception:
+            hint_card = None
+        print(_ai_fill_lock_hint(hint_card, celebrity=str(getattr(args, "mode", "") or "").lower() == "celebrity"))
     if bad:
         for idx, r in enumerate(results, start=1):
             if not r.get('ok'):
@@ -1969,6 +1961,18 @@ def cmd_progress(args):
         print("  暂无 card.json")
 
 
+def cmd_workflow(args):
+    """查询或切换默认抽卡工作流（zi = Z-Image，krea = Krea2 Turbo，moss = MOSS Image）。"""
+    raw_set = str(getattr(args, "set", None) or "").strip()
+    try:
+        info = set_default_workflow(raw_set) if raw_set else describe_default_workflow()
+    except ValueError as exc:
+        print(f"❌ {exc}")
+        raise SystemExit(2) from exc
+    verb = "已切换" if info.get("changed") else "当前"
+    print(f"{verb}默认工作流：{info['label']}（{info['id']}）")
+    print(json.dumps(info, ensure_ascii=False))
+
 
 def cmd_direct(args):
     """直投模式：绕过卡片引擎，直接投递 prompt 至 GPU 队列"""
@@ -1994,14 +1998,22 @@ def cmd_direct(args):
         submit_args += ["--lighting", args.lighting]
     if getattr(args, "style", None):
         submit_args += ["--style", args.style]
-    if getattr(args, "lora", None):
-        submit_args += ["--lora", args.lora]
+    direct_wf = normalize_workflow_name(getattr(args, "workflow", None) or get_default_workflow_name())
+    direct_lora = getattr(args, "lora", None)
+    if direct_lora:
+        from resolver.role_resolver import resolve_lora_for_workflow
+        try:
+            direct_lora = resolve_lora_for_workflow(direct_lora, direct_wf)
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            sys.exit(1)
+        submit_args += ["--lora", direct_lora]
     if getattr(args, "width", None):
         submit_args += ["--width", str(args.width)]
     if getattr(args, "height", None):
         submit_args += ["--height", str(args.height)]
-    if getattr(args, "workflow", None):
-        submit_args += ["--workflow", args.workflow]
+    if direct_wf:
+        submit_args += ["--workflow", direct_wf]
     if getattr(args, "reply_id", None) not in (None, "", "null"):
         submit_args += ["--reply-id", str(args.reply_id)]
     if getattr(args, "user_input", None):
@@ -2117,8 +2129,8 @@ def cmd_doc(args):
         sys.exit(1)
 
 
-_PERSPECTIVE_SHORT = ("颜射", "后入", "丝袜", "鱼眼", "偷拍")
-_PERSPECTIVE_FULL = ("颜射视角", "后入视角", "丝袜视角", "鱼眼视角", "偷拍视角")
+_PERSPECTIVE_SHORT = ("颜射", "后入", "丝袜", "偷拍")
+_PERSPECTIVE_FULL = ("颜射视角", "后入视角", "丝袜视角", "偷拍视角")
 _PERSPECTIVE_GENERIC = frozenset({
     "特殊视角", "视角库", "perspective", "perspective_scenes",
 })
@@ -2307,10 +2319,66 @@ def cmd_search(args):
             print("💡 库外角色：原词直接 --person 即可，不必搜到才传。")
         print()
 
+    trope_query = getattr(args, "trope", None)
+    if trope_query:
+        has_query = True
+        q = str(trope_query).strip().lower()
+        print(f"🔍 正在检索特色桥段，关键字: '{q}' ...\n")
+        from trope_runtime import load_tropes_config
+        cfg = load_tropes_config().get("tropes", {})
+        found_any = False
+        for p_id, p_data in cfg.items():
+            name = p_data.get("name", "")
+            cat = p_data.get("category", "")
+            desc = str(p_data.get("description") or "").strip()
+            aliases = [a.lower() for a in p_data.get("aliases", [])]
+            variants = p_data.get("variants", {})
+            matched_vars = []
+            for v_id, v_data in variants.items():
+                v_name = v_data.get("name", "")
+                v_aliases = [a.lower() for a in v_data.get("aliases", [])]
+                kws = [k.lower() for k in v_data.get("keywords", [])]
+                v_desc = str(v_data.get("description") or "").strip()
+                match_text = " ".join(
+                    [name, v_name, desc, v_desc] + aliases + v_aliases + kws
+                ).lower()
+                if q in match_text or q in ("all", "*", "桥段", "体位", "动作"):
+                    matched_vars.append((v_id, v_data))
+            if matched_vars or q in name.lower() or any(q in a for a in aliases) or (desc and q in desc.lower()):
+                found_any = True
+                print(f"✨ 桥段: \033[36m{name}\033[0m · {cat}")
+                if desc:
+                    print(f"   📖 说明: {desc}")
+                trig = "、".join(p_data.get("aliases") or [])
+                if trig:
+                    print(f"   🔑 触发: {trig}")
+                cli_name = (p_data.get("aliases") or [name])[0]
+                print(f"   抽卡: create/chain --trope {cli_name}  或  --trope {cli_name}:变体名  或  --trope {cli_name}:变体名:全插/半插")
+                print("   可选用变体:")
+                target_vars = matched_vars if matched_vars else list(variants.items())
+                for v_id, v_data in target_vars:
+                    v_name = v_data.get("name") or v_id
+                    v_desc = str(v_data.get("description") or "").strip()
+                    trigs = list(dict.fromkeys(
+                        list(v_data.get("aliases") or []) + list(v_data.get("keywords") or [])
+                    ))
+                    print(f"     • \033[32m{v_name}\033[0m  传参: \033[33m{cli_name}:{v_name}\033[0m")
+                    if v_desc:
+                        print(f"       📖 {v_desc}")
+                    if trigs:
+                        print(f"       🔑 触发: {', '.join(trigs)}")
+                print("-" * 80)
+        if not found_any:
+            print("❌ 未找到匹配的特色桥段。")
+            print("💡 当前可用桥段: 深喉 (变体: 第一人称、第三人称)；鱼眼")
+        print()
+
     if not has_query:
-        print("❌ 错误: 请指定 --scene 或 --person 关键字进行搜索。")
+        print("❌ 错误: 请指定 --scene, --person 或 --trope 关键字进行搜索。")
         print("  例: python3 card_cli.py search --scene 教室")
         print("  例: python3 card_cli.py search --scene 校园")
         print("  例: python3 card_cli.py search --scene 颜射视角")
         print("  例: python3 card_cli.py search --person jk")
+        print("  例: python3 card_cli.py search --trope 深喉")
+        print("  例: python3 card_cli.py search --trope 鱼眼")
         sys.exit(1)

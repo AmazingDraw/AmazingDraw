@@ -34,7 +34,6 @@ import amazingdraw_paths  # noqa: E402
 from web_server import (
     CARDS_DIR,
     CONFIG_PATH,
-    PRESETS_DIR,
     SCRIPT_DIR,
     load_system_config,
     save_system_config,
@@ -313,7 +312,7 @@ def post_settings(settings: Dict[str, Any]):
         # safe_write_config 写盘失败会抛；不可再返回 status=ok
         raise HTTPException(status_code=500, detail=f"配置写入失败：{exc}") from exc
     update_images_mount()
-    return {"status": "ok", "settings": settings}
+    return {"status": "ok", "settings": load_system_config()}
 
 def parse_png_filename(filename: str):
     """从 PNG 文件名解析人物、场景和意图描述"""
@@ -648,7 +647,7 @@ def get_card(card_id: str):
                     "width": 512,
                     "height": 768,
                     "seed": None,
-                    "workflow_config": "moody"
+                    "workflow_config": "moody_zib_zit"
                 },
                 "delivery": {
                     "reply_id": None
@@ -1044,12 +1043,20 @@ def extract_card_info_via_llm(prompt: str) -> dict:
             return fallback
         return t
 
+    from card_llm_client import independent_llm_enabled, offline_prompt_metadata
+
+    offline = offline_prompt_metadata(prompt)
     fallback_data = {
-        "person": "直投模式",
-        "scene": "Raw Prompt",
-        "narrative_zh": _scrub_banned(prompt, "用户英文 Prompt 直投生图"),
+        "person": _scrub_banned(offline.get("person"), "直投模式"),
+        "scene": _scrub_banned(offline.get("scene"), "Raw Prompt"),
+        "narrative_zh": _scrub_banned(
+            offline.get("narrative_zh") or offline.get("narrative"),
+            "用户英文 Prompt 直投生图",
+        ),
     }
-    
+    if not independent_llm_enabled("metadata"):
+        return fallback_data
+
     try:
         from card_llm_client import chat_completion
         system_msg = (
@@ -1068,7 +1075,8 @@ def extract_card_info_via_llm(prompt: str) -> dict:
         res_text = chat_completion(
             messages=messages,
             max_tokens=150,
-            timeout=30
+            timeout=30,
+            feature="metadata",
         )
         
         if res_text:
@@ -1511,7 +1519,7 @@ def get_roles():
     celebrities = []
     try:
         celebs_map = role_resolver.load_celebrities()
-        for mode_key in ["z", "flux"]:
+        for mode_key in ["z", "krea2", "flux"]:
             for lora_key, item in celebs_map.get(mode_key, {}).items():
                 # celebrities.json 形如 {"girlslike_zi_ayx": ["安悦溪", "触发词"]}：
                 # 键是 lora 名，中文名在值里。早先把值当 dict 取 .get("lora") 会抛异常，

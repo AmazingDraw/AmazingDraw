@@ -5,21 +5,19 @@
   "cards_dir": "",
   "comfyui_dir": "~/ComfyUI",
   "obsidian_vault_dir": "",
-  "openclaw_workspace_dir": "",
   "llm": {
     "base_url": "http://127.0.0.1:8317/v1",
     "api_key": "",
     "model": "gemini-flash",
-    "independent_model": "",
-    "fallback_models": [],
     "timeout_seconds": 30,
     "retry_limit": 3
   },
   "restrict_roles": true,
   "disabled_celebrities": [],
   "enable_ai_check": false,
+  "enable_cjk_sanitization": true,
   "custom_presets_dir": "",
-  "default_workflow": "moody_zib_zit",
+  "default_workflow": "moody_moss",
   "scene_cooldown_window": 9,
   "scene_library_weights": {
     "school_scenes": 5,
@@ -87,7 +85,13 @@
     "half_nude"
   ],
   "workflows_aliases": {
-    "moody": "moody_zib_zit"
+    "zi": "moody_zib_zit",
+    "z": "moody_zib_zit",
+    "krea": "krea2_turbo",
+    "krea2": "krea2_turbo",
+    "moss": "moody_moss",
+    "moody_moss": "moody_moss",
+    "moodymoss": "moody_moss"
   },
   "workflows": {
     "moody_zib_zit": {
@@ -126,7 +130,124 @@
       "node_input_overrides": {},
       "default_steps": 20,
       "default_width": 512,
-      "default_height": 768
+      "default_height": 768,
+      "resolution_presets": {
+        "vertical": {
+          "width": 512,
+          "height": 768
+        },
+        "horizontal": {
+          "width": 768,
+          "height": 512
+        },
+        "square": {
+          "width": 640,
+          "height": 640
+        },
+        "widescreen": {
+          "width": 1088,
+          "height": 464
+        }
+      }
+    },
+    "krea2_turbo": {
+      "name": "Krea 2 Turbo fp8 · 2:3 768×1152",
+      "workflow_path": "workflows/Krea2_Turbo_fp8_8步_CFG1_768x1152.json",
+      "filename_prefix": "Krea2",
+      "prompt_nodes": [
+        "5"
+      ],
+      "negative_nodes": [],
+      "negative_text": "",
+      "lora_nodes": [
+        "23"
+      ],
+      "seed_nodes": [
+        "8"
+      ],
+      "size_nodes": [
+        "7"
+      ],
+      "seed_type": "standard",
+      "deforum_fix": false,
+      "link_key": "links",
+      "node_key": "nodes",
+      "prompt_style": "photorealistic_portrait",
+      "description": "Krea 2 Turbo fp8 · 8步 CFG1 euler/simple · 2:3 768×1152 · TE=qwen3-vl-4b-heretic_fp8_e4m3fn · Bypass3@22 strength 1.0 · 明星 LoRA@23 girls_like_krea2",
+      "lora_subdir": "girls_like_krea2",
+      "lora_input_key": "lora_name",
+      "required_loras": [
+        "krea2filterbypass3.safetensors"
+      ],
+      "node_input_overrides": {},
+      "default_steps": 8,
+      "default_width": 768,
+      "default_height": 1152,
+      "resolution_presets": {
+        "vertical": {
+          "width": 768,
+          "height": 1152
+        },
+        "horizontal": {
+          "width": 1152,
+          "height": 768
+        },
+        "square": {
+          "width": 1024,
+          "height": 1024
+        },
+        "widescreen": {
+          "width": 1376,
+          "height": 768
+        }
+      }
+    },
+    "moody_moss": {
+      "name": "Moody Moss Mix 4.1 · 2:3 768×1152",
+      "workflow_path": "workflows/Moody_Moss_Standard_25步_CFG3.json",
+      "filename_prefix": "Moody-Moss",
+      "prompt_nodes": [
+        "627"
+      ],
+      "negative_nodes": [
+        "864"
+      ],
+      "negative_text": "worst quality, low quality, bad anatomy, deformed hands, extra fingers, malformed limbs, distorted face, plastic skin, overly smooth skin, waxy skin, oversharpening, excessive skin retouching, blurry, jpeg artifacts, watermark, text, logo",
+      "lora_nodes": [
+        "854"
+      ],
+      "seed_nodes": [
+        "851"
+      ],
+      "size_nodes": [
+        "698"
+      ],
+      "seed_type": "standard",
+      "deforum_fix": false,
+      "link_key": "links",
+      "node_key": "nodes",
+      "prompt_style": "photorealistic_portrait",
+      "description": "Moody Moss Mix V4.1 fp8 (MOSS Image) · 25步 CFG3 euler/beta · Flow 5.0",
+      "lora_subdir": "moss",
+      "lora_input_key": "lora_name",
+      "node_input_overrides": {},
+      "default_steps": 25,
+      "default_width": 768,
+      "default_height": 1152,
+      "resolution_presets": {
+        "vertical": {
+          "width": 768,
+          "height": 1152
+        },
+        "horizontal": {
+          "width": 1152,
+          "height": 768
+        },
+        "square": {
+          "width": 1024,
+          "height": 1024
+        }
+      }
     }
   },
   "lock_size_to_workflow": true,

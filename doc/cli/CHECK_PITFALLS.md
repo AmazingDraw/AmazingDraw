@@ -4,7 +4,7 @@ fill / 连抽前看这一页。全量规则在 [CHECK_SCRIPT_GUIDE.md](../engine
 
 | 坑 | 别这样写 | 改成 | 别误杀 |
 | :--- | :--- | :--- | :--- |
-| 嘴舌 | `biting lip` / `tongue out` / `drool` | `lips softly parted` 或 `pressing lips together` | — |
+| 嘴舌 | `biting lip` / `tongue out` / `drool` | `lips softly parted` 或 `pressing lips together` | `not biting` / `not tongue out` 已剥，不误杀 |
 | 内裤+私处 | `panties` 和 `pussy`/`vulva` 同时出现 | `no panties` / `bottomless`，或内裤拉到一边 | 半遮只写裤边偷看、不写 vulva，可过 |
 | 薄衣露点 | `no bra` + 白衬衫 + nipples，却没写衣襟打开 | `shirt open` / `unbuttoned` / `hanging open` | `open-back` 不算前敞；外敞但内衬扣好是合法半遮 |
 | 无扣假敞开 | 吊带/背心/运动内衣只写 `hanging open`/`one shoulder` 却露奶头 | `pulled down` / `aside` / `removed`，或干脆 `topless` | 有扣 `shirt`/`blouse` 走上一行，不走本条 |

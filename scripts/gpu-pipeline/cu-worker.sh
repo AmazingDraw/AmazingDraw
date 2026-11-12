@@ -44,7 +44,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/../config.json"
+CONFIG_FILE="${CU_CONFIG_FILE:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get config_file 2>/dev/null || echo "${SCRIPT_DIR}/../config.json")}"
 WORKSPACE="${CU_WORKSPACE:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get workspace)}"
 # 卡片目录：与 cu-queue 一致（CU_CARDS_DIR 覆盖 > config.cards_dir > ~/.amazingdraw/cards）
 CARDS_DIR_RESOLVED="${CU_CARDS_DIR:-$(python3 "${SCRIPT_DIR}/../amazingdraw_paths.py" get cards_dir)}"

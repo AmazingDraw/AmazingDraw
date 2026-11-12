@@ -26,6 +26,7 @@ python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle --use
 | `--mode`       | `amateur`(默认，单人自动开启体型盲盒 `{{BODY}}`) / `celebrity`                                                                                                  |
 | `--bundle`     | 覆盖默认的 1 条场景词库。不带值：按当前场景扩一圈相关章；带值：指定章节（例：`--bundle "tattoo:图案速查"`） |
 | `--no-blind`   | 关闭体型盲盒（降级为传统明文 `slots.body_shape`）                                                                                                               |
+| `--trope`      | 特色桥段。不带值：`tropes.json` 全部桥段随机；带值：`深喉` / `深喉:第一人称` / `深喉:第一人称:全插` / `深喉:半插`（`全入`/`半入` 同义）；`鱼眼`。深度锁死时手、精液、视线仍随机 |
 
 ---
 
@@ -80,9 +81,9 @@ python3 card_cli.py options --card <id> --json '{
 ## 4. 局部修改 `patch`
 
 ```bash
-# 数字指令（方向编号）
+# 数字指令（方向编号）。组合如 51 / 27961 由 Agent 按位多次 --direction，不要丢给 --user-input
 python3 card_cli.py patch --card <id> --direction 9  # 纹身
-python3 card_cli.py patch --card <id> --user-input "51"  # 组合指令
+python3 card_cli.py patch --card <id> --user-input "not nude"  # 只记文字 / 裸露指令，不拆数字
 
 # 直接改字段
 python3 card_cli.py patch --card <id> --set slots.tattoo --value "small pink heart"
@@ -228,6 +229,8 @@ python3 card_cli.py search --scene 走廊      # 地点 → 钉死命中 label
 python3 card_cli.py search --scene 校园      # 主题 → 抽卡原词随机整库
 python3 card_cli.py search --scene 颜射视角  # 完整视角词 → 抽卡原词随机该池
 python3 card_cli.py search --person 护士     # 角色只看四轴；抽卡仍直接 --person
+python3 card_cli.py search --trope 深喉      # 深喉说明与机位；抽卡 --trope 深喉[:机位][:全插|半插]
+python3 card_cli.py search --trope 鱼眼      # 鱼眼光学；抽卡 --trope 鱼眼
 python3 card_cli.py resolve --scene-library general_scenes --include-tags office --exposure-focus auto
 python3 card_cli.py resolve --scene-id some-scene-id --mood 暧昧   # 精确场景 id；见 resolve --help
 ```
@@ -243,8 +246,6 @@ python3 card_cli.py queue clear [--force]
 python3 card_cli.py queue remove --job-id JOB_ID  # 推荐，稳定标识
 python3 card_cli.py queue remove --position N
 ```
-
-`status` 保留旧 `length/next/avg-eta` 兼容字段，同时返回 QueueStore v2 的 `revision/jobs/state_counts`。写操作遇到 `lock_busy` 或坏 JSON 会返回非零，禁止按成功处理。
 
 ---
 

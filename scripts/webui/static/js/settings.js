@@ -186,6 +186,59 @@ function initSettingsIntegrationChipClicks() {
 }
 
 
+const LLM_CALL_KEYS = ["route_hint", "multi_roles", "body_classify", "metadata"];
+
+function syncIndependentLlmToggles(form) {
+  if (!form) return;
+  const master = form.elements["enable_independent_llm"];
+  const on = !master || !!master.checked;
+  const box = document.getElementById("settings-llm-call-toggles");
+  if (box) box.classList.toggle("is-disabled", !on);
+  LLM_CALL_KEYS.forEach((key) => {
+    const el = form.elements[`llm_call_${key}`];
+    if (el) el.disabled = !on;
+  });
+  const ai = form.elements["enable_ai_check"];
+  if (ai) ai.disabled = !on;
+}
+
+function applyIndependentLlmSettings(form, settings) {
+  if (!form) return;
+  const src = settings || {};
+  const masterEl = form.elements["enable_independent_llm"];
+  if (masterEl) masterEl.checked = src.enable_independent_llm !== false;
+  const calls = src.llm_calls || {};
+  LLM_CALL_KEYS.forEach((key) => {
+    const el = form.elements[`llm_call_${key}`];
+    if (el) el.checked = calls[key] !== false;
+  });
+  if (form.elements["enable_ai_check"]) {
+    form.elements["enable_ai_check"].checked = !!src.enable_ai_check;
+  }
+  syncIndependentLlmToggles(form);
+}
+
+function collectIndependentLlmSettings(form, settings) {
+  const src = settings || {};
+  const calls = Object.assign(
+    { route_hint: true, multi_roles: true, body_classify: true, metadata: true },
+    src.llm_calls || {}
+  );
+  LLM_CALL_KEYS.forEach((key) => {
+    const el = form.elements[`llm_call_${key}`];
+    if (el) calls[key] = !!el.checked;
+  });
+  return {
+    enable_independent_llm: form.elements["enable_independent_llm"]
+      ? !!form.elements["enable_independent_llm"].checked
+      : src.enable_independent_llm !== false,
+    llm_calls: calls,
+    enable_ai_check: form.elements["enable_ai_check"]
+      ? !!form.elements["enable_ai_check"].checked
+      : false,
+  };
+}
+
 async function loadSettings() {
   try {
     const res = await fetch("/api/settings");
@@ -215,8 +268,9 @@ async function loadSettings() {
       if (form.elements["scene_cooldown_window"]) {
         form.elements["scene_cooldown_window"].value = state.settings.scene_cooldown_window || 10;
       }
-      if (form.elements["enable_ai_check"]) {
-        form.elements["enable_ai_check"].checked = !!state.settings.enable_ai_check;
+      applyIndependentLlmSettings(form, state.settings);
+      if (form.elements["enable_cjk_sanitization"]) {
+        form.elements["enable_cjk_sanitization"].checked = state.settings.enable_cjk_sanitization !== false;
       }
       const llm = state.settings.llm || {};
       if (form.elements["llm_base_url"]) {
@@ -230,9 +284,6 @@ async function loadSettings() {
       }
       if (form.elements["lock_size_to_workflow"]) {
         form.elements["lock_size_to_workflow"].checked = state.settings.lock_size_to_workflow !== false;
-      }
-      if (form.elements["openclaw_workspace_dir"]) {
-        form.elements["openclaw_workspace_dir"].value = state.settings.openclaw_workspace_dir || "";
       }
       if (form.elements["recording_dir"]) {
         form.elements["recording_dir"].value = state.settings.recording_dir || "";
@@ -269,7 +320,7 @@ async function loadSettings() {
       const defaultWfSelect = document.getElementById("settings-default-workflow");
       if (defaultWfSelect) {
         const aliases = state.settings.workflows_aliases || {};
-        const val = state.settings.default_workflow || "moody";
+        const val = state.settings.default_workflow || "moody_zib_zit";
         defaultWfSelect.value = aliases[val] || val;
         defaultWfSelect.onchange = () => {
           state.settings.default_workflow = defaultWfSelect.value;
@@ -323,11 +374,7 @@ async function loadSettings() {
           chipsBox.appendChild(chip);
         });
       }
-      if (form.elements["restrict_roles"]) {
-        const restrict = state.settings.restrict_roles;
-        form.elements["restrict_roles"].checked =
-          restrict === undefined ? true : !!restrict;
-      }
+
       
 
 
@@ -483,6 +530,7 @@ async function loadPresets() {
 async function autoSaveSettings() {
   const form = document.getElementById("form-settings-page");
   if (!form) return;
+  syncIndependentLlmToggles(form);
   
   const data = Object.assign({}, state.settings || {}, {
     llm_model: form.elements["llm_model"].value,
@@ -495,7 +543,7 @@ async function autoSaveSettings() {
         : ((state.settings.llm && state.settings.llm.api_key) || ""),
       model: form.elements["llm_model"] ? form.elements["llm_model"].value : (state.settings.llm_model || ""),
       retry_limit: preserveLlmRetryLimit(state.settings),
-      timeout_seconds: (state.settings.llm && state.settings.llm.timeout_seconds) || 30,
+      timeout_seconds: (state.settings.llm && state.settings.llm.timeout_seconds) || 10,
     },
     comfyui_host: form.elements["comfyui_host"].value.trim(),
     output_dir: form.elements["output_dir"] ? form.elements["output_dir"].value.trim() : (state.settings.output_dir || ""),
@@ -516,16 +564,18 @@ async function autoSaveSettings() {
     
     // A 组路径与算法配置
     comfyui_dir: form.elements["comfyui_dir"] ? form.elements["comfyui_dir"].value.trim() : (state.settings.comfyui_dir || ""),
-    openclaw_workspace_dir: form.elements["openclaw_workspace_dir"] ? form.elements["openclaw_workspace_dir"].value.trim() : (state.settings.openclaw_workspace_dir || ""),
     obsidian_vault_dir: form.elements["obsidian_vault_dir"] ? form.elements["obsidian_vault_dir"].value.trim() : (state.settings.obsidian_vault_dir || ""),
     tmp_dir: form.elements["tmp_dir"] ? form.elements["tmp_dir"].value.trim() : (state.settings.tmp_dir || ""),
     cards_dir: form.elements["cards_dir"] ? form.elements["cards_dir"].value.trim() : (state.settings.cards_dir || ""),
 
-    default_workflow: form.elements["default_workflow"] ? form.elements["default_workflow"].value : (state.settings.default_workflow || "moody"),
+    default_workflow: form.elements["default_workflow"] ? form.elements["default_workflow"].value : (state.settings.default_workflow || "moody_zib_zit"),
     scene_cooldown_window: form.elements["scene_cooldown_window"] ? parseInt(form.elements["scene_cooldown_window"].value, 10) || 10 : 10,
-    enable_ai_check: form.elements["enable_ai_check"]
-      ? !!form.elements["enable_ai_check"].checked
-      : false,
+    ...collectIndependentLlmSettings(form, state.settings),
+    enable_cjk_sanitization: form.elements["enable_cjk_sanitization"]
+      ? form.elements["enable_cjk_sanitization"].checked
+      : (state.settings.enable_cjk_sanitization !== undefined
+          ? !!state.settings.enable_cjk_sanitization
+          : true),
     auto_horizontal_for_multi: form.elements["auto_horizontal_for_multi"] ? form.elements["auto_horizontal_for_multi"].checked : true,
     lock_size_to_workflow: form.elements["lock_size_to_workflow"] ? form.elements["lock_size_to_workflow"].checked : true,
     exposure_allowed_modes: (() => {
@@ -544,11 +594,7 @@ async function autoSaveSettings() {
       if (idxs.length === 0) return (state.settings.exposure_limit || ["none", "both"]);
       return [order[idxs[0]], order[idxs[idxs.length - 1]]];
     })(),
-    restrict_roles: form.elements["restrict_roles"]
-      ? form.elements["restrict_roles"].checked
-      : (state.settings.restrict_roles !== undefined
-          ? !!state.settings.restrict_roles
-          : true),
+
     
     // B 组分辨率规格预设
     resolution_presets: (() => {
@@ -588,13 +634,18 @@ async function autoSaveSettings() {
     })()
   });
 
+  const payload = Object.assign({}, data);
+  delete payload.workflows;
+  delete payload.workflows_aliases;
+
   try {
-    await fetch("/api/settings", {
+    const res = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
-    state.settings = data;
+    const saved = await res.json();
+    state.settings = (saved && saved.settings) ? saved.settings : Object.assign({}, state.settings, payload);
     updateComfyLink();
     loadPresets();
     state.settingsDirty = false;
@@ -712,7 +763,7 @@ async function loadDocContent(docName) {
 
 function renderWorkflowsList() {
   const workflows = state.settings.workflows || {};
-  const defaultWf = state.settings.default_workflow || "moody";
+  const defaultWf = state.settings.default_workflow || "moody_zib_zit";
   const aliases = state.settings.workflows_aliases || {};
   const normalizedDefault = aliases[defaultWf] || defaultWf;
 
