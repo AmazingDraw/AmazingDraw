@@ -17,7 +17,7 @@ triggers:
 
 本地绘图核心控制台。**Card Engine** 将绘画拆为「导演决策」与「渲染执行」。
 
-下文路径相对本文件所在目录（zip / 仓库根）。正斜杠 `/` 在 macOS 与 Windows 通用。解释器必须和发行包文件名里的 Python 标签一致：`cp39` → Python 3.9，`cp312` → Python 3.12。Apple 自带 `/usr/bin/python3` 是 3.9，请下 cp39；本机 3.12 请下 cp312。不要把 `.so` 和 `.pyd` 混放，也不要混 3.9/3.12 native。ComfyUI 用它自己的 venv，可以和引擎 Python 不是同一个。启动脚本：`bash scripts/...`（Windows 请用 Git Bash）。先 `cd` 到 skill 根再执行。
+下文路径相对本文件所在目录（zip / 仓库根）。正斜杠 `/` 在 macOS 与 Windows 通用。启动脚本：`bash scripts/...`（Windows 请用 Git Bash）。先 `cd` 到 skill 根再执行。
 
 > 🔒 **AI 铁律**
 >
@@ -25,7 +25,7 @@ triggers:
 > 2. **角色直传**：任何角色直接传 `--person`（无需搜库，库外自由发挥）；严禁用泛词「素人」作 `--person`。
 > 3. **Help 规范与严格闭环**：参数与步骤以 `card_cli.py <命令> --help` 为唯一真相源，严禁跳步、合步或自创顺序；严格遵循「建卡（`create` / `chain`）➔ 读返回模板 ➔ 填槽（`fill`）➔ 提交（`resume` / `render`）」闭环推进。
 
-**真相源**：`card.json` 唯一。盲盒卡（默认开启）由引擎在 `_private.body_shape` 托管体型，Agent 侧 `slots.body_shape` 固定为 `"{{BODY}}"`（多人 `"{{BODY:1}}"` 等；明星 / 云端出图或 `--no-blind` 豁免，沿用明文）。改核心字段后须作废 render 缓存。优先级：`用户指定 > 库内命中 > 随机补全`。库外 `--person`（amateur）可自由发明；库外 `--scene`（非纯主题词）→ `manual-custom`，fill 必写英文 `scene.keywords`。纯主题词仍进主题池。
+**真相源**：`card.json` 唯一。盲盒卡（默认开启）由引擎在 `_private.body_shape` 托管体型，Agent 侧 `slots.body_shape` 固定为 `"{{BODY}}"`（多人 `"{{BODY:1}}"` 等；明星 / 云端出图或 `--no-blind` 豁免，沿用明文）。改核心字段后须作废 render 缓存。优先级：`用户指定 > 库内命中 > 随机补全`。
 
 ---
 

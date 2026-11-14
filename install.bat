@@ -262,6 +262,17 @@ function Find-MatchingPython([string]$Want) {
     return $null
 }
 
+function Test-IsMsysBash([string]$Path) {
+    if (-not $Path) { return $false }
+    # WSL 的 bash.exe 固定在 System32，Git Bash 永远不在这里
+    if ($Path -match '(?i)\\Windows\\System32\\bash\.exe$') { return $false }
+    try {
+        $out = & $Path -c 'uname -s' 2>$null | Select-Object -First 1
+        if ($out -match '^(MSYS|MINGW|CYGWIN)') { return $true }
+    } catch {}
+    return $false
+}
+
 function Find-GitBash {
     $cands = @(
         'C:\Program Files\Git\bin\bash.exe',
@@ -284,7 +295,9 @@ function Find-GitBash {
         if ($seen.ContainsKey($key)) { continue }
         $seen[$key] = $true
         if ($c -match '(?i)Program Files \(x86\)') { continue }
-        if (Test-Path -LiteralPath $c -PathType Leaf) { return $c }
+        if (-not (Test-Path -LiteralPath $c -PathType Leaf)) { continue }
+        # 必须验证是 MSYS/Git Bash，不能是 WSL 的 bash.exe
+        if (Test-IsMsysBash $c) { return $c }
     }
     return $null
 }

@@ -20,8 +20,20 @@ cu-draw-card.py — GPU 渲染执行脚本
 - `python3 cu-draw-card.py --prompt-file /tmp/p.txt --amateur`
 """
 
+import sys
+from pathlib import Path as _Path
+for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
+    _native = _p / 'card_engine_core' / 'native'
+    if _native.is_dir() and (
+        list(_native.glob('card_asset_loader*.so'))
+        or list(_native.glob('card_asset_loader*.pyd'))
+    ):
+        if str(_native) not in sys.path:
+            sys.path.insert(0, str(_native))
+        break
 import hashlib, json, os, random, re, sys, time, argparse
 from pathlib import Path
+from card_config import TMP_DIR
 import requests
 import logging
 import logging.handlers
@@ -69,7 +81,19 @@ def resolve_workflow_path(path_str: str) -> str:
                 return resolved
     # Support relative paths
     if not os.path.isabs(path_str):
-        return str(Path(COMFYUI_DIR) / path_str)
+        resolved = str(Path(COMFYUI_DIR) / path_str)
+        if os.path.exists(resolved):
+            return resolved
+        # 兜底：workflow 被收进子目录时按文件名搜索（先 workflows/ 子树，避免遍历 models/ 等巨型目录）
+        for _base in (Path(COMFYUI_DIR) / "workflows", Path(COMFYUI_DIR)):
+            if not _base.is_dir():
+                continue
+            try:
+                hit = next(_base.rglob(Path(path_str).name))
+                return str(hit)
+            except StopIteration:
+                continue
+        return resolved
     return os.path.expanduser(path_str)
 
 
@@ -101,17 +125,6 @@ FLUX_CELEBRITY_MAP = celebs_data.get("flux", {})
 RGTHREE_CONTROLS = {'randomize', 'fixed', 'increment', 'decrement', 'randomize (GPU)', 'fixed (GPU)'}
 def _resolve_builtin_aliases() -> dict:
     try:
-import sys
-from pathlib import Path as _Path
-for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
-    _native = _p / 'card_engine_core' / 'native'
-    if _native.is_dir() and (
-        list(_native.glob('card_asset_loader*.so'))
-        or list(_native.glob('card_asset_loader*.pyd'))
-    ):
-        if str(_native) not in sys.path:
-            sys.path.insert(0, str(_native))
-        break
         from card_config import get_builtin_aliases
         return get_builtin_aliases()
     except Exception:

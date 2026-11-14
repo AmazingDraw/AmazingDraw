@@ -1,0 +1,178 @@
+{
+  "default_workflow": "moody_zib_zit",
+  "aliases": {
+    "zi": "moody_zib_zit",
+    "z": "moody_zib_zit",
+    "zimage": "moody_zib_zit",
+    "z-image": "moody_zib_zit",
+    "moody_zib_zit": "moody_zib_zit",
+    "krea": "krea2_turbo",
+    "krea2": "krea2_turbo",
+    "krea2_turbo": "krea2_turbo",
+    "moss": "moody_moss",
+    "moody_moss": "moody_moss",
+    "moodymoss": "moody_moss"
+  },
+  "workflows": {
+    "moody_zib_zit": {
+      "name": "Moody ZIB+ZIT",
+      "family": "zi",
+      "family_label": "Z-Image",
+      "celebrity_pool": "z",
+      "lora_subdir": "girls_like_zi",
+      "lora_input_key": "LORA_1",
+      "workflow_path": "workflows/Moody_ZIB_ZIT_20步_CFG3_512x768.json",
+      "filename_prefix": "Moody",
+      "prompt_nodes": [
+        "620",
+        "627",
+        "660"
+      ],
+      "negative_nodes": [
+        "674"
+      ],
+      "negative_text": "low quality, worst quality, blurry, jpeg artifacts, watermark, deformed, bad anatomy, bad mouth, bad teeth, weird tongue, distorted lips, extra limbs, extra fingers, mutated hands, bad proportions, ugly, disfigured, cropped, out of frame, semen on chin, cum on chin, fluid on chin",
+      "lora_nodes": [
+        "632",
+        "671"
+      ],
+      "seed_nodes": [
+        "654",
+        "649",
+        "688"
+      ],
+      "size_nodes": [
+        "606"
+      ],
+      "seed_type": "rgthree",
+      "deforum_fix": true,
+      "link_key": "links",
+      "node_key": "nodes",
+      "prompt_style": "photorealistic_portrait",
+      "description": "Moody ZIB+ZIT 双阶段素人/明星写真，20有效步，512x768初始→768x1152输出，支持 girls_like_zi LoRA",
+      "node_input_overrides": {},
+      "default_steps": 20,
+      "default_width": 512,
+      "default_height": 768,
+      "resolution_presets": {
+        "vertical": {
+          "width": 512,
+          "height": 768
+        },
+        "horizontal": {
+          "width": 768,
+          "height": 512
+        },
+        "square": {
+          "width": 640,
+          "height": 640
+        },
+        "widescreen": {
+          "width": 1088,
+          "height": 464
+        }
+      }
+    },
+    "krea2_turbo": {
+      "name": "Moody Krea Mix 6 · 2:3 768×1152",
+      "family": "krea",
+      "family_label": "Krea",
+      "celebrity_pool": "krea2",
+      "lora_subdir": "girls_like_krea2",
+      "lora_input_key": "lora_name",
+      "workflow_path": "workflows/Krea2_Turbo_fp8_8步_CFG1_768x1152.json",
+      "filename_prefix": "Krea2",
+      "prompt_nodes": [
+        "627"
+      ],
+      "negative_nodes": [],
+      "lora_nodes": [
+        "854"
+      ],
+      "seed_nodes": [
+        "851"
+      ],
+      "size_nodes": [
+        "698"
+      ],
+      "seed_type": "rgthree",
+      "deforum_fix": false,
+      "link_key": "links",
+      "node_key": "nodes",
+      "prompt_style": "photorealistic_portrait",
+      "description": "Moody Krea Mix V6 fp8 (Krea 2) · 8步 CFG1 euler_ancestral/beta · 2:3 768×1152 · 明星 LoRA@854 girls_like_krea2",
+      "required_loras": [],
+      "node_input_overrides": {},
+      "default_steps": 8,
+      "default_width": 768,
+      "default_height": 1152,
+      "resolution_presets": {
+        "vertical": {
+          "width": 768,
+          "height": 1152
+        },
+        "horizontal": {
+          "width": 1152,
+          "height": 768
+        },
+        "square": {
+          "width": 1024,
+          "height": 1024
+        },
+        "widescreen": {
+          "width": 1376,
+          "height": 768
+        }
+      }
+    },
+    "moody_moss": {
+      "name": "Moody Moss Mix 4.1 · 2:3 768×1152",
+      "family": "moss",
+      "family_label": "MOSS Image",
+      "lora_subdir": "moss",
+      "lora_input_key": "lora_name",
+      "workflow_path": "workflows/Moody_Moss_Standard_25步_CFG3.json",
+      "filename_prefix": "Moody-Moss",
+      "prompt_nodes": [
+        "627"
+      ],
+      "negative_nodes": [
+        "864"
+      ],
+      "negative_text": "worst quality, low quality, bad anatomy, deformed hands, extra fingers, malformed limbs, distorted face, plastic skin, overly smooth skin, waxy skin, oversharpening, excessive skin retouching, blurry, jpeg artifacts, watermark, text, logo",
+      "lora_nodes": [
+        "854"
+      ],
+      "seed_nodes": [
+        "851"
+      ],
+      "size_nodes": [
+        "698"
+      ],
+      "seed_type": "standard",
+      "deforum_fix": false,
+      "link_key": "links",
+      "node_key": "nodes",
+      "prompt_style": "photorealistic_portrait",
+      "description": "Moody Moss Mix V4.1 fp8 (MOSS Image) · 25步 CFG3 euler/beta · Flow 5.0",
+      "node_input_overrides": {},
+      "default_steps": 25,
+      "default_width": 768,
+      "default_height": 1152,
+      "resolution_presets": {
+        "vertical": {
+          "width": 768,
+          "height": 1152
+        },
+        "horizontal": {
+          "width": 1152,
+          "height": 768
+        },
+        "square": {
+          "width": 1024,
+          "height": 1024
+        }
+      }
+    }
+  }
+}

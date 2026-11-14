@@ -680,6 +680,7 @@ def cmd_fill(args):
                     lower_policy=lower_clothing_policy_for_card(card),
                     perspective_key=_perspective_key,
                     half_nude_region=_half_nude_reg,
+                    card_id=card.get("card_id"),
                 )
                 if exposure_filtered != exposure_raw:
                     status_lines.append(f"📋 clothing 预过滤({ef_val}):")

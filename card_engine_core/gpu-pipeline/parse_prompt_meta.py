@@ -8,6 +8,17 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / 'card-engine'))
 
+import sys
+from pathlib import Path as _Path
+for _p in [_Path(__file__).resolve().parent] + list(_Path(__file__).resolve().parent.parents):
+    _native = _p / 'card_engine_core' / 'native'
+    if _native.is_dir() and (
+        list(_native.glob('card_asset_loader*.so'))
+        or list(_native.glob('card_asset_loader*.pyd'))
+    ):
+        if str(_native) not in sys.path:
+            sys.path.insert(0, str(_native))
+        break
 from card_llm_client import chat_completion, extract_json_object, independent_llm_enabled, offline_prompt_metadata
 from card_validation import has_cjk
 from card_config import load_system_config

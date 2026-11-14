@@ -194,7 +194,7 @@ search 只确认库内有没有。抽卡把同一词传 create/chain --scene。�
     c_mend.add_argument("--value", help="新值")
     c_mend.add_argument("--get", dest="get_field", help="读取字段当前值")
     c_mend.add_argument("--reroll-body", nargs="?", const="all", default=None, help="重抽当前盲盒卡的四轴体型：单人卡直接传，多人卡可指定 1, 2, ... 或 all（默认 all）")
-    c_mend.add_argument("--stage", dest="stage", help="重抽体型时显式指定角色年龄阶段 Y1~Y5（单人传如 'Y2'，多人重抽全部可传如 'Y5,Y2'）")
+    c_mend.add_argument("--stage", dest="stage", help="重抽体型时显式指定角色阶段 Y1~Y5（单人传如 'Y2'，多人重抽全部可传如 'Y5,Y2'）")
     c_mend.add_argument("--undo", action="store_true", help="撤销上一步修改")
     c_mend.add_argument("--history", action="store_true", help="查看最近修改记录")
     c_mend.add_argument("--dry-run", action="store_true", help="预览 diff，不写入")
@@ -301,7 +301,7 @@ def add_single_parsers(sub):
     c_create.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="覆盖场景自动词库。默认按场景标签自动挂 1 条可选提示词。不带值：按当前场景扩一圈相关章节；带值：同 cu-template-bundle.py --sections")
     c_create.add_argument("--no-bundle", action="store_true", dest="no_bundle", help="关闭场景自动词库（也不加载 --bundle）")
     c_create.add_argument("--no-blind", action="store_true", help="关闭体型盲盒（降级为传统明文 slots.body_shape）")
-    c_create.add_argument("--stage", dest="stage", help="显式指定角色年龄阶段 Y1~Y5（Y1含苞初绽/Y2豆蔻含春/Y3韶华舒展/Y4风姿绰约/Y5丰润韵致，多人卡支持逗号分隔如 'Y5,Y2'）")
+    c_create.add_argument("--stage", dest="stage", help="显式指定角色阶段 Y1~Y5（多人卡支持逗号分隔如 'Y5,Y2'）")
     c_create.add_argument(
         "--trope",
         dest="trope",
@@ -573,7 +573,7 @@ def add_chain_parsers(sub):
     c_chain.add_argument("--bundle", nargs="?", const="auto", default=None, metavar="SECTIONS", help="覆盖场景自动词库。默认按场景标签自动挂 1 条可选提示词。不带值：按当前场景扩一圈相关章节；带值：同 cu-template-bundle.py --sections")
     c_chain.add_argument("--no-bundle", action="store_true", dest="no_bundle", help="关闭场景自动词库")
     c_chain.add_argument("--no-blind", action="store_true", help="关闭体型盲盒（降级为传统明文 slots.body_shape）")
-    c_chain.add_argument("--stage", dest="stage", help="显式指定角色年龄阶段 Y1~Y5（Y1含苞初绽/Y2豆蔻含春/Y3韶华舒展/Y4风姿绰约/Y5丰润韵致，多人卡支持逗号分隔如 'Y5,Y2'）")
+    c_chain.add_argument("--stage", dest="stage", help="显式指定角色阶段 Y1~Y5（多人卡支持逗号分隔如 'Y5,Y2'）")
     c_chain.add_argument(
         "--trope",
         dest="trope",
