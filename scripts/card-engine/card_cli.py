@@ -134,7 +134,10 @@ search 只确认库内有没有。抽卡把同一词传 create/chain --scene。�
   地点  --scene 走廊       钉死命中的 label
   主题  --scene 校园       随机整库（医疗/职场/SM/日常/古风/特殊 同理）
   视角  --scene 颜射视角   随机该视角池（必须完整词；特殊视角=视角库全盲盒）
-  桥段  --trope 深喉|鱼眼  深喉：说明、触发词与两档机位；抽卡 --trope 深喉[:机位][:深度]，深度=全插/半插（全入/半入同义）。鱼眼：--trope 鱼眼
+  桥段  --trope 深喉|鱼眼|偷拍
+        深喉：说明、触发词与两档机位；抽卡 --trope 深喉[:机位][:深度]，深度=全插/半插（全入/半入同义）
+        鱼眼：--trope 鱼眼
+        偷拍：--trope 偷拍[:低位|中位|高位][:单侧|双侧|竖缝|门缝|横隙|小孔|暗框|孔隙]
   角色  --person 护士      只看 Y·V·U·L；抽卡角色仍直接 --person
   未命中                   原词照传：场景 → manual-custom（fill 必写英文 scene.keywords）；角色直接 --person
 """
@@ -144,7 +147,7 @@ search 只确认库内有没有。抽卡把同一词传 create/chain --scene。�
         help="地点列出 label；主题词或完整视角词列出对应池。抽卡原词给 create/chain 即整池随机。",
     )
     c_search.add_argument("--person", help="按关键字搜索角色库/身份库 (如 '护士', '女大学生', 'ol')；仅展示四轴粗标签(Y·V·U·L)，不暴露真实体型文本")
-    c_search.add_argument("--trope", dest="trope", help="查询特色桥段说明与触发词 (如 '深喉', '鱼眼', '第一人称', '第三人称', '桥段')")
+    c_search.add_argument("--trope", dest="trope", help="查询特色桥段说明与触发词 (如 '深喉', '鱼眼', '偷拍', '第一人称', '第三人称', '桥段')")
 
     c_resolve = sub.add_parser("resolve", help="resolver 联合解析，输出 fill-ready 字段")
     c_resolve.add_argument("--scene-library", default="general_scenes", help="场景库名")
@@ -230,7 +233,9 @@ SCENE_ARG_HELP = (
 
 TROPE_ARG_HELP = (
     "指定特色桥段。不带值：全部桥段随机。"
-    "带值：深喉 / 深喉:第一人称 / 深喉:第一人称:全插 / 深喉:半插（全入/半入同义；深度锁死，其余轴仍随机）；鱼眼。"
+    "带值：深喉 / 深喉:第一人称 / 深喉:第一人称:全插 / 深喉:半插（全入/半入同义；深度锁死，其余轴仍随机）；"
+    "鱼眼；"
+    "偷拍 / 偷拍[:低位|中位|高位][:单侧|双侧|竖缝|门缝|横隙|小孔|暗框|孔隙]。"
 )
 
 PERSPECTIVE_TIPS_TEXT = """[tip] 技巧：自带视角特定场景精准命中（视角场景免疫外部裸露指令，只认自身允许的裸露档位）
@@ -621,10 +626,17 @@ def build_parser(command_set, description):
 
 🎮 抽卡控制台四大运行模式工作流 (Console Four Workflows):
 
-  ⭐ [AI 契约] 主人未指定特定模式时，AI 应默认执行②批量连抽模式（chain 流程）。
+  ⭐ [AI 契约] 主人未指定特定模式时，AI 应默认执行①批量连抽模式（chain 流程）。
   ⭐ [角色理解] 用户提及的任何角色（明星中文名、库内预设身份或库外角色如「暗房冲洗师」「机车女」），AI 均直接作为 --person 传入，无需查库，引擎全自动识别并托管体型盲盒。
 
-  ① 常规单抽模式 (Normal Single Mode):
+  ① 批量连抽模式 (Chain Batch Mode):
+    $ python3 card_cli.py chain --count <数量> --user-input "<用户原始要求>"
+    → AI 导演逐张深读骨架 JSON，做 8 维创意决策
+    → 逐张一次 fill 导入槽位（--json-file 一次写齐，勿拆 --phase）
+    → $ python3 card_cli.py chain --resume <id> (自动 render -> check -> autofix -> submit)
+    → check 失败时: $ python3 card_cli.py mend --card <id> --set <field> --value "<值>" 修改后回到 resume
+
+  ② 常规单抽模式 (Normal Single Mode):
     $ python3 card_cli.py create --user-input "<用户原始要求>" [--person <角色>] [--scene <场景>]
     → 根据建卡骨架，AI导演深读并进行 8 维创意决策
     → $ python3 card_cli.py fill --card <id> --json '{"subject":..., "director":..., "slots":...}'   # 先填导演/槽位
@@ -632,13 +644,6 @@ def build_parser(command_set, description):
     → 为方向 2–8/9 写 direction_descriptions（patch/fill，见 options --help）
     → $ python3 card_cli.py render --card <id> && python3 card_cli.py present --card <id> --json
     → 通过快捷数字或口头指令进行交互式微调修改（输入「1」或「画」提交出图）
-
-  ② 批量连抽模式 (Chain Batch Mode):
-    $ python3 card_cli.py chain --count <数量> --user-input "<用户原始要求>"
-    → AI 导演逐张深读骨架 JSON，做 8 维创意决策
-    → 逐张一次 fill 导入槽位（--json-file 一次写齐，勿拆 --phase）
-    → $ python3 card_cli.py chain --resume <id> (自动 render -> check -> autofix -> submit)
-    → check 失败时: $ python3 card_cli.py mend --card <id> --set <field> --value "<值>" 修改后回到 resume
 
   ③ 灵感精选模式 (Featured Inspiration Mode):
     $ python3 card_cli.py featured [--workflow <工作流>] [--width <宽>] [--height <高>]

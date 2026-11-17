@@ -21,7 +21,7 @@ triggers:
 
 > 🔒 **AI 铁律**
 >
-> 1. **严禁扫库与刺探**：禁止 grep / find / cat 刺探源码、内部配置（角色/场景库）与历史卡片；场景查询只走 `card_cli.py search`；体型由盲盒全自动采样托管，严禁刺探或手写 `body_shape`。
+> 1. **严禁扫库与刺探**：禁止 grep / find / cat 刺探源码、`tool-output`与内部配置（角色/场景库）；场景查询只走 `card_cli.py search`；体型由盲盒全自动采样托管，严禁刺探或手写 `body_shape`。
 > 2. **角色直传**：任何角色直接传 `--person`（无需搜库，库外自由发挥）；严禁用泛词「素人」作 `--person`。
 > 3. **Help 规范与严格闭环**：参数与步骤以 `card_cli.py <命令> --help` 为唯一真相源，严禁跳步、合步或自创顺序；严格遵循「建卡（`create` / `chain`）➔ 读返回模板 ➔ 填槽（`fill`）➔ 提交（`resume` / `render`）」闭环推进。
 
@@ -52,8 +52,8 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 
 | 模式    | 入口                | 核心流程                                                                                                            | 适用         | 额外约束                                                                                                                       |
 | :------ | :------------------ | :------------------------------------------------------------------------------------------------------------------ | :----------- | :----------------------------------------------------------------------------------------------------------------------------- |
-| 🎴 常规 | `create`          | 骨架 → fill（导演含 exposure_mode + 槽位）→ 叙事升华 → render 交互                                               | 精细打磨     | `workflow_mode=single`；**必** `options --auto`；`present` 只替换 `__dirtytalk__`，禁止自排版 / 泄露 `card_id` |
 | 🚄 连抽 | `chain --count N` | 建骨架 → 逐张决策 → **一次** `fill --json-file`（勿拆 `--phase`）→ 逐张 resume（引擎串行）→ 失败 mend | 批量         | **不要** `options --auto`；中途不停问；语义冲突看 `💡 [自愈建议]` 再 fill                                            |
+| 🎴 常规 | `create`          | 骨架 → fill（导演含 exposure_mode + 槽位）→ 叙事升华 → render 交互                                               | 精细打磨     | `workflow_mode=single`；**必** `options --auto`；`present` 只替换 `__dirtytalk__`，禁止自排版 / 泄露 `card_id` |
 | 🚀 直投 | `direct --prompt` | 英文 prompt raw 直投 GPU，零干预                                                                                    | 已有完整英文 | **禁止**改 / 扩 / 删 prompt 或追加画质词                                                                                 |
 | 🎲 精选 | `featured`        | 随机抽 Obsidian 灵感库，meta 原样旁路                                                                               | 随机灵感     | 与 CLI `direct` 无关                                                                                                         |
 

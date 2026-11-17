@@ -54,7 +54,7 @@ WORKFLOW_MODELS: Dict[str, List[Tuple[str, str, str]]] = {
         ("VAE", "qwen_image_vae.safetensors", "vae"),
     ],
     "moody_moss": [
-        ("扩散模型 DiT", "MoodyMossMix-fp8.safetensors", "diffusion_models"),
+        ("扩散模型 DiT", "Moody-Moss-Mix-V4.1_00001__clean-fp8.safetensors", "diffusion_models"),
         ("文本编码器", "qwen3.5_9b_int8_convrot.safetensors", "text_encoders"),
         ("VAE", "flux2-vae.safetensors", "vae"),
     ],
@@ -152,9 +152,9 @@ def _is_comfyui_root(p: Path) -> bool:
         return False
 
 
-def find_hints_file(root: Optional[Path] = None) -> Optional[Path]:
-    """Locate workflow_moody_zib_zit.txt (mirrors detect_local_deps search)."""
-    name = "workflow_moody_zib_zit.txt"
+def find_hints_file(root: Optional[Path] = None, wf_id: str = DEFAULT_WF_ID) -> Optional[Path]:
+    """Locate install_hints/workflow_<wf_id>.txt (mirrors detect_local_deps search)."""
+    name = f"workflow_{wf_id}.txt"
     candidates: List[Path] = []
     here = Path(__file__).resolve().parent
     if root is not None:
@@ -432,8 +432,8 @@ def scan_moody_models(comfyui: Optional[Path]) -> List[Tuple[str, str, str, bool
 def print_model_checklist(
     comfyui: Optional[Path], root: Optional[Path] = None, wf_id: str = DEFAULT_WF_ID
 ) -> None:
-    hints = find_hints_file(root)
-    if hints is not None and wf_id == "moody_zib_zit":
+    hints = find_hints_file(root, wf_id)
+    if hints is not None:
         try:
             _eprint(hints.read_text(encoding="utf-8"))
         except Exception:

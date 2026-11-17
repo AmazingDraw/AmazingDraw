@@ -1,0 +1,25 @@
+============================================================
+工作流 Moody Krea Mix 6（id: krea2_turbo）模型清单
+============================================================
+工作流文件：Krea2_Turbo_fp8_8步_CFG1_768x1152.json
+放置位置：  $COMFYUI_DIR/workflows/
+
+请把下列模型放到 ComfyUI 的 models/ 对应子目录（缺一不可出图）：
+
+| 用途         | 文件名                              | 放置目录                    | 来源 |
+|--------------|-------------------------------------|-----------------------------|------|
+| 扩散模型 DiT | Moody-Krea-Mix-fp8.safetensors      | models/diffusion_models/    | CivitAI · Moody Krea 2 Mix |
+| 文本编码器   | qwen3vl_4b_fp8_scaled.safetensors   | models/text_encoders/       | HF · Comfy-Org/Krea-2 |
+| VAE          | qwen_image_vae.safetensors          | models/vae/                 | HF · Comfy-Org/Krea-2 |
+
+链接：
+  Moody Krea 2 Mix: https://civitai.com/models/2731187
+  text_encoders:    https://huggingface.co/Comfy-Org/Krea-2/tree/main/text_encoders
+  vae:              https://huggingface.co/Comfy-Org/Krea-2/tree/main/vae
+
+说明：
+  · CLIPLoader type 选 krea2
+  · 采样参数以工作流为准：8 步、CFG 1（euler_ancestral/beta），画幅 768×1152，极速成片
+  · 角色 LoRA 子目录：models/loras/girls_like_krea2/（明星 LoRA 用）
+  · 本清单对应 config 里 workflows.krea2_turbo（含 prompt_nodes 等节点绑定）
+============================================================

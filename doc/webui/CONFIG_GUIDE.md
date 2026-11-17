@@ -56,7 +56,7 @@
 | :--- | :--- |
 | `exposure_allowed_modes` | 允许的裸露档集合，优先。例 `["upper","lower","half_nude"]`。WebUI chips 写入，至少一项 |
 | `exposure_limit` | 兼容区间 `[min, max]`。没有 `exposure_allowed_modes` 时用。WebUI 保存 chips 时会派生写入 |
-| `perspective_exposure_bindings` | 特殊视角允许的裸露档。缺省：颜射 `upper`/`half_covered`，后入 `lower`/`half_nude`，丝袜 `half_nude`/`half_covered`，偷拍 `lower`/`half_nude` |
+| `perspective_exposure_bindings` | 特殊视角允许的裸露档。缺省：颜射 `upper`/`half_covered`，后入 `lower`/`half_nude`，丝袜 `half_nude`/`half_covered`，偷拍 `half_nude（region=lower）` |
 | `disabled_celebrities` | 默认 `[]`。禁用明星名单：支持填中文名（例 `"高叶"`）或 LoRA 键（例 `"girlslike_zi_gy"`），填入后不进入随机抽取池与候选列表 |
 | `enable_independent_llm` | 默认 `true`。引擎独立调用总闸。关闭后节点 ①②④⑤⑦⑧ 不发 HTTP。环境变量 `AMAZING_DRAW_NO_INDEPENDENT_LLM=1` 强制关。WebUI 在服务参数区 |
 | `llm_calls` | 分项，默认全 `true`：`route_hint` / `multi_roles` / `body_classify` / `metadata`。总闸关时不生效。不含翻译 |

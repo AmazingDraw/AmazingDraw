@@ -1,312 +1,177 @@
 # 抽卡命令速查
 
-> 工作目录：`cd scripts/card-engine`
+> 工作目录：`cd scripts/card-engine` · 完整参数见 `python3 card_cli.py <子命令> --help`
 
 ---
 
-## 1. 创建 `create`
+## 一、连抽模式（默认主线）
+
+### 1. 连抽 `chain`
 
 ```bash
-# 随机（--user-input 必填）
-python3 card_cli.py create --user-input "可爱风格"
-
-# 指定场景/人物
-python3 card_cli.py create --person "OL" --scene "停车场" --user-input "高冷风格"
-python3 card_cli.py create --person "女大学生" --scene "校园" --user-input "加入宠物元素"
-
-# 比例 / 体型 / 其他
-python3 card_cli.py create --aspect portrait --user-input "可爱风格"    # 512x768（默认）
-python3 card_cli.py create --person "护士" --profile nurse-milk --user-input "高冷风格"
-python3 card_cli.py create --seed 123456 --workflow moody_zib_zit --bundle --user-input "加入宠物元素"
+python3 card_cli.py chain --count 3 --user-input "可爱风格"
+python3 card_cli.py chain --count 3 --person "护士" --scene "诊室" --user-input "高冷风格"
+python3 card_cli.py chain --resume <card_id>            # 自动 render → check → autofix → submit
+python3 card_cli.py chain --resume <card_id> --dry-run  # 仅校验不入 GPU 队列
 ```
 
-| 参数             | 说明                                                                                                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--user-input` | **必填**。风格/元素等用户补充（如：可爱风格、高冷风格、加入宠物元素）                                                                                         |
-| `--mode`       | `amateur`(默认，单人自动开启体型盲盒 `{{BODY}}`) / `celebrity`                                                                                                  |
-| `--bundle`     | 覆盖默认的 1 条场景词库。不带值：按当前场景扩一圈相关章；带值：指定章节（例：`--bundle "tattoo:图案速查"`） |
-| `--no-blind`   | 关闭体型盲盒（降级为传统明文 `slots.body_shape`）                                                                                                               |
-| `--trope`      | 特色桥段。不带值：`tropes.json` 全部桥段随机；带值：`深喉` / `深喉:第一人称` / `深喉:第一人称:全插` / `深喉:半插`（`全入`/`半入` 同义）；`鱼眼`。深度锁死时手、精液、视线仍随机 |
+> 流程：**一次** `fill --json-file` 填完后逐张 `--resume`（引擎级全局串行，不会自动删旧草稿）。
 
----
-
-## 2. 填词 `fill`
+### 2. 填词 `fill`
 
 ```bash
-# 逐字段
-python3 card_cli.py fill --card <id> \
-  --clothing "..." --pose "..." --expression-gaze "..." \
-  --style-quality "..." --makeup-hair "..." --accessories "..." \
-  --imperfections "..." --tattoo "..." --props "..." --liquids "..." \
-  --dir-intent "..." --dir-exposure-mode half_nude \
-  --dir-style-recipe anime_style --dir-lighting-palette warm_soft \
-  --dir-pose-direction frontal_close_up --dir-makeup-direction natural_flush \
-  --dir-expression-gaze cute_flirty --dir-focus-detail face_expression \
-  --theme-zh "中文主题" --story-elevation-zh "..." \
-  --lighting-palette-zh "暖光" --style-recipe-zh "动漫风格"
-
-# 结构化 JSON 一次导入（连抽默认；勿拆 --phase）
+# 连抽主力：一次导入（勿拆 --phase）
 python3 card_cli.py fill --card <id> --json-file fill.json
 python3 card_cli.py fill --card <id> --json '{"theme_zh":"...","director":{...},"slots":{...},"story_elevation_zh":"...","lighting_palette_zh":"...","style_recipe_zh":"..."}'
 
-# 分阶段填（仅常规模式精细打磨；连抽禁止）
-python3 card_cli.py fill --card <id> --phase director   # 第一阶段：8维导演
-python3 card_cli.py fill --card <id> --phase slots      # 第二阶段：12槽位
-python3 card_cli.py fill --card <id> --phase elevation  # 第三阶段：叙事升华
+# 常规精修可选分阶段（连抽禁止）
+python3 card_cli.py fill --card <id> --phase director|slots|elevation
 ```
 
-| 参数                         | 说明                                                      |
-| ---------------------------- | --------------------------------------------------------- |
-| `--json-file` / `--json` | **连抽推荐**：一次写齐 director + slots + elevation（盲盒卡勿填 `body_shape`；脸型五官轮廓写入 `makeup_hair`，人物专属气质写入 `expression_gaze`） |
-| `--phase`                  | 可选分阶段；**仅**常规模式精细打磨，连抽勿用        |
-| `--clothing`               | 服装描述（旧`--exposure-clothing` 已弃用）              |
+> 盲盒卡勿填 `body_shape`；人物气质写 `expression_gaze`（逐字段参数见 `fill --help`）。
 
----
-
-## 3. 动态选项 `options`
+### 3. 连抽修复 `mend`
 
 ```bash
-# 自动分配 6 个动态方向（推荐）
-python3 card_cli.py options --card <id> --auto
-
-# 手动指定
-python3 card_cli.py options --card <id> --json '{
-  "2": {"kind": "exposure", "name": "裸露", "emoji": "🍆", "targets": ["slots.clothing", "director.pose_direction", "director.exposure_mode"]},
-  "3": {"name": "姿势", "emoji": "🧘", "targets": ["slots.pose"]}
-}'
-```
-
----
-
-## 4. 局部修改 `patch`
-
-```bash
-# 数字指令（方向编号）。组合如 51 / 27961 由 Agent 按位多次 --direction，不要丢给 --user-input
-python3 card_cli.py patch --card <id> --direction 9  # 纹身
-python3 card_cli.py patch --card <id> --user-input "not nude"  # 只记文字 / 裸露指令，不拆数字
-
-# 直接改字段
-python3 card_cli.py patch --card <id> --set slots.tattoo --value "small pink heart"
-python3 card_cli.py patch --card <id> --set direction_descriptions.9 --value "在左肩设计樱花刺青"
-
-# 按 target 分别赋值
-python3 card_cli.py patch --card <id> --direction 3 --targets-json '{
-  "slots.pose": "kneeling on bed",
-  "director.pose_direction": "跪姿"
-}'
-
-# 裸露方向必须同步 clothing 与 exposure_mode
-python3 card_cli.py patch --card <id> --direction 2 --targets-json '{
-  "slots.clothing": "pleated skirt hiked up, lace panties pulled aside",
-  "director.pose_direction": "front-facing lower-body reveal",
-  "director.exposure_mode": "lower"
-}'
-```
-
-> 常规 `single` 的 `lower` 会保留已明确掀起、拨开或褪下的衣物，并补足私处可见性；连抽 `chain` 仍采用零遮挡规则。裸露数字 patch 会替换旧裸露 directive，并清除旧 render/validation。
-
----
-
-## 5. 展示 `present`
-
-```bash
-python3 card_cli.py present --card <id> --json    # 常规 R4：结构化 JSON（含 text_template）
-python3 card_cli.py present --card <id>          # 展示卡片与菜单
-python3 card_cli.py present --card <id> --compact # 精简展示
-```
-
-> 常规模式必跑 `options --auto` 后才能 `present`。`options` 只更新交互菜单并清理旧描述，
-> **不会**修改卡片状态、Prompt 缓存或清除验证内容；但它会推进 `card.version`，因此若在
-> `check` 之后再次运行，提交前必须重新 `check`。推荐始终按 `options → render → check → submit` 排序。
-
----
-
-## 6. 渲染 / 检查 / 提交
-
-```bash
-python3 card_cli.py render --card <id>            # 渲染 prompt
-python3 card_cli.py check --card <id>             # 预检
-python3 card_cli.py submit --card <id> --confirm  # 提交（必须 --confirm）
-python3 card_cli.py submit --card <id> --confirm --dry-run  # 模拟预览
-```
-
-`check` 会从当前源字段重建最终 Prompt，并在 `_validation` 中记录：
-
-* `prompt_hash`：最终 Prompt 的 SHA-256；
-* `card_version`：校验结果实际保存到的卡片版本；
-* `workflow`：规范化后的工作流名称。
-
-`submit` 会再次重建 Prompt 并逐项核对这三个字段；任一字段缺失或变化都会拒绝入队，要求重新
-执行 `check`。历史常规卡若没有该凭证，也需要重新检查一次。精选模式读取的是已校验灵感库，
-继续按可信来源直接提交，不套用此凭证门禁。
-
----
-
-## 7. 数字指令（常规模式）
-
-| 指令           | 操作                        |
-| -------------- | --------------------------- |
-| `1` / `画` | 提交生成                    |
-| `6`          | 合理性检查                  |
-| `9`          | 纹身修改                    |
-| `0` / `换` | 重抽                        |
-| `2-5,7,8`    | 动态方向（需先`options`） |
-
-> 连抽模式不用数字指令，走 `fill → chain --resume → submit`
-
----
-
-## 8. 连抽 `chain`
-
-```bash
-# 创建骨架（--user-input 必填）
-python3 card_cli.py chain --count 3 --person "女大学生" --user-input "可爱风格"
-python3 card_cli.py chain --count 3 --person "护士" --scene "诊室" --user-input "高冷风格"
-
-# resume 提交（自动 render → check → autofix → submit）
-python3 card_cli.py chain --resume <card_id>
-```
-
-> 连抽填卡：**一次** `fill --json-file`，不要拆三次 `--phase`，逐张 `--resume`。
->
-> `chain --resume` 为**引擎级全局串行**（`/tmp/cu-card/chain-resume.lock`）：多进程并行 resume 会排队，避免 `check_prompt` 并发互拖；`fill`/`create` 不受此锁影响。GPU 渲染仍由 `cu-gpu.lock` 串行。
->
-> `chain` **不会自动删除任何旧草稿**。草稿清理由用户在 WebUI 中显式预览并确认，避免跨会话误删。
->
-> **dry-run 测试**：`chain --resume <card_id> --dry-run` 仅跑 render→check→autofix 全流程校验，**停在提交前不渲染**（卡 status 停在 validated，不入 GPU 队列），用于审查/测试。普通 `--resume` 会走到 submit 入队。
-
----
-
-## 9. 直投 `direct`
-
-```bash
-python3 card_cli.py direct \
-  --prompt "英文prompt" \
-  --person "OL" --scene "卧室" --theme "主题" \
-  --narrative "中文叙事" --lighting "光影" --style "风格" \
-  [--width 512 --height 768] [--dry-run]
-```
-
-> `--prompt` 为唯一技术必填；6 个中文元数据推荐提供（可省略，由 LLM 提取），用于归档文件名与展示。
-> **CLI `direct`** 走 `cu-submit --raw`，**不**经过卡引擎场景库 / 灵感原点 meta。
-> **WebUI 直投**仍会先提取人物、场景和叙事并生成卡片，再提交原始 Prompt；其卡号使用
-> 并发安全的唯一 ID。所有入口统一拒绝含路径分隔符、控制字符或越出卡片目录的 `card_id`。
-
----
-
-## 10. 精选 `featured`
-
-```bash
-python3 card_cli.py featured [--workflow moody_zib_zit] [--width 512] [--height 768]
-python3 card_cli.py featured --dry-run   # 只建卡并模拟 submit 命令，不入 GPU 队列
-```
-
-> 从 Obsidian `vault/灵感库/` 随机抽已归档词条；卡片写死 **灵感原点 meta**（`special-ethereal-origin`，代码内建，**不在** `special_scenes.json`），原样旁路渲染。
-> 与 CLI `direct` 无关。`create` 若 topic 含「直投 / direct injection」会旁路同一 meta，仍不等于 `direct` 命令。
-
----
-
-## 11. 连抽修复 `mend`
-
-```bash
-python3 card_cli.py mend --card <id> --set slots.clothing --value "xxx"
+python3 card_cli.py mend --card <id> --set slots.clothing --value "xxx" [--dry-run]
 python3 card_cli.py mend --card <id> --get slots.clothing   # 读取字段
-python3 card_cli.py mend --card <id> --reroll-body          # 重抽盲盒体型（保持用户约束与外层结构）
-python3 card_cli.py mend --card <id> --undo                 # 撤销
-python3 card_cli.py mend --card <id> --history              # 修改记录
-python3 card_cli.py mend --card <id> --set slots.pose --value "..." --dry-run
+python3 card_cli.py mend --card <id> --reroll-body          # 重抽盲盒体型
+python3 card_cli.py mend --card <id> --undo | --history     # 撤销 / 修改记录
 ```
 
 ---
 
-## 12. 文档/搜索
+## 二、常规单卡模式（精细打磨）
+
+> 闭环：`create` → `fill` → `options --auto` → `patch`（按需）→ `present` → `render` → `check` → `submit --confirm`。
+
+### 4. 创建 `create`
 
 ```bash
-python3 card_cli.py doc prompt   # 查阅提示词装配手册
-python3 card_cli.py doc pitfalls # 高频报错避坑指南
-python3 card_cli.py doc PROMPT_TEMPLATE.md   # 也认文件名/相对路径/中文关键词（如 doc 避坑）；未知输入会给出近似提示
-python3 card_cli.py search --scene 走廊      # 地点 → 钉死命中 label
-python3 card_cli.py search --scene 校园      # 主题 → 抽卡原词随机整库
-python3 card_cli.py search --scene 颜射视角  # 完整视角词 → 抽卡原词随机该池
-python3 card_cli.py search --person 护士     # 角色只看四轴；抽卡仍直接 --person
-python3 card_cli.py search --trope 深喉      # 深喉说明与机位；抽卡 --trope 深喉[:机位][:全插|半插]
-python3 card_cli.py search --trope 鱼眼      # 鱼眼光学；抽卡 --trope 鱼眼
+python3 card_cli.py create --user-input "可爱风格"
+python3 card_cli.py create --person "女大学生" --scene "校园" --aspect portrait --user-input "高冷风格"
+python3 card_cli.py create --person "护士" --profile nurse-milk --seed 123456 --workflow moody_zib_zit --bundle --user-input "加入宠物元素"
+```
+
+| 参数 | 说明 |
+| :--- | :--- |
+| `--user-input` | **必填**。风格/元素等用户补充 |
+| `--mode` | `amateur`（默认，开启体型盲盒 `{{BODY}}`）/ `celebrity` |
+| `--bundle` | 扩充词库：不带值按场景扩一圈；带值指定章节（如 `"tattoo:图案速查"`） |
+| `--no-blind` | 关闭体型盲盒，退回明文 `slots.body_shape` |
+| `--trope` | 特色桥段：不带值随机；带值 `深喉[:机位][:全插\|半插]` / `鱼眼` |
+
+### 5. 动态选项 `options`
+
+```bash
+python3 card_cli.py options --card <id> --auto   # 自动分配 6 个动态方向（推荐）
+python3 card_cli.py options --card <id> --json '{"2":{"kind":"exposure","name":"裸露","emoji":"🍆","targets":["slots.clothing","director.pose_direction","director.exposure_mode"]}}'
+```
+
+### 6. 局部修改 `patch`
+
+```bash
+python3 card_cli.py patch --card <id> --direction 9                    # 组合如 51 须按位拆开多次传 --direction
+python3 card_cli.py patch --card <id> --user-input "not nude"          # 只传文字/裸露指令，不拆数字
+python3 card_cli.py patch --card <id> --set slots.tattoo --value "small pink heart"
+python3 card_cli.py patch --card <id> --direction 2 --targets-json '{"slots.clothing":"pleated skirt hiked up, lace panties pulled aside","director.pose_direction":"front-facing lower-body reveal","director.exposure_mode":"lower"}'
+```
+
+> 裸露改档须同步 `slots.clothing` 与 `director.exposure_mode` 并清除旧校验；常规 `lower` 保留掀/拨衣物，连抽 `chain` 走零遮挡。
+
+### 7. 展示 `present`
+
+```bash
+python3 card_cli.py present --card <id> [--json | --compact]
+```
+
+> 必先跑 `options --auto`；`options` 会推进 `card.version`，若在 `check` 后重跑须重新 `check`（推荐顺序：`options → render → check → submit`）。
+
+### 8. 渲染 / 检查 / 提交
+
+```bash
+python3 card_cli.py render --card <id>
+python3 card_cli.py check --card <id>
+python3 card_cli.py submit --card <id> --confirm [--dry-run]
+```
+
+> `submit` 强校验 `check` 凭证（Prompt 哈希 / 卡版本 / 工作流），改过源字段须重新 `check`（精选模式豁免）。
+
+### 9. 数字指令（常规模式）
+
+| 指令 | 操作 | 指令 | 操作 |
+| :--- | :--- | :--- | :--- |
+| `1` / `画` | 提交生成 | `6` | 合理性检查 |
+| `0` / `换` | 重抽 | `9` | 纹身修改 |
+| `2-5,7,8` | 动态方向（先 `options`） | — | — |
+
+---
+
+## 三、其他抽卡模式
+
+### 10. 直投 `direct`
+
+```bash
+python3 card_cli.py direct --prompt "英文prompt" --person "OL" --scene "卧室" --theme "主题" --narrative "中文叙事" --lighting "光影" --style "风格" [--width 512 --height 768] [--dry-run]
+```
+
+> 仅 `--prompt` 技术必填，其余中文元数据用于展示与归档（可省）；直走 `cu-submit --raw`，不经场景库。
+
+### 11. 精选 `featured`
+
+```bash
+python3 card_cli.py featured [--workflow moody_zib_zit] [--width 512 --height 768] [--dry-run]
+```
+
+> 从 Obsidian `vault/灵感库/` 随机抽取已归档词条旁路渲染。
+
+---
+
+## 四、查询、队列与运维
+
+### 12. 文档/搜索
+
+```bash
+python3 card_cli.py doc prompt|pitfalls|避坑       # 查阅核心文档
+python3 card_cli.py search --scene 走廊|校园|颜射视角
+python3 card_cli.py search --person 护士
+python3 card_cli.py search --trope 深喉|鱼眼
 python3 card_cli.py resolve --scene-library general_scenes --include-tags office --exposure-focus auto
-python3 card_cli.py resolve --scene-id some-scene-id --mood 暧昧   # 精确场景 id；见 resolve --help
+python3 card_cli.py resolve --scene-id some-scene-id --mood 暧昧
 ```
 
----
-
-## 13. 队列管理
+### 13. 队列管理
 
 ```bash
-python3 card_cli.py queue status
-python3 card_cli.py queue health
-python3 card_cli.py queue clear [--force]
-python3 card_cli.py queue remove --job-id JOB_ID  # 推荐，稳定标识
-python3 card_cli.py queue remove --position N
+python3 card_cli.py queue status | health | clear [--force]
+python3 card_cli.py queue remove --job-id JOB_ID | --position N
 ```
 
----
-
-## 14. 记录与进度
+### 14. 记录与进度
 
 ```bash
 python3 card_cli.py progress
 python3 card_cli.py record --card <id>
-python3 card_cli.py archive --card <id>  # 存档到 Obsidian 灵感库
+python3 card_cli.py archive --card <id>            # 幂等归档至 Obsidian 灵感库（须能唯一匹配当前卡 PNG）
 ```
 
-`archive` 只接受可证明属于当前卡的 PNG，匹配优先级为：
-卡片 `render_image`（路径或精确 basename）→ 精确 `<card_id>.png` →
-旧卡“人物-场景-主题 / 人物-场景”唯一前缀。候选为空或超过一个都会失败并列出原因，
-不会再按时间戳或“最新图片”猜测。
-
-归档写入是幂等的：同一 `card_id` 且附件完整时直接返回 `already_archived`；
-缺失附件时只补附件；不同卡生成同名笔记时自动使用 `·2`、`·3` 成对后缀，
-既有 Markdown 与 PNG 均不覆盖。中文短名称直接本地生成文件名；只有需要翻译或提炼时
-才调用 LLM（单次超时 8 秒，失败后使用本地降级）。
-内部服务返回 `ok / status / source_image / image_path / note_path / match_strategy`；
-WebUI 据此区分 `archived` 与 `already_archived`，不再解析 CLI stdout。
-
----
-
-## 15. 快捷操作
-
-> 下列路径默认对应 `config.json` 的 `cards_dir` / `tmp_dir`（未改配置时即为下方写法）。
+### 15. 快捷操作
 
 ```bash
-# 查看卡面 JSON
 cat ~/.amazingdraw/cards/<card_id>.json | python3 -m json.tool
-
-# 查看后台日志
 tail -20 /tmp/cu-card/cu-submit-bg_*.log
-
-# 清理僵尸锁（GPU 锁为 O_EXCL 原子文件；释放仍是删文件）
-rm -f /tmp/cu-card/cu-gpu.lock
+rm -f /tmp/cu-card/cu-gpu.lock                     # 清理僵尸 GPU 锁
 ```
 
----
+### 16. 禁止事项
 
-发行包不含 `tests/` 目录；自测命令仅 skill 开发树提供，zip 用户请跳过。
+- ❌ `--person` / prompt 中禁止出现「素人」
+- ❌ 常规模式未先执行 `options --auto` 禁止使用动态数字位
+- ❌ 连抽模式禁止使用数字指令或 `--phase`
 
----
-
-## 17. 禁止事项
-
-- ❌ prompt/person 中禁止出现「素人」
-- ❌ 常规模式下，动态位必须先 `options --auto` 才能用
-- ❌ 连抽模式不要走数字指令
-
----
-
-## 18. ComfyUI 维护
+### 17. ComfyUI 维护
 
 ```bash
-# 渲染进度条
 curl -s http://127.0.0.1:8188/api/settings/Comfy.Queue.ShowRunProgressBar
-curl -s -X POST http://127.0.0.1:8188/api/settings/Comfy.Queue.ShowRunProgressBar \
-  -H "Content-Type: application/json" -d 'true'
+curl -s -X POST http://127.0.0.1:8188/api/settings/Comfy.Queue.ShowRunProgressBar -H "Content-Type: application/json" -d 'true'
 ```
-
-> 设置存储在 `~/ComfyUI/user/comfyui.db`（SQLite），重启后持久保留。

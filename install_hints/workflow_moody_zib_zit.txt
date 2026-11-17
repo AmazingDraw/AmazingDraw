@@ -1,5 +1,5 @@
 ============================================================
-默认工作流 Moody ZIB+ZIT（id: moody_zib_zit）模型清单
+工作流 Moody ZIB+ZIT（id: moody_zib_zit）模型清单
 ============================================================
 工作流文件：Moody_ZIB_ZIT_20步_CFG3_512x768.json
 放置位置：  $COMFYUI_DIR/workflows/
@@ -10,17 +10,18 @@
 |-------------------|-------------------------------------|-----------------------------|------|
 | 一阶段 UNET（ZIB）| MoodyWildMix-zib-base.safetensors   | models/diffusion_models/    | CivitAI · Moody Wild Mix |
 | 二阶段 UNET（ZIT）| MoodyRealMix-zit-write.safetensors  | models/diffusion_models/    | CivitAI · Moody Real Mix |
-| 文本编码器        | qwen_3_4b.safetensors               | models/text_encoders/       | Hugging Face · Comfy-Org/z_image_turbo |
-| VAE               | ae.safetensors                      | models/vae/                 | Hugging Face · Comfy-Org/z_image_turbo |
+| 文本编码器        | qwen_3_4b.safetensors               | models/text_encoders/       | HF · Comfy-Org/Z-Image-Turbo |
+| VAE               | ae.safetensors                      | models/vae/                 | HF · Comfy-Org/Z-Image-Turbo |
 
 链接：
-  Moody Wild Mix: https://civitai.red/models/2384856/moody-wild-mix
-  Moody Real Mix: https://civitai.com/models/621441
-  z_image_turbo:  https://huggingface.co/Comfy-Org/z_image_turbo
+  Moody Wild Mix: https://civitai.com/models/2384856/moody-wild-mix-zibzid
+  Moody Real Mix: https://civitai.com/models/621441/moody-real-mix
+  text_encoders:  https://huggingface.co/Comfy-Org/Z-Image-Turbo/tree/main/split_files/text_encoders
+  vae:            https://huggingface.co/Comfy-Org/Z-Image-Turbo/tree/main/split_files/vae
 
 说明：
-  · CLIPLoader type 请选 lumina2
+  · CLIPLoader type 选 lumina2
+  · 采样参数以工作流为准：20 有效步、CFG 3（512×768 初始 → 768×1152 上采样输出）
   · 角色 LoRA 子目录：models/loras/girls_like_zi/（可选，抽素人/明星写真用）
-  · 推荐参数以 CivitAI 模型页为准（ZIB 约 CFG 4·40 步；ZIT 约 CFG 1·8 步）
   · 本清单对应 config 里 workflows.moody_zib_zit（含 prompt_nodes 等节点绑定）
 ============================================================

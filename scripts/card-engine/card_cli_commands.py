@@ -408,12 +408,12 @@ def cmd_fill(args):
             if (
                 slot == "style_quality"
                 and val
-                and (card.get("_trope") or {}).get("id") == "fisheye"
+                and (card.get("_trope") or {}).get("id")
             ):
-                from trope_runtime import style_quality_keeps_fisheye_roll
-                ov = card.get("_trope") or {}
-                if not style_quality_keeps_fisheye_roll(str(val)):
-                    print("💡 特色桥段：fill 提交的 style_quality 丢掉鱼眼光学证据，已保留创卡预填")
+                from trope_runtime import style_quality_keeps_trope_contract
+                if not style_quality_keeps_trope_contract(card, str(val)):
+                    tname = (card.get("_trope") or {}).get("name") or (card.get("_trope") or {}).get("id")
+                    print(f"💡 特色桥段：fill 提交的 style_quality 丢掉【{tname}】契约证据，已保留创卡预填")
                     val = card["slots"].get("style_quality")
             if (
                 slot == "pose"
@@ -669,15 +669,11 @@ def cmd_fill(args):
             # ── clothing 预过滤：让 AI 当场看到哪些词会被删/加 ──
             exposure_raw = card["slots"].get("clothing", "").strip()
             if exposure_raw and ef_val != "auto":
-                from card_exposure import (
-                    filter_clothing_by_focus,
-                    lower_clothing_policy_for_card,
-                )
+                from card_exposure import filter_clothing_by_focus
                 exposure_filtered = filter_clothing_by_focus(
                     exposure_raw,
                     exposure_mode=ef_val,
                     context_text=_ctx_text,
-                    lower_policy=lower_clothing_policy_for_card(card),
                     perspective_key=_perspective_key,
                     half_nude_region=_half_nude_reg,
                     card_id=card.get("card_id"),
@@ -1111,11 +1107,7 @@ def cmd_patch(args):
         invalidate_render_cache(card, reason=f'patch-direction-{args.direction}')
         if is_exposure_direction:
             from card_validation import run_preflight_check
-            from card_exposure import (
-                lower_clothing_policy_for_card,
-                resolve_half_nude_region_for_card,
-                validate_exposure_consistency,
-            )
+            from card_exposure import validate_exposure_consistency
 
             _, preflight_details = run_preflight_check(card)
             exposure_errors = [
@@ -1134,7 +1126,6 @@ def cmd_patch(args):
                 pose_text=str((card.get("slots") or {}).get("pose") or ""),
                 exposure_mode=_plan["mode"],
                 context_text=_plan["context_text"],
-                lower_policy=_plan["lower_policy"],
                 half_nude_region=_plan["half_nude_region"],
             )
             if consistency.get("missing_signals"):
@@ -2332,7 +2323,11 @@ def cmd_search(args):
             name = p_data.get("name", "")
             cat = p_data.get("category", "")
             desc = str(p_data.get("description") or "").strip()
-            aliases = [a.lower() for a in p_data.get("aliases", [])]
+            aliases = [
+                str(a).lower()
+                for a in (list(p_data.get("explicit_aliases") or []) + list(p_data.get("aliases") or []))
+                if a
+            ]
             variants = p_data.get("variants", {})
             matched_vars = []
             for v_id, v_data in variants.items():
@@ -2350,11 +2345,19 @@ def cmd_search(args):
                 print(f"✨ 桥段: \033[36m{name}\033[0m · {cat}")
                 if desc:
                     print(f"   📖 说明: {desc}")
-                trig = "、".join(p_data.get("aliases") or [])
+                all_trigs = list(dict.fromkeys(
+                    list(p_data.get("explicit_aliases") or []) + list(p_data.get("aliases") or [])
+                ))
+                trig = "、".join(all_trigs)
                 if trig:
                     print(f"   🔑 触发: {trig}")
-                cli_name = (p_data.get("aliases") or [name])[0]
-                print(f"   抽卡: create/chain --trope {cli_name}  或  --trope {cli_name}:变体名  或  --trope {cli_name}:变体名:全插/半插")
+                cli_name = (all_trigs or [name])[0]
+                if p_id == "deepthroat":
+                    print(f"   抽卡: create/chain --trope {cli_name}  或  --trope {cli_name}:变体名  或  --trope {cli_name}:变体名:全插/半插")
+                elif p_id == "peek":
+                    print(f"   抽卡: create/chain --trope {cli_name}  或  --trope {cli_name}[:低位|中位|高位][:单侧|双侧|竖缝|门缝|横隙|小孔|暗框|孔隙]")
+                else:
+                    print(f"   抽卡: create/chain --trope {cli_name}")
                 print("   可选用变体:")
                 target_vars = matched_vars if matched_vars else list(variants.items())
                 for v_id, v_data in target_vars:
@@ -2371,7 +2374,7 @@ def cmd_search(args):
                 print("-" * 80)
         if not found_any:
             print("❌ 未找到匹配的特色桥段。")
-            print("💡 当前可用桥段: 深喉 (变体: 第一人称、第三人称)；鱼眼")
+            print("💡 当前可用桥段: 深喉 (变体: 第一人称、第三人称)；鱼眼；偷拍")
         print()
 
     if not has_query:
@@ -2382,4 +2385,5 @@ def cmd_search(args):
         print("  例: python3 card_cli.py search --person jk")
         print("  例: python3 card_cli.py search --trope 深喉")
         print("  例: python3 card_cli.py search --trope 鱼眼")
+        print("  例: python3 card_cli.py search --trope 偷拍")
         sys.exit(1)
