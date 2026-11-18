@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <a href="https://x.com/AmazingDrawBot"><img src="https://img.shields.io/badge/X-点击关注%20%40AmazingDrawBot-000000?style=for-the-badge&logo=x&logoColor=white" alt="点击关注"></a>
-  <a href="https://t.me/AmazingDraw"><img src="https://img.shields.io/badge/Telegram-点击加群%20%40AmazingDraw-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="点击加群"></a>
-  <a href="https://t.me/PromptReverseBot"><img src="https://img.shields.io/badge/🤖-点击反推%20%40PromptReverseBot-8A2BE2?style=for-the-badge" alt="提示词反推"></a>
+  <a href="https://x.com/AmazingDrawBot"><img src="https://img.shields.io/badge/X-点击关注%20%40AmazingDrawBot-000000?style=flat-square&logo=x&logoColor=white" alt="点击关注"></a>
+  <a href="https://t.me/AmazingDraw"><img src="https://img.shields.io/badge/Telegram-点击加群%20%40AmazingDraw-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="点击加群"></a>
+  <a href="https://t.me/PromptReverseBot"><img src="https://img.shields.io/badge/🤖-点击反推%20%40PromptReverseBot-8A2BE2?style=flat-square" alt="提示词反推"></a>
 </p>
 
 ---
