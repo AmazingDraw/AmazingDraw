@@ -9,7 +9,7 @@
   <!-- 立即从 localStorage 读取主题，防止初始页面闪烁 -->
   <script>
     (function() {
-      const savedTheme = localStorage.getItem("theme") || "dark";
+      const savedTheme = localStorage.getItem("theme") || "light";
       if (savedTheme === "light") {
         document.documentElement.classList.add("light-mode");
       }
@@ -24,13 +24,15 @@
   <script src="marked.min.js"></script>
   <!-- 自定义样式 -->
   <!-- 由 app.css 连续切分而来：顺序即层叠顺序，调换会改变样式优先级 -->
-  <link rel="stylesheet" href="css/01-base.css?v=1.9.7">
-  <link rel="stylesheet" href="css/02-layout.css?v=1.11.1">
-  <link rel="stylesheet" href="css/03-chat.css?v=1.10.1">
-  <link rel="stylesheet" href="css/04-panels.css?v=1.9.7">
-  <link rel="stylesheet" href="css/05-settings.css?v=1.14.9">
-  <link rel="stylesheet" href="css/06-components.css?v=1.12.1">
-  <link rel="stylesheet" href="css/07-effects.css?v=1.9.7">
+  <link rel="stylesheet" href="css/01-base.css?v=2.3.1">
+  <link rel="stylesheet" href="css/02-layout.css?v=2.2.1">
+  <link rel="stylesheet" href="css/03-chat.css?v=2.2.3">
+  <link rel="stylesheet" href="css/04-panels.css?v=2.1.1">
+  <link rel="stylesheet" href="css/05-settings.css?v=2.2.6">
+  <link rel="stylesheet" href="css/06-components.css?v=1.12.6">
+  <link rel="stylesheet" href="css/07-effects.css?v=2.3.2">
+  <link rel="stylesheet" href="css/08-mode-bar.css?v=1.1.1">
+  <link rel="stylesheet" href="css/09-responsive.css?v=1.0.0">
 </head>
 <body>
   <div id="archive-status-announcer" class="archive-status-announcer" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -719,10 +721,12 @@
           <button class="chat-mode-btn nav-view-trigger" data-view="settings" title="环境配置：管理 ComfyUI 服务与物理目录">
             <i class="fa-solid fa-sliders"></i>
             <span>配置</span>
+            <span class="chat-mode-btn-sub">Settings</span>
           </button>
           <button class="chat-mode-btn nav-view-trigger" data-view="docs" title="帮助文档：查阅设计配方与操作指南">
             <i class="fa-regular fa-file-lines"></i>
             <span>文档</span>
+            <span class="chat-mode-btn-sub">Docs</span>
           </button>
         </div>
       </div>
@@ -876,10 +880,12 @@
 
   <!-- Lightbox Overlay for Image Zoom -->
   <div class="modal-overlay lightbox-overlay" id="lightbox-modal">
+    <button type="button" class="lightbox-nav lightbox-prev is-hidden" id="btn-lightbox-prev" aria-label="上一张" title="上一张 (←)"><i class="fa-solid fa-chevron-left"></i></button>
     <div class="lightbox-content">
       <img id="lightbox-img" alt="渲染图预览" decoding="async">
-      <button class="btn-close-modal lightbox-close" id="btn-close-lightbox" aria-label="关闭大图预览"><i class="fa-solid fa-xmark"></i></button>
+      <div class="lightbox-caption is-hidden" id="lightbox-caption"></div>
     </div>
+    <button type="button" class="lightbox-nav lightbox-next is-hidden" id="btn-lightbox-next" aria-label="下一张" title="下一张 (→)"><i class="fa-solid fa-chevron-right"></i></button>
   </div>
 
   <div class="modal-overlay" id="album-create-modal" aria-hidden="true">
@@ -907,13 +913,13 @@
   <!-- JavaScript 引导 -->
   <!-- 由 app.js 拆分而来：core.js 定义 state 与共享常量，必须最先加载 -->
   <script src="js/core.js?v=1.11.4"></script>
-  <script src="js/shell.js?v=1.11.3"></script>
+  <script src="js/shell.js?v=1.11.4"></script>
   <script src="js/onboarding.js?v=1.13.4"></script>
   <script src="js/settings.js?v=1.11.2"></script>
-  <script src="js/cards.js?v=1.11.0"></script>
-  <script src="js/albums.js?v=1.2.7"></script>
+  <script src="js/cards.js?v=1.13.5"></script>
+  <script src="js/albums.js?v=1.3.7"></script>
   <script src="js/queue.js?v=1.9.9"></script>
-  <script src="js/chat.js?v=1.11.0"></script>
-  <script src="js/widgets.js?v=1.9.7"></script>
+  <script src="js/chat.js?v=1.12.1"></script>
+  <script src="js/widgets.js?v=1.9.10"></script>
 </body>
 </html>

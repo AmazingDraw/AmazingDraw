@@ -2,6 +2,14 @@
 
 发行包版本是 GitHub Releases 的 tag（`v主.次.补`）。四个 zip 文件名仍是平台 × Python（`AmazingDraw-darwin-cp39.zip` 这类），不把版本写进文件名。zip 根有 `VERSION` 和本文件。
 
+## 0.1.23 — 2026-11-21
+
+- 安装加「灵魂三问」门槛，非 AI Agent 用户劝退；推荐 Antigravity / Devin
+- Windows 自动探测 C–H 盘 ComfyUI，支持便携包/整合包/偏僻目录
+- 工作流：MOSS 统一 MoodyMossMix-fp8（25 步）；Krea 2 Turbo 改名「Moody Krea 2 Mix 典藏版」
+- WebUI 相册与交互细节修复
+- 引擎：场景字段接入提示词、桥段前景锚定、镜面/去重门禁
+
 ## 0.1.22 — 2026-11-18
 
 - 场景库治理：新增写作规范与全库门禁，场景命名与内容更统一

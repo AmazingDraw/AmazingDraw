@@ -1,5 +1,18 @@
 /* albums.js — 成品库网格与专辑 */
 
+let _albumScrollBound = false;
+let _albumAutoLoading = false;
+
+function computeSmartAlbumBatch(gridEl) {
+  const grid = gridEl || document.getElementById("album-grid");
+  const rawW = (grid && grid.clientWidth) ? grid.clientWidth : Math.max(720, window.innerWidth - 360);
+  const innerWidth = Math.max(360, rawW - 56);
+  // 与 CSS minmax(168px, 1fr) + gap 16px 严格对齐计算当前列数
+  const cols = Math.max(2, Math.floor((innerWidth + 16) / (168 + 16)));
+  // 每次按整列数的 8 行对齐加载（如 4列=32、5列=40、6列=48），保证末行永远铺满不留缺口
+  return cols * 8;
+}
+
 function initAlbum() {
   const createBtn = document.getElementById("btn-album-create");
   const confirmBtn = document.getElementById("btn-album-create-confirm");
@@ -27,7 +40,7 @@ function initAlbum() {
     }
   });
   const reload = () => {
-    state.albumLimit = 100;
+    state.albumLimit = computeSmartAlbumBatch();
     loadAlbumPool();
   };
   timeSel?.addEventListener("change", () => {
@@ -139,7 +152,7 @@ function renderAlbumFacets(facets) {
 function selectAlbumBucket({ albumId, person }) {
   state.albumFilter = albumId || "all";
   state.albumPersonFilter = person || "";
-  state.albumLimit = 100;
+  state.albumLimit = computeSmartAlbumBatch();
   renderAlbumSidebar();
   loadAlbumPool().catch((err) => showToast(err.message || err, "error"));
 }
@@ -186,7 +199,7 @@ function renderAlbumSidebar() {
   const rows = [
     { id: "all", name: (virtual.all && virtual.all.name) || "全部成片", count: (virtual.all && virtual.all.count) || 0, virtual: true },
     ...systemRows,
-    { id: "unfiled", name: (virtual.unfiled && virtual.unfiled.name) || "未分辑", count: (virtual.unfiled && virtual.unfiled.count) || 0, virtual: true },
+    { id: "unfiled", name: (virtual.unfiled && virtual.unfiled.name) || "未分类", count: (virtual.unfiled && virtual.unfiled.count) || 0, virtual: true },
     ...userRows,
   ];
   list.innerHTML = "";
@@ -194,8 +207,11 @@ function renderAlbumSidebar() {
     const btn = document.createElement("div");
     btn.className = `album-nav-item${row.system ? " is-system" : ""}${albumBucketActive("album", row.id) ? " active" : ""}`;
     btn.setAttribute("data-album-id", row.id);
+    const iconHtml = row.id === "x_collection"
+      ? `<span class="album-nav-x-icon" aria-hidden="true">𝕏</span>`
+      : `<i class="fa-regular ${row.system ? "fa-heart" : row.virtual ? "fa-images" : "fa-folder"}"></i>`;
     btn.innerHTML = `
-      <i class="fa-regular ${row.system ? "fa-heart" : row.virtual ? "fa-images" : "fa-folder"}"></i>
+      ${iconHtml}
       <span class="album-nav-name"></span>
       <span class="album-nav-count">${row.count} 条</span>
       ${row.virtual || row.system ? "" : `<span class="album-nav-tools">
@@ -268,7 +284,7 @@ function renderAlbumSidebar() {
         `;
         fold.title = `不足 ${minMain} 条的角色收在这里`;
         fold.addEventListener("click", (e) => {
-          if (e.target.closest(".album-nav-caret")) {
+          if (e.target.closest(".album-nav-caret") || albumBucketActive("person", "__other__")) {
             e.stopPropagation();
             state.albumPersonRareOpen = !state.albumPersonRareOpen;
             renderAlbumSidebar();
@@ -278,112 +294,170 @@ function renderAlbumSidebar() {
           selectAlbumBucket({ albumId: "all", person: "__other__" });
         });
         personList.appendChild(fold);
-        const rareOpen =
-          state.albumPersonRareOpen ||
-          albumBucketActive("person", "__other__") ||
-          rare.some((row) => albumBucketActive("person", row.name));
-        if (rareOpen) rare.forEach((row) => appendPerson(row, true));
+        if (state.albumPersonRareOpen) rare.forEach((row) => appendPerson(row, true));
       }
     }
   }
 }
 
-function renderAlbumGrid() {
+function _createAlbumTile(card, { realAlbum, isFavorites, favoriteIds }) {
+  const tile = document.createElement("article");
+  tile.className = "album-tile";
+  tile.draggable = true;
+  tile.dataset.cardId = card.card_id;
+  const imgSrc = card.image_url || (card.render_image ? `/images/${encodeURIComponent(card.render_image)}` : "");
+  const heading = [card.person, card.scene].filter(Boolean).join(" · ") || card.card_id;
+  const frame = document.createElement("div");
+  frame.className = "album-tile-frame";
+  const favorited = favoriteIds.has(card.card_id);
+  const xPost = card.x_post && typeof card.x_post === "object" ? card.x_post : null;
+  let xBadgeHtml = "";
+  if (xPost) {
+    const ts = Number(xPost.posted_at || 0);
+    const when = ts ? new Date(ts * 1000).toLocaleString("zh-CN", { hour12: false }) : "";
+    const tip = [
+      "已发 X",
+      xPost.handle || "",
+      when ? `(${when})` : "",
+      xPost.status_url ? "· 点击查看原帖" : "",
+    ].filter(Boolean).join(" ");
+    const safeUrl = xPost.status_url && /^https?:\/\//i.test(xPost.status_url) ? xPost.status_url : "";
+    xBadgeHtml = safeUrl
+      ? `<a class="album-tile-x-badge" href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">𝕏</a>`
+      : `<span class="album-tile-x-badge" title="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">𝕏</span>`;
+  }
+  frame.innerHTML = `
+    ${xBadgeHtml}
+    <div class="album-tile-quick">
+      <button type="button" data-album-fav class="${favorited ? "is-on" : ""}" title="${favorited ? "取消收藏" : "收藏"}" aria-label="${favorited ? "取消收藏" : "收藏"}">
+        <i class="fa-${favorited ? "solid" : "regular"} fa-heart"></i>
+      </button>
+      <button type="button" data-album-del title="删除卡片" aria-label="删除卡片">
+        <i class="fa-regular fa-trash-can"></i>
+      </button>
+    </div>
+    <div class="album-tile-meta">
+      <div class="album-tile-title"></div>
+      <div class="album-tile-sub">${escapeHtml(card.status || "")}</div>
+      <div class="album-tile-actions">
+        <button type="button" data-album-open>工作台打开</button>
+      </div>
+    </div>
+  `;
+  frame.querySelector(".album-tile-title").textContent = heading;
+  if (imgSrc) {
+    const img = document.createElement("img");
+    img.className = "gallery-img album-thumb loaded";
+    img.alt = heading;
+    img.decoding = "async";
+    img.loading = "lazy";
+    img.addEventListener("error", () => {
+      img.classList.add("is-missing");
+    });
+    img.src = imgSrc;
+    frame.insertBefore(img, frame.firstChild);
+  } else {
+    const missing = document.createElement("div");
+    missing.className = "album-tile-missing";
+    missing.textContent = "无图";
+    frame.insertBefore(missing, frame.firstChild);
+  }
+  tile.appendChild(frame);
+  tile.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", card.card_id);
+  });
+  tile.querySelector(".album-tile-x-badge")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+  tile.querySelector("[data-album-open]")?.addEventListener("click", () => openCardInWorkbench(card.card_id));
+  tile.querySelector("[data-album-fav]")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isNowOn = e.currentTarget.classList.contains("is-on");
+    toggleFavoriteCard(card.card_id, isNowOn);
+  });
+  tile.querySelector("[data-album-del]")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    confirmDeleteAlbumCard(card);
+  });
+  return tile;
+}
+
+function renderAlbumGrid(opts = {}) {
   const grid = document.getElementById("album-grid");
   const title = document.getElementById("album-header-title");
   const info = document.getElementById("album-sidebar-info");
   if (!grid) return;
+
+  if (!_albumScrollBound) {
+    _albumScrollBound = true;
+    grid.addEventListener("scroll", () => {
+      if (_albumAutoLoading) return;
+      if (grid.scrollTop <= 0) return;
+      const items = state.albumPool || [];
+      const currentLimit = state.albumLimit || 0;
+      if (currentLimit >= items.length) return;
+      if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 260) {
+        _albumAutoLoading = true;
+        state.albumLimit = currentLimit + computeSmartAlbumBatch(grid);
+        renderAlbumGrid({ append: true });
+        setTimeout(() => {
+          _albumAutoLoading = false;
+        }, 180);
+      }
+    }, { passive: true });
+  }
+
   const items = state.albumPool || [];
-  const limit = state.albumLimit || 100;
+  const step = computeSmartAlbumBatch(grid);
+  if (!state.albumLimit || state.albumLimit < step) {
+    state.albumLimit = step;
+  }
+  const limit = state.albumLimit;
   const shown = items.slice(0, limit);
   const albumName = albumTitleFor(state.albumFilter);
   if (title) {
     title.innerHTML = `<i class="fa-regular fa-images"></i> ${escapeHtml(albumName)} · ${items.length} 条`;
   }
   if (info) info.textContent = `显示 ${shown.length} / ${items.length} 条`;
-  grid.innerHTML = "";
-  if (!shown.length) {
-    const empty = document.createElement("p");
-    empty.className = "placeholder-text";
-    empty.textContent = "这个分组里还没有成片。把卡片拖到左侧专辑即可分类。";
-    grid.appendChild(empty);
-    return;
-  }
+
   const realAlbum = (state.albums || []).some((a) => a.id === state.albumFilter);
+  const isFavorites = state.albumFilter === "favorites";
   const favoriteIds = new Set(((state.albums || []).find((a) => a.id === "favorites") || {}).card_ids || []);
-  shown.forEach((card) => {
-    const tile = document.createElement("article");
-    tile.className = "album-tile";
-    tile.draggable = true;
-    tile.dataset.cardId = card.card_id;
-    const imgSrc = card.image_url || (card.render_image ? `/images/${encodeURIComponent(card.render_image)}` : "");
-    const heading = [card.person, card.scene].filter(Boolean).join(" · ") || card.card_id;
-    const frame = document.createElement("div");
-    frame.className = "album-tile-frame";
-    const favorited = favoriteIds.has(card.card_id);
-    frame.innerHTML = `
-      <div class="album-tile-quick">
-        <button type="button" data-album-fav class="${favorited ? "is-on" : ""}" title="${favorited ? "取消收藏" : "收藏"}" aria-label="${favorited ? "取消收藏" : "收藏"}">
-          <i class="fa-${favorited ? "solid" : "regular"} fa-heart"></i>
-        </button>
-        <button type="button" data-album-del title="删除卡片" aria-label="删除卡片">
-          <i class="fa-regular fa-trash-can"></i>
-        </button>
-      </div>
-      <div class="album-tile-meta">
-        <div class="album-tile-title"></div>
-        <div class="album-tile-sub">${escapeHtml(card.status || "")}</div>
-        <div class="album-tile-actions">
-          <button type="button" data-album-open>工作台打开</button>
-          ${realAlbum ? `<button type="button" data-album-remove>移出</button>` : ""}
-          ${realAlbum ? `<button type="button" data-album-cover>封面</button>` : ""}
-        </div>
-      </div>
-    `;
-    frame.querySelector(".album-tile-title").textContent = heading;
-    if (imgSrc) {
-      const img = document.createElement("img");
-      img.className = "gallery-img album-thumb loaded";
-      img.alt = heading;
-      img.decoding = "async";
-      img.loading = "lazy";
-      img.addEventListener("error", () => {
-        img.classList.add("is-missing");
-      });
-      img.src = imgSrc;
-      frame.insertBefore(img, frame.firstChild);
-    } else {
-      const missing = document.createElement("div");
-      missing.className = "album-tile-missing";
-      missing.textContent = "无图";
-      frame.insertBefore(missing, frame.firstChild);
+
+  if (opts.append) {
+    const oldMore = grid.querySelector(".load-more-container");
+    if (oldMore) oldMore.remove();
+    const existingCount = grid.querySelectorAll(".album-tile").length;
+    shown.slice(existingCount).forEach((card) => {
+      grid.appendChild(_createAlbumTile(card, { realAlbum, isFavorites, favoriteIds }));
+    });
+  } else {
+    const prevScrollTop = opts.preserveScroll ? grid.scrollTop : 0;
+    grid.innerHTML = "";
+    if (!shown.length) {
+      const empty = document.createElement("p");
+      empty.className = "placeholder-text";
+      empty.textContent = "这个分组里还没有成片。把卡片拖到左侧专辑即可分类。";
+      grid.appendChild(empty);
+      grid.scrollTop = 0;
+      return;
     }
-    tile.appendChild(frame);
-    tile.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", card.card_id);
+    shown.forEach((card) => {
+      grid.appendChild(_createAlbumTile(card, { realAlbum, isFavorites, favoriteIds }));
     });
-    tile.querySelector("[data-album-open]")?.addEventListener("click", () => openCardInWorkbench(card.card_id));
-    tile.querySelector("[data-album-remove]")?.addEventListener("click", () => removeCardFromAlbum(state.albumFilter, card.card_id));
-    tile.querySelector("[data-album-cover]")?.addEventListener("click", () => setAlbumCover(state.albumFilter, card.card_id));
-    tile.querySelector("[data-album-fav]")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleFavoriteCard(card.card_id, favorited);
-    });
-    tile.querySelector("[data-album-del]")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      confirmDeleteAlbumCard(card);
-    });
-    grid.appendChild(tile);
-  });
+    grid.scrollTop = prevScrollTop;
+  }
+
   if (items.length > shown.length) {
     const more = document.createElement("div");
     more.className = "load-more-container";
-    more.innerHTML = `<button type="button" class="btn-load-more" id="btn-album-load-more"><i class="fa-solid fa-arrow-down-long"></i> 加载更多 (已显示 ${shown.length}/${items.length})</button>`;
+    const nextBatch = Math.min(step, items.length - shown.length);
+    more.innerHTML = `<button type="button" class="btn-load-more" id="btn-album-load-more"><i class="fa-solid fa-arrow-down-long"></i> 继续加载 ${nextBatch} 张 (已显示 ${shown.length}/${items.length} · 下滑到底部自动续载)</button>`;
     more.querySelector("button").addEventListener("click", () => {
-      state.albumLimit = (state.albumLimit || 100) + 100;
-      renderAlbumGrid();
+      state.albumLimit = shown.length + computeSmartAlbumBatch(grid);
+      renderAlbumGrid({ append: true });
     });
     grid.appendChild(more);
   }
@@ -392,7 +466,7 @@ function renderAlbumGrid() {
 function albumTitleFor(id) {
   if (state.albumPersonFilter === "__other__") return "角色 · 其他";
   if (state.albumPersonFilter) return `角色 · ${state.albumPersonFilter}`;
-  if (id === "unfiled") return "未分辑";
+  if (id === "unfiled") return "未分类";
   const found = (state.albums || []).find((a) => a.id === id);
   if (found) return found.name;
   return "全部成片";
@@ -415,6 +489,64 @@ async function toggleFavoriteCard(cardId, currentlyOn) {
   }
 }
 
+function _removeTileFromAlbumGrid(cardId) {
+  const grid = document.getElementById("album-grid");
+  const title = document.getElementById("album-header-title");
+  const info = document.getElementById("album-sidebar-info");
+
+  state.albumPool = (state.albumPool || []).filter((c) => c.card_id !== cardId);
+  const items = state.albumPool;
+
+  if (!grid) return;
+  const tile = Array.from(grid.querySelectorAll(".album-tile")).find(
+    (el) => el.dataset.cardId === cardId
+  );
+  if (tile) tile.remove();
+
+  const currentTiles = grid.querySelectorAll(".album-tile").length;
+  const limit = state.albumLimit || currentTiles;
+  const oldMore = grid.querySelector(".load-more-container");
+
+  // 如果池子里还有未渲染的后继卡片，顺位补一张进来保持网格整齐
+  if (currentTiles < limit && items.length > currentTiles) {
+    const nextCard = items[currentTiles];
+    if (nextCard) {
+      const realAlbum = (state.albums || []).some((a) => a.id === state.albumFilter);
+      const isFavorites = state.albumFilter === "favorites";
+      const favoriteIds = new Set(((state.albums || []).find((a) => a.id === "favorites") || {}).card_ids || []);
+      const nextTile = _createAlbumTile(nextCard, { realAlbum, isFavorites, favoriteIds });
+      if (oldMore) grid.insertBefore(nextTile, oldMore);
+      else grid.appendChild(nextTile);
+    }
+  }
+
+  const shownCount = grid.querySelectorAll(".album-tile").length;
+  const albumName = albumTitleFor(state.albumFilter);
+  if (title) {
+    title.innerHTML = `<i class="fa-regular fa-images"></i> ${escapeHtml(albumName)} · ${items.length} 条`;
+  }
+  if (info) info.textContent = `显示 ${shownCount} / ${items.length} 条`;
+
+  if (!shownCount) {
+    if (oldMore) oldMore.remove();
+    const empty = document.createElement("p");
+    empty.className = "placeholder-text";
+    empty.textContent = "这个分组里还没有成片。把卡片拖到左侧专辑即可分类。";
+    grid.appendChild(empty);
+  } else if (oldMore) {
+    if (items.length <= shownCount) {
+      oldMore.remove();
+    } else {
+      const step = computeSmartAlbumBatch(grid);
+      const nextBatch = Math.min(step, items.length - shownCount);
+      const btn = oldMore.querySelector("button");
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-arrow-down-long"></i> 继续加载 ${nextBatch} 张 (已显示 ${shownCount}/${items.length} · 下滑到底部自动续载)`;
+      }
+    }
+  }
+}
+
 function confirmDeleteAlbumCard(card) {
   const label = [card.person, card.scene].filter(Boolean).join(" · ") || card.card_id;
   openDangerConfirmModal({
@@ -425,9 +557,25 @@ function confirmDeleteAlbumCard(card) {
       if (typeof deleteCard === "function") {
         await deleteCard(card.card_id);
       }
-      await refreshAlbumWorkspace();
+      _removeTileFromAlbumGrid(card.card_id);
+      loadAlbumIndex().catch(() => {});
     },
   });
+}
+
+function _syncTileFavoriteButton(cardId, isOn) {
+  const grid = document.getElementById("album-grid");
+  if (!grid) return;
+  const tile = Array.from(grid.querySelectorAll(".album-tile")).find(
+    (el) => el.dataset.cardId === cardId
+  );
+  const btn = tile?.querySelector("[data-album-fav]");
+  if (!btn) return;
+  btn.classList.toggle("is-on", isOn);
+  btn.title = isOn ? "取消收藏" : "收藏";
+  btn.setAttribute("aria-label", isOn ? "取消收藏" : "收藏");
+  const icon = btn.querySelector("i");
+  if (icon) icon.className = `fa-${isOn ? "solid" : "regular"} fa-heart`;
 }
 
 async function addCardToAlbum(albumId, cardId, options = {}) {
@@ -439,7 +587,12 @@ async function addCardToAlbum(albumId, cardId, options = {}) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "移入失败");
-    await refreshAlbumWorkspace();
+    if (state.albumFilter === albumId) {
+      await refreshAlbumWorkspace();
+    } else {
+      if (albumId === "favorites") _syncTileFavoriteButton(cardId, true);
+      loadAlbumIndex().catch(() => {});
+    }
     showToast(options.toast || "已加入专辑", "success");
   } catch (err) {
     showToast(`移入失败：${err.message || err}`, "error");
@@ -455,7 +608,13 @@ async function removeCardFromAlbum(albumId, cardId, options = {}) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.detail || "移出失败");
-    await refreshAlbumWorkspace();
+    if (state.albumFilter === albumId) {
+      _removeTileFromAlbumGrid(cardId);
+      loadAlbumIndex().catch(() => {});
+    } else {
+      if (albumId === "favorites") _syncTileFavoriteButton(cardId, false);
+      loadAlbumIndex().catch(() => {});
+    }
     showToast(options.toast || "已移出专辑", "success");
   } catch (err) {
     showToast(`移出失败：${err.message || err}`, "error");

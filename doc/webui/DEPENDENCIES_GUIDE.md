@@ -1,4 +1,4 @@
-# amazing-draw · 软件、模型与环境依赖全量指南 (DEPENDENCIES)
+# 软件、模型与环境依赖全量指南 (DEPENDENCIES)
 
 > **目标**：为全新的 macOS / Windows 机器提供从零搭建、环境依赖、模型下载、软件放置到一键绿线验证的完整指南。
 > **平台兼容**：内核按平台分发：macOS 在本机编译 `.so`，Windows 由 CI 编译 `.pyd`。Windows 用 [Git for Windows](https://git-scm.com/download/win) 提供 bash 层（见 §1.2 / §8）。**Windows 尚未实机测试。**
@@ -118,12 +118,12 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
    - 25 步 CFG3 DiT 架构，原生支持 Qwen 3.5 9B int8 编码器与 Flux2 VAE
    - 工作流文件：`~/ComfyUI/workflows/Moody_Moss_Standard_25步_CFG3.json`
    - 专用 LoRA 目录：`models/loras/moss/`
-2. **Moody Krea Mix 6 (Krea 2 Turbo)**（id: `krea2_turbo`，简称 `krea`）：
+2. **Moody Krea 2 Mix (Krea 2 Turbo)**（id: `krea2_turbo`，简称 `krea`）：
    - 8 步 CFG1 极速成片，底模 `Moody-Krea-Mix-fp8.safetensors` + 官方标量文本编码器 `qwen3vl_4b_fp8_scaled.safetensors`
    - 工作流文件：`~/ComfyUI/workflows/Krea2_Turbo_fp8_8步_CFG1_768x1152.json`
    - 明星 LoRA 目录：`models/loras/girls_like_krea2/`
 3. **Z-Image Turbo 写真**（id: `moody_zib_zit`，简称 `zi`）：
-   - 双阶段：先 [Moody Wild Mix（ZIB Base）](https://civitai.com/models/2384856/moody-wild-mix-zibzid)，再 [Moody Real Mix（ZIT Turbo）](https://civitai.com/models/621441/moody-real-mix)
+   - 双阶段：先 [Moody Wild Mix（ZIB Base）](https://civitai.com/models/2384856/moody-wild-mix-zibzid)，再 [Moody Pro Mix（ZIT Turbo）](https://civitai.com/models/620406/moody-pro-mix)
    - 工作流文件：`~/ComfyUI/workflows/Moody_ZIB_ZIT_20步_CFG3_512x768.json`
    - 明星 LoRA 目录：`models/loras/girls_like_zi/`（136 人）
 
@@ -136,7 +136,7 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 | 用途 | 文件 | 放置目录 | 来源 |
 | :--- | :--- | :--- | :--- |
 | 一阶段 UNET（ZIB） | `MoodyWildMix-zib-base.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Wild Mix](https://civitai.com/models/2384856/moody-wild-mix-zibzid) |
-| 二阶段 UNET（ZIT） | `MoodyRealMix-zit-write.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Real Mix](https://civitai.com/models/621441/moody-real-mix) |
+| 二阶段 UNET（ZIT） | `MoodyProMix-zit-ce.safetensors` | `models/diffusion_models/` | [CivitAI · Moody Pro Mix](https://civitai.com/models/620406/moody-pro-mix) |
 | 文本编码器 | `qwen_3_4b.safetensors` | `models/text_encoders/` | [HF · Comfy-Org/Z-Image-Turbo · text_encoders](https://huggingface.co/Comfy-Org/Z-Image-Turbo/tree/main/split_files/text_encoders) |
 | VAE | `ae.safetensors` | `models/vae/` | [HF · Comfy-Org/Z-Image-Turbo · vae](https://huggingface.co/Comfy-Org/Z-Image-Turbo/tree/main/split_files/vae) |
 
@@ -148,7 +148,7 @@ bash scripts/gpu-pipeline/comfyui-start.sh stop
 | 文本编码器 | `qwen3.5_9b_int8_convrot.safetensors` | `models/text_encoders/` | [HF · Comfy-Org/MOSS-Image · text_encoders](https://huggingface.co/Comfy-Org/MOSS-Image/tree/main/text_encoders) |
 | VAE | `flux2-vae.safetensors` | `models/vae/` | [HF · Comfy-Org/MOSS-Image · vae](https://huggingface.co/Comfy-Org/MOSS-Image/tree/main/vae) |
 
-#### C. Krea 2 Turbo (Moody Krea Mix 6) 模型
+#### C. Krea 2 Turbo (Moody Krea 2 Mix) 模型
 
 | 用途 | 文件 | 放置目录 | 来源 |
 | :--- | :--- | :--- | :--- |

@@ -341,19 +341,73 @@ function initAutocomplete() {
 // =====================================================================
 function initLightbox() {
   const modal = document.getElementById("lightbox-modal");
-  const closeBtn = document.getElementById("btn-close-lightbox");
+  const prevBtn = document.getElementById("btn-lightbox-prev");
+  const nextBtn = document.getElementById("btn-lightbox-next");
+  const captionEl = document.getElementById("lightbox-caption");
   if (!modal) return;
 
-  const openLightbox = (src) => {
+  let galleryList = [];
+  let galleryIndex = -1;
+
+  const syncGalleryChrome = () => {
+    const hasGallery = galleryList.length > 0 && galleryIndex >= 0;
+    const canNav = hasGallery && galleryList.length > 1;
+    prevBtn?.classList.toggle("is-hidden", !canNav);
+    nextBtn?.classList.toggle("is-hidden", !canNav);
+    if (captionEl) {
+      if (hasGallery) {
+        const item = galleryList[galleryIndex];
+        captionEl.textContent = `${galleryIndex + 1} / ${galleryList.length}${item.caption ? ` · ${item.caption}` : ""}`;
+        captionEl.classList.remove("is-hidden");
+      } else {
+        captionEl.textContent = "";
+        captionEl.classList.add("is-hidden");
+      }
+    }
+  };
+
+  const preloadAdjacent = (idx) => {
+    if (galleryList.length <= 1) return;
+    const prevIdx = (idx - 1 + galleryList.length) % galleryList.length;
+    const nextIdx = (idx + 1) % galleryList.length;
+    [prevIdx, nextIdx].forEach((i) => {
+      const src = galleryList[i]?.src;
+      if (src) {
+        const pre = new Image();
+        pre.src = src;
+      }
+    });
+  };
+
+  const openLightbox = (src, items = [], idx = -1) => {
     const img = document.getElementById("lightbox-img");
     if (!img || !src) return;
+    galleryList = Array.isArray(items) ? items : [];
+    galleryIndex = idx;
     img.src = src;
     img.style.display = "block";
+    syncGalleryChrome();
     modal.classList.add("open");
+    if (galleryIndex >= 0) preloadAdjacent(galleryIndex);
+  };
+
+  const stepLightbox = (delta) => {
+    if (!modal.classList.contains("open") || galleryList.length <= 1 || galleryIndex < 0) return;
+    const img = document.getElementById("lightbox-img");
+    if (!img) return;
+    galleryIndex = (galleryIndex + delta + galleryList.length) % galleryList.length;
+    const target = galleryList[galleryIndex];
+    if (!target || !target.src) return;
+    img.src = target.src;
+    syncGalleryChrome();
+    preloadAdjacent(galleryIndex);
   };
 
   const closeLightbox = () => {
     modal.classList.remove("open");
+    galleryList = [];
+    galleryIndex = -1;
+    syncGalleryChrome();
     const img = document.getElementById("lightbox-img");
     if (img) {
       img.removeAttribute("src");
@@ -361,22 +415,113 @@ function initLightbox() {
     }
   };
 
-  closeBtn?.addEventListener("click", closeLightbox);
+  const deleteCurrentGalleryPhoto = () => {
+    if (!modal.classList.contains("open") || galleryList.length === 0 || galleryIndex < 0) return;
+    const target = galleryList[galleryIndex];
+    if (!target || !target.cardId || typeof openDangerConfirmModal !== "function") return;
+    const label = target.caption || target.cardId;
+    openDangerConfirmModal({
+      title: "删除卡片",
+      message: `删除「${label}」会拿掉卡片和图片，收藏和专辑里也会去掉。`,
+      confirmLabel: "删除",
+      onConfirm: async () => {
+        if (typeof deleteCard === "function") {
+          await deleteCard(target.cardId);
+        }
+        if (typeof _removeTileFromAlbumGrid === "function") {
+          _removeTileFromAlbumGrid(target.cardId);
+        }
+        if (typeof loadAlbumIndex === "function") {
+          loadAlbumIndex().catch(() => {});
+        }
+        galleryList.splice(galleryIndex, 1);
+        if (galleryList.length === 0) {
+          closeLightbox();
+          return;
+        }
+        if (galleryIndex >= galleryList.length) {
+          galleryIndex = galleryList.length - 1;
+        }
+        const nextItem = galleryList[galleryIndex];
+        const img = document.getElementById("lightbox-img");
+        if (img && nextItem?.src) {
+          img.src = nextItem.src;
+        }
+        syncGalleryChrome();
+        preloadAdjacent(galleryIndex);
+      },
+    });
+  };
+
+  prevBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    stepLightbox(-1);
+  });
+  nextBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    stepLightbox(1);
+  });
   modal.addEventListener("click", (e) => {
-    if (e.target === modal || e.target.id === "lightbox-img" || e.target.closest("#btn-close-lightbox")) {
+    if (e.target.closest(".lightbox-nav")) return;
+    if (e.target === modal || e.target.id === "lightbox-img") {
       closeLightbox();
     }
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && modal.classList.contains("open")) {
+    if (!modal.classList.contains("open")) return;
+    if (e.repeat && (e.key === "Delete" || e.key === "Backspace")) return;
+    const confirmModal = document.getElementById("danger-confirm-modal");
+    if (confirmModal && confirmModal.classList.contains("open")) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (typeof closeDangerConfirmModal === "function") closeDangerConfirmModal();
+      } else if (e.key === "Enter" || e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        document.getElementById("btn-danger-confirm-ok")?.click();
+      }
+      return;
+    }
+    if (e.key === "Escape") {
       closeLightbox();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      stepLightbox(-1);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      stepLightbox(1);
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      deleteCurrentGalleryPhoto();
     }
   });
 
   // Global event delegation for images that support zooming
   document.addEventListener("click", (e) => {
     if (e.target.tagName === "IMG" && (e.target.classList.contains("gallery-img") || e.target.closest(".chat-image-bubble"))) {
+      const albumTile = e.target.closest("#album-grid .album-tile");
+      if (albumTile) {
+        const cardId = albumTile.dataset.cardId || "";
+        const pool = Array.isArray(state.albumPool) ? state.albumPool : [];
+        const items = pool
+          .map((card) => {
+            const src = card.image_url || (card.render_image ? `/images/${encodeURIComponent(card.render_image)}` : "");
+            if (!src) return null;
+            return {
+              cardId: card.card_id,
+              src,
+              caption: [card.person, card.scene].filter(Boolean).join(" · ") || card.card_id,
+            };
+          })
+          .filter(Boolean);
+        let idx = items.findIndex((it) => it.cardId === cardId);
+        if (idx === -1) {
+          const clickedSrc = e.target.getAttribute("src") || e.target.src;
+          idx = items.findIndex((it) => it.src === clickedSrc);
+        }
+        openLightbox(e.target.src, items, idx);
+        return;
+      }
       openLightbox(e.target.src);
     }
   });

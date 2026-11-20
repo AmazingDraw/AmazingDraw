@@ -70,6 +70,138 @@ def _is_comfyui_root(p: Path) -> bool:
         return False
 
 
+def _is_scanned_comfyui_root(p: Path) -> bool:
+    """Stricter check for shallow-scanned dirs so unrelated main.py projects are skipped."""
+    if not _is_comfyui_root(p):
+        return False
+    try:
+        return (
+            (p / "comfy").is_dir()
+            or (p / "nodes.py").is_file()
+            or (p / "comfy_extras").is_dir()
+        )
+    except Exception:
+        return False
+
+
+_WIN_DRIVES: Tuple[str, ...] = ("C", "D", "E", "F", "G", "H")
+_WIN_SCAN_SKIP_DIRS = frozenset({
+    "$recycle.bin",
+    "$windows.~bt",
+    "$windows.~ws",
+    "system volume information",
+    "windows",
+    "windows.old",
+    "programdata",
+    "recovery",
+    "perflogs",
+    "msocache",
+    "config.msi",
+    "documents and settings",
+    "intel",
+    "amd",
+    "nvidia",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    "appdata",
+})
+_WIN_SCAN_MAX_ENTRIES_PER_DIR = 200
+
+
+def _iter_subdirs_bounded(parent: Path, limit: int = _WIN_SCAN_MAX_ENTRIES_PER_DIR) -> List[Path]:
+    """List up to `limit` non-system direct child directories of `parent`. Never raises."""
+    out: List[Path] = []
+    try:
+        with os.scandir(parent) as it:
+            for entry in it:
+                name = entry.name
+                low = name.casefold()
+                if not name or name[0] in (".", "$") or low in _WIN_SCAN_SKIP_DIRS:
+                    continue
+                try:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                except OSError:
+                    continue
+                out.append(Path(entry.path))
+                if len(out) >= limit:
+                    break
+    except OSError:
+        return []
+    return out
+
+
+def _probe_comfy_dir_variants(entry: Path) -> List[Path]:
+    """Given a dir whose name contains 'comfy', check it and portable/nested ComfyUI subdirs."""
+    hits: List[Path] = []
+    if _is_scanned_comfyui_root(entry):
+        hits.append(entry)
+    nested = entry / "ComfyUI"
+    if _is_scanned_comfyui_root(nested):
+        hits.append(nested)
+    for sub in _iter_subdirs_bounded(entry, limit=40):
+        if sub.name.casefold() == "comfyui":
+            continue
+        if "comfy" in sub.name.casefold() and _is_scanned_comfyui_root(sub):
+            hits.append(sub)
+    return hits
+
+
+def _windows_drive_roots(drives: Tuple[str, ...] = _WIN_DRIVES) -> List[Path]:
+    """Return existing drive roots for C–H (handles both native Windows and MSYS/Git Bash)."""
+    roots: List[Path] = []
+    seen = set()
+    is_msys = bool(os.environ.get("MSYSTEM")) and sys.platform != "win32"
+    for drive in drives:
+        cands = [Path(drive + ":/")]
+        if is_msys:
+            cands.insert(0, Path("/" + drive.lower()))
+        for root in cands:
+            try:
+                if not root.is_dir():
+                    continue
+                key = str(root.resolve()).casefold()
+            except OSError:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            roots.append(root)
+            break
+    return roots
+
+
+def _scan_windows_comfyui_roots(
+    drive_roots: List[Path],
+    extra_parents: Optional[List[Path]] = None,
+) -> List[Path]:
+    """Shallow 1–2 level scan across drive roots and common user folders for ComfyUI installs.
+
+    Catches portable packs (ComfyUI_windows_portable/ComfyUI), aki packs (ComfyUI-aki-*),
+    and second-level folders like D:/AI/ComfyUI or G:/Games/ComfyUI without full-disk crawl.
+    """
+    hits: List[Path] = []
+    for root in drive_roots:
+        for entry in _iter_subdirs_bounded(root):
+            if "comfy" in entry.name.casefold():
+                hits.extend(_probe_comfy_dir_variants(entry))
+                continue
+            for sub in _iter_subdirs_bounded(entry):
+                if "comfy" in sub.name.casefold():
+                    hits.extend(_probe_comfy_dir_variants(sub))
+    for parent in extra_parents or []:
+        try:
+            if not parent.is_dir():
+                continue
+        except OSError:
+            continue
+        for sub in _iter_subdirs_bounded(parent):
+            if "comfy" in sub.name.casefold():
+                hits.extend(_probe_comfy_dir_variants(sub))
+    return hits
+
+
 def _comfyui_richness(p: Path) -> int:
     """Prefer installs that look complete; never used to reject main.py-only roots."""
     score = 0
@@ -174,7 +306,13 @@ def _comfyui_candidates(cfg: Dict[str, Any]) -> List[Tuple[Path, int]]:
 
     if sys.platform == "win32" or os.environ.get("MSYSTEM"):
         user = os.environ.get("USER") or os.environ.get("USERNAME") or ""
-        for drive in ("C", "D", "E"):
+        extra_parents: List[Path] = [
+            home / "Desktop",
+            home / "Documents",
+            home / "Downloads",
+        ]
+        add(str(home / "Downloads" / "ComfyUI"), 5)
+        for drive in _WIN_DRIVES:
             add("/" + drive.lower() + "/ComfyUI", 6)
             add(drive + ":/ComfyUI", 6)
             if user:
@@ -183,8 +321,12 @@ def _comfyui_candidates(cfg: Dict[str, Any]) -> List[Tuple[Path, int]]:
                 add(drive + ":/Users/" + user + "/ComfyUI", 3)
                 add(base_u + "/Desktop/ComfyUI", 5)
                 add(base_u + "/Documents/ComfyUI", 5)
+                add(base_u + "/Downloads/ComfyUI", 5)
                 add(drive + ":/Users/" + user + "/Desktop/ComfyUI", 5)
                 add(drive + ":/Users/" + user + "/Documents/ComfyUI", 5)
+                add(drive + ":/Users/" + user + "/Downloads/ComfyUI", 5)
+        for hit in _scan_windows_comfyui_roots(_windows_drive_roots(), extra_parents=extra_parents):
+            add(str(hit), 7)
 
     return out
 

@@ -21,7 +21,10 @@ FINISHED_STATUSES = {"rendered", "delivered", "success"}
 VIRTUAL_IDS = {"all", "unfiled"}
 FAVORITES_ID = "favorites"
 FAVORITES_NAME = "我的收藏"
-RESERVED_ALBUM_NAMES = {FAVORITES_NAME, "收藏"}
+X_ALBUM_ID = "x_collection"
+X_ALBUM_NAME = "X 合集"
+SYSTEM_ALBUM_IDS = {FAVORITES_ID, X_ALBUM_ID}
+RESERVED_ALBUM_NAMES = {FAVORITES_NAME, "收藏", X_ALBUM_NAME}
 PERSON_OTHER = "__other__"
 PERSON_MAIN_MIN = 3
 SKIP_PERSON_LABELS = {"ComfyUI"}
@@ -58,16 +61,16 @@ def _load_store() -> dict:
         if item:
             cleaned.append(item)
     store = {"version": 1, "albums": cleaned}
-    if _ensure_favorites(store):
+    if _ensure_system_albums(store):
         _save_store(store)
     return store
 
 
-def _favorites_template(now: Optional[int] = None) -> dict:
+def _system_album_template(album_id: str, name: str, now: Optional[int] = None) -> dict:
     stamp = int(now or time.time())
     return {
-        "id": FAVORITES_ID,
-        "name": FAVORITES_NAME,
+        "id": album_id,
+        "name": name,
         "system": True,
         "cover_card_id": "",
         "created_at": stamp,
@@ -76,17 +79,37 @@ def _favorites_template(now: Optional[int] = None) -> dict:
     }
 
 
-def _ensure_favorites(store: dict) -> bool:
+def _ensure_system_albums(store: dict) -> bool:
     albums = list(store.get("albums") or [])
-    found = next((item for item in albums if item.get("id") == FAVORITES_ID), None)
-    if found is None:
-        store["albums"] = [_favorites_template()] + albums
-        return True
-    found["name"] = FAVORITES_NAME
-    found["system"] = True
-    rest = [item for item in albums if item.get("id") != FAVORITES_ID]
-    store["albums"] = [found] + rest
-    return False
+    changed = False
+    system_specs = [
+        (FAVORITES_ID, FAVORITES_NAME),
+        (X_ALBUM_ID, X_ALBUM_NAME),
+    ]
+    system_items = []
+    used_ids = set()
+    for sys_id, sys_name in system_specs:
+        found = next(
+            (
+                item for item in albums
+                if item.get("id") == sys_id or (sys_id == X_ALBUM_ID and item.get("name") == sys_name)
+            ),
+            None,
+        )
+        if found is None:
+            found = _system_album_template(sys_id, sys_name)
+            changed = True
+        else:
+            if found.get("id") != sys_id or found.get("name") != sys_name or not found.get("system"):
+                found["id"] = sys_id
+                found["name"] = sys_name
+                found["system"] = True
+                changed = True
+        used_ids.add(found["id"])
+        system_items.append(found)
+    rest = [item for item in albums if item.get("id") not in used_ids]
+    store["albums"] = system_items + rest
+    return changed
 
 
 def _normalize_album(raw: Any) -> Optional[dict]:
@@ -96,9 +119,13 @@ def _normalize_album(raw: Any) -> Optional[dict]:
     name = str(raw.get("name") or "").strip()
     if not album_id or not name or album_id in VIRTUAL_IDS:
         return None
-    system = album_id == FAVORITES_ID or bool(raw.get("system"))
+    if name == X_ALBUM_NAME and album_id != X_ALBUM_ID:
+        album_id = X_ALBUM_ID
+    system = album_id in SYSTEM_ALBUM_IDS or bool(raw.get("system"))
     if album_id == FAVORITES_ID:
         name = FAVORITES_NAME
+    elif album_id == X_ALBUM_ID:
+        name = X_ALBUM_NAME
     ids: List[str] = []
     seen = set()
     for item in raw.get("card_ids") or []:
@@ -167,6 +194,44 @@ def _public_album(album: dict) -> dict:
     }
 
 
+def _load_x_posts() -> Dict[str, dict]:
+    path = amazingdraw_paths.x_posts_file()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        posts = data.get("posts") if isinstance(data, dict) else None
+        if isinstance(posts, dict):
+            return {str(k): v for k, v in posts.items() if isinstance(v, dict)}
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {}
+
+
+def _prune_x_post(card_id: str) -> None:
+    path = amazingdraw_paths.x_posts_file()
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    posts = data.get("posts") if isinstance(data, dict) else None
+    if not isinstance(posts, dict) or card_id not in posts:
+        return
+    posts.pop(card_id, None)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps({"version": 1, "posts": posts}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _x_album_card_ids(store: dict) -> set:
+    for album in store.get("albums") or []:
+        if album.get("id") == X_ALBUM_ID or album.get("name") == X_ALBUM_NAME:
+            return set(album.get("card_ids") or [])
+    return set()
+
+
 def prune_card_from_albums(card_id: str) -> None:
     cid = str(card_id or "").strip()
     if not cid:
@@ -185,6 +250,7 @@ def prune_card_from_albums(card_id: str) -> None:
             changed = True
         if changed:
             _save_store(store)
+        _prune_x_post(cid)
 
 
 def prune_cards_from_albums(card_ids: List[str]) -> None:
@@ -376,7 +442,7 @@ def list_albums():
         "albums": [_public_album(a) for a in store.get("albums") or []],
         "virtual": {
             "all": {"id": "all", "name": "全部成片", "count": len(pool)},
-            "unfiled": {"id": "unfiled", "name": "未分辑", "count": len(unfiled)},
+            "unfiled": {"id": "unfiled", "name": "未分类", "count": len(unfiled)},
         },
         "groups": {
             "persons": _group_counts(pool, "person"),
@@ -391,7 +457,7 @@ def create_album(req: Dict[str, Any]):
     if not name:
         raise HTTPException(status_code=400, detail="专辑名不能为空")
     if name in RESERVED_ALBUM_NAMES:
-        raise HTTPException(status_code=400, detail=f"「{FAVORITES_NAME}」是系统分类，不能再建同名专辑")
+        raise HTTPException(status_code=400, detail=f"「{name}」是系统分类，不能再建同名专辑")
     now = int(time.time())
     album = {
         "id": str(uuid.uuid4()),
@@ -416,14 +482,14 @@ def patch_album(album_id: str, req: Dict[str, Any]):
     with _LOCK:
         store = _load_store()
         album = _find_album(store, album_id)
-        if album_id == FAVORITES_ID and "name" in req:
+        if album_id in SYSTEM_ALBUM_IDS and "name" in req:
             raise HTTPException(status_code=400, detail="系统分类不能改名")
         if "name" in req:
             name = str(req.get("name") or "").strip()
             if not name:
                 raise HTTPException(status_code=400, detail="专辑名不能为空")
             if name in RESERVED_ALBUM_NAMES:
-                raise HTTPException(status_code=400, detail=f"「{FAVORITES_NAME}」是系统分类，不能占用这个名字")
+                raise HTTPException(status_code=400, detail=f"「{name}」是系统分类，不能占用这个名字")
             album["name"] = name[:80]
         if "cover_card_id" in req:
             cover = str(req.get("cover_card_id") or "").strip()
@@ -438,7 +504,7 @@ def patch_album(album_id: str, req: Dict[str, Any]):
 
 @router.delete("/api/albums/{album_id}")
 def delete_album(album_id: str):
-    if album_id in VIRTUAL_IDS or album_id == FAVORITES_ID:
+    if album_id in VIRTUAL_IDS or album_id in SYSTEM_ALBUM_IDS:
         raise HTTPException(status_code=400, detail="系统分类不能删除")
     with _LOCK:
         store = _load_store()
@@ -524,9 +590,23 @@ def album_pool(
             theme="",
             include_unrendered=bool(include_unrendered),
         )
+        x_posts = _load_x_posts()
+        x_album_ids = _x_album_card_ids(store)
+        enriched = []
+        for item in items:
+            cid = str(item.get("card_id") or "")
+            rec = x_posts.get(cid)
+            if not rec and cid in x_album_ids:
+                rec = {"card_id": cid, "status_url": "", "handle": "", "posted_at": 0, "source": "album"}
+            if rec:
+                row = dict(item)
+                row["x_post"] = rec
+                enriched.append(row)
+            else:
+                enriched.append(item)
     return {
         "album_id": key,
-        "items": items,
-        "total": len(items),
+        "items": enriched,
+        "total": len(enriched),
         "facets": _facets(facets_source),
     }

@@ -9,7 +9,6 @@
     "krea": "krea2_turbo",
     "krea2": "krea2_turbo",
     "krea2_turbo": "krea2_turbo",
-    "moss": "moody_moss",
     "moody_moss": "moody_moss",
     "moodymoss": "moody_moss"
   },
@@ -74,7 +73,7 @@
       }
     },
     "krea2_turbo": {
-      "name": "Moody Krea Mix 6 · 2:3 768×1152",
+      "name": "Moody Krea 2 Mix 典藏版 · 2:3 768×1152",
       "family": "krea",
       "family_label": "Krea",
       "celebrity_pool": "krea2",
@@ -100,7 +99,7 @@
       "link_key": "links",
       "node_key": "nodes",
       "prompt_style": "photorealistic_portrait",
-      "description": "Moody Krea Mix V6 fp8 (Krea 2) · 8步 CFG1 euler_ancestral/beta · 2:3 768×1152 · 明星 LoRA@854 girls_like_krea2",
+      "description": "Moody Krea 2 Mix 典藏版 fp8 (Krea 2) · 8步 CFG1 euler_ancestral/beta · 2:3 768×1152 · 明星 LoRA@854 girls_like_krea2",
       "required_loras": [],
       "node_input_overrides": {},
       "default_steps": 8,

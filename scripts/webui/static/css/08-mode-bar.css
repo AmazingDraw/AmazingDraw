@@ -1,0 +1,181 @@
+/* 08-mode-bar.css — 右栏垂直模式选择器（卡片/相册/配置/文档）与微交互
+   由 07-effects.css 拆分而来；<link> 顺序位于 07-effects.css 之后。 */
+/* =====================================================================
+   🎛 Right mode rail (卡片/相册/配置/文档)
+   顶栏 68px 与 .chat-header 同高；左右无水平 padding，保证：
+   - border-left 从顶通到底
+   - 顶部分割线与中栏 header 底边对齐、横向通满
+   ===================================================================== */
+.chat-mode-sidebar {
+  position: relative;
+  width: 72px;
+  min-height: 100%;
+  align-self: stretch;
+  box-sizing: border-box;
+  border-left: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-shrink: 0;
+  padding: 0;
+  z-index: 2;
+}
+
+.chat-mode-sidebar-top {
+  height: 68px;
+  min-height: 68px;
+  max-height: 68px;
+  box-sizing: border-box;
+  width: 100%;
+  flex-shrink: 0;
+  margin: 0;
+  border-bottom: none;
+  background: var(--bg-primary);
+}
+
+.chat-mode-sidebar-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px;
+  box-sizing: border-box;
+}
+
+.chat-mode-indicator {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  width: calc(100% - 12px);
+  height: 0;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 10px var(--color-primary-dim);
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.2s;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.chat-mode-btn {
+  position: relative;
+  z-index: 1;
+  border: none;
+  width: 100%;
+  padding: 8px 0;
+  font-size: 0.7rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  transition: color 0.2s ease, transform 0.1s ease, background-color 0.2s ease;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.chat-mode-btn i {
+  font-size: 0.95rem;
+}
+
+.chat-mode-btn-sub {
+  font-size: 0.55rem;
+  opacity: 0.72;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.chat-mode-divider {
+  width: 55%;
+  height: 0;
+  border-top: 1px solid var(--border-color);
+  margin: 6px 0;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.chat-mode-btn:hover:not(.active) {
+  color: var(--text-bright);
+  background: var(--bg-hover);
+}
+
+.chat-mode-btn:active {
+  transform: scale(0.96);
+}
+
+.chat-mode-btn.active,
+html.light-mode .chat-mode-btn.active {
+  color: var(--text-on-primary);
+  font-weight: 600;
+}
+
+/* --- 单条对话删除悬浮按钮样式 --- */
+.msg-bubble-container {
+  position: relative;
+  max-width: 100%;
+}
+
+.btn-delete-msg {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  padding: 8px;
+  font-size: 0.85rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-delete-msg:hover {
+  color: var(--color-danger, #ef4444);
+  transform: translateY(-50%) scale(1.12);
+}
+
+.chat-message:hover .btn-delete-msg {
+  opacity: 0.6;
+}
+
+.chat-message .btn-delete-msg:hover {
+  opacity: 1;
+}
+
+.chat-message.ai .btn-delete-msg {
+  left: 100%;
+  margin-left: 8px;
+}
+
+.chat-message.user .btn-delete-msg {
+  right: 100%;
+  margin-right: 8px;
+}
+
+/* 诗词挂件交互特效 */
+.poetry-box:hover {
+  border-left-color: var(--color-primary);
+  background: var(--bg-soft);
+}
+.poetry-box button:hover {
+  color: var(--color-primary);
+}
+.poetry-box #btn-play-poetry:hover {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  transform: scale(1.06);
+}

@@ -18,10 +18,10 @@
   box-sizing: border-box;
 }
 
-/* Docs: readable width with room for tables */
+/* Docs: full readable width with comfortable gallery padding */
 .docs-page-container {
-  max-width: 1080px;
-  padding: 22px 24px 14px;
+  max-width: 1240px;
+  padding: 22px 32px 18px;
 }
 
 #view-settings,
@@ -107,19 +107,28 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  border: 1px solid transparent;
+  border: none;
+  border-left: 2px solid transparent;
   background: transparent;
   color: var(--text-main);
-  border-radius: 8px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   padding: 8px 10px;
   cursor: pointer;
   text-align: left;
   font-family: var(--font-sans);
+  transition: var(--transition-smooth);
+}
+
+.album-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-bright);
 }
 
 .album-nav-item.active {
-  background: var(--bg-hover);
-  border-color: var(--border-focus);
+  background: var(--color-active-row);
+  border-left-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .album-nav-item .album-nav-name {
@@ -170,6 +179,7 @@
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  grid-auto-rows: max-content;
   gap: 18px 16px;
   align-items: start;
   align-content: start;
@@ -276,6 +286,49 @@
   object-fit: contain;
   object-position: center center;
   background: #0c0b0e;
+}
+
+.album-nav-x-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.album-tile-x-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(16, 16, 20, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(8, 4, 8, 0.22);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+a.album-tile-x-badge:hover {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: rgba(255, 255, 255, 0.45);
+  transform: scale(1.06);
+  color: #fff;
 }
 
 .album-tile-quick {
@@ -446,14 +499,19 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 
 .settings-card-section {
   scroll-margin-top: 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 16px 16px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+  padding: 12px 4px 20px;
   margin-bottom: 0;
   min-width: 0;
   overflow: hidden;
-  box-shadow: var(--shadow-subtle);
+  box-shadow: none;
+}
+
+.settings-column > .settings-card-section:last-child {
+  border-bottom: none;
 }
 
 /* Settings sticky toolbar */
@@ -467,16 +525,16 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
   margin-bottom: 18px;
   padding: 10px 14px;
   background: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  box-shadow: var(--shadow-subtle);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  box-shadow: none;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .settings-sticky-copy {
-  font-size: 0.74rem;
-  color: var(--text-bright);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -485,7 +543,7 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 }
 
 .settings-sticky-copy i {
-  color: var(--color-primary);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
@@ -499,13 +557,18 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
   box-shadow: none;
 }
 
-/* Settings Grid Layout */
+/* Settings Grid Layout — with subtle center column divider */
 .settings-grid-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 28px;
   align-items: start;
   min-width: 0;
+}
+
+.settings-column:first-child {
+  padding-right: 28px;
+  border-right: 1px solid var(--border-color);
 }
 
 @media (max-width: 980px) {
@@ -519,6 +582,11 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
   .settings-grid-layout {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .settings-column:first-child {
+    padding-right: 0;
+    border-right: none;
   }
 
   .settings-card-section .form-grid-2 {
@@ -561,9 +629,9 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 }
 
 .resolution-preset-item .res-label {
-  flex: 0 0 128px;
-  width: 128px;
-  font-size: 0.78rem;
+  flex: 0 0 108px;
+  width: 108px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-bright);
   line-height: 1.35;
@@ -571,25 +639,29 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 
 .resolution-preset-item .res-controls {
   flex: 1 1 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
-/* 下拉定宽不抢空间；右侧宽高输入吃掉剩余宽度 */
+/* 下拉与宽高输入按网格自适应，杜绝右侧高度框被裁切 */
 .resolution-preset-item select.res-preset-select {
-  flex: 0 0 9.8em;
-  width: 9.8em;
-  max-width: 9.8em;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
-  padding: 8px 22px 8px 8px;
-  font-size: 0.76rem;
-  border-radius: 6px;
+  padding: 7px 20px 7px 8px;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-soft);
   color: var(--text-bright);
   outline: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .resolution-preset-item select.res-preset-select:focus {
@@ -597,27 +669,34 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 }
 
 .resolution-preset-item .res-inputs {
-  flex: 1 1 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .resolution-preset-item .res-inputs input[type="number"] {
-  flex: 1 1 0;
-  width: auto;
-  min-width: 88px;
+  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   text-align: center;
-  /* 右侧给原生 stepper 留空，四位数完整可见 */
-  padding: 8px 22px 8px 8px;
-  font-size: 0.78rem;
-  border-radius: 6px;
+  padding: 7px 4px;
+  font-size: var(--fs-sm);
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-soft);
   color: var(--text-bright);
   outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.resolution-preset-item .res-inputs input[type="number"]::-webkit-outer-spin-button,
+.resolution-preset-item .res-inputs input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .resolution-preset-item .res-inputs input[type="number"]:focus {
@@ -675,16 +754,22 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 .form-row textarea,
 .form-row input[type="number"] {
   background: var(--bg-input);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-soft);
   color: var(--text-bright);
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-sans);
-  font-size: 0.72rem;
+  font-size: var(--fs-sm);
   width: 100%;
   max-width: 100%;
   min-width: 0;
   transition: var(--transition-smooth);
+}
+
+.form-row select {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 多行输入需要额外的行距与缩放约束，否则会顶破弹窗布局 */
@@ -698,9 +783,11 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 .form-row input[type="text"]:focus,
 .form-row input[type="password"]:focus,
 .form-row textarea:focus,
-.form-row select:focus {
+.form-row select:focus,
+.form-row input[type="number"]:focus {
   outline: none;
   border-color: var(--border-focus);
+  box-shadow: var(--surface-focus-ring);
 }
 
 .form-group-row {
@@ -812,9 +899,9 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
   min-height: 0;
   min-width: 0;
@@ -880,7 +967,13 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 }
 
 .markdown-body > *:first-child {
-  margin-top: 0 !important;
+  margin-top: 0;
+}
+
+.markdown-body h1,
+.markdown-body h2 {
+  font-family: var(--font-serif);
+  letter-spacing: 0.03em;
 }
 
 .markdown-body h1,
@@ -888,8 +981,8 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 .markdown-body h3,
 .markdown-body h4 {
   color: var(--text-bright);
-  font-weight: 700;
-  line-height: 1.3;
+  font-weight: 600;
+  line-height: 1.35;
   text-wrap: balance;
   margin: 1.35em 0 0.55em;
 }
@@ -921,13 +1014,30 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 }
 
 .markdown-body a {
-  color: var(--color-primary-soft);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
+  color: #8b9cff;
+  text-decoration: underline;
+  text-decoration-color: rgba(139, 156, 255, 0.45);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
 
 .markdown-body a:hover {
-  border-bottom-color: currentColor;
+  color: #a5b4fc;
+  text-decoration-color: currentColor;
+}
+
+.markdown-body a code {
+  color: inherit;
+}
+
+html.light-mode .markdown-body a {
+  color: #2563eb;
+  text-decoration-color: rgba(37, 99, 235, 0.38);
+}
+
+html.light-mode .markdown-body a:hover {
+  color: #1d4ed8;
+  text-decoration-color: currentColor;
 }
 
 .markdown-body ul,
@@ -977,8 +1087,8 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
   margin: 0.95em 0;
   padding: 12px 14px;
   background: var(--bg-input);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   overflow-x: auto;
   max-width: 100%;
 }
@@ -1062,6 +1172,10 @@ html.light-mode .album-tile:focus-within .album-tile-frame {
 
 .markdown-body td {
   color: var(--text-main);
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: var(--bg-soft);
 }
 
 .markdown-body strong {

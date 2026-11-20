@@ -69,6 +69,7 @@ bash scripts/webui/webui-start.sh start|stop|status|restart
 | [CHECK_PITFALLS.md](doc/cli/CHECK_PITFALLS.md)               | 高频避坑（fill 前必读）              |
 | [CONFIG_GUIDE.md](doc/webui/CONFIG_GUIDE.md)                 | `config.json`                      |
 | [CLOUD_DRAW.md](doc/cli/CLOUD_DRAW.md)                       | 外部渲染                             |
+| [X_KIMI_POST.md](doc/engine/x/X_KIMI_POST.md)                 | Kimi 发 X：`--json` 标题一步定位     |
 
 ---
 

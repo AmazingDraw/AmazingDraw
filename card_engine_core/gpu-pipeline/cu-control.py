@@ -609,6 +609,22 @@ def detect_stalled_state(workers: list[dict], queue: list[dict]) -> dict:
     return {'stalled': False, 'reason': '', 'done_file': ''}
 
 
+def _format_workflow_display(wf_name: str) -> str:
+    raw = str(wf_name or '').strip()
+    if not raw:
+        return '未识别'
+    try:
+        card_engine_dir = str(_GPU_DIR.parent / 'card-engine')
+        if card_engine_dir not in sys.path:
+            sys.path.insert(0, card_engine_dir)
+        from card_config import normalize_workflow_name, workflow_family, workflow_family_label
+        wf_id = normalize_workflow_name(raw) or raw
+        label = workflow_family_label(workflow_family(wf_id))
+        return f'{label} ({wf_id})' if label else wf_id
+    except Exception:
+        return raw
+
+
 def cmd_status() -> int:
     workers = gather_active_workers()
     local_status = queue_status()
@@ -654,6 +670,8 @@ def cmd_status() -> int:
         lines.append(f'> • 人物：{s["person"] or "未识别"}')
         lines.append(f'> • 场景：{s["scene"] or "未识别"}')
         lines.append(f'> • 主题：{s["theme"] or "未识别"}')
+        wf_name = w.get('workflow') or (w.get('meta') or {}).get('workflow') or (runtime or {}).get('workflow') or ''
+        lines.append(f'> • 工作流：{_format_workflow_display(wf_name)}')
         if progress:
             pct = progress.get("progress_pct")
             stage_label = stage_map.get(progress.get("stage"), "处理中")
@@ -683,6 +701,8 @@ def cmd_status() -> int:
         lines.append(f'> • 人物：{s["person"] or "未识别"}')
         lines.append(f'> • 场景：{s["scene"] or "未识别"}')
         lines.append(f'> • 主题：{s["theme"] or "未识别"}')
+        wf_name = paused.get('workflow') or meta.get('workflow') or ''
+        lines.append(f'> • 工作流：{_format_workflow_display(wf_name)}')
         lines.append('> • 状态：等待恢复')
     else:
         if stalled.get('stalled'):

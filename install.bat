@@ -472,10 +472,60 @@ function Write-ManualCommands {
     }
 }
 
+function Invoke-PrereqCheck {
+    if ($Yes -or ($env:AMAZINGDRAW_INSTALL_NONINTERACTIVE -eq '1') -or ($env:AMAZINGDRAW_PREREQ_PASSED -eq '1')) {
+        $env:AMAZINGDRAW_PREREQ_PASSED = '1'
+        return
+    }
+    if (-not (Test-IsInteractive)) {
+        Fail "当前无交互终端，无法完成安装前确认。自动化安装请加 -Yes，或设置 AMAZINGDRAW_INSTALL_YES=1。"
+    }
+
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "== AmazingDraw 安装前确认（灵魂三问）==" -ForegroundColor Cyan
+    Write-Host "本项目是给 AI Agent 装的 Skill 技能包，不是独立画图软件。"
+    Write-Host "请依次确认以下 3 个问题（默认 N，任一选否将退出安装）："
+    Write-Host "============================================================" -ForegroundColor Cyan
+
+    $questions = @(
+        "1/3 [概念关] 你知道什么是 AI Agent，并且清楚本项目是给 AI Agent 装的 Skill 技能包（不是双击即用的独立画图软件）吗？",
+        "2/3 [工具关] 你电脑上已经装好、并且实际用过至少一款支持 Skill / 命令行的 AI Agent（如 dsh、Cursor、Cherry Studio、Devin 等）吗？",
+        "3/3 [排错关] 如果安装或运行时提示路径不存在、Python/依赖缺失或权限报错，你能自己排查，或者把报错发给 AI 自己解决吗？"
+    )
+
+    foreach ($q in $questions) {
+        Write-Host ""
+        Write-Host $q
+        $ans = ''
+        try {
+            $ans = Read-Host "请输入 y 确认，直接回车或输入其他内容退出 [y/N]"
+        } catch {
+            $ans = ''
+        }
+        $norm = ([string]$ans).Trim().ToLowerInvariant()
+        if ($norm -notin @('y', 'yes', '是')) {
+            Write-Host ""
+            Write-Host "============================================================" -ForegroundColor Yellow
+            Write-Host "[中止安装] 本项目面向已有 AI Agent 使用基础的用户，不是独立画图软件。" -ForegroundColor Yellow
+            Write-Host "建议先了解 AI Agent、Skill 与基础命令行/路径概念，" -ForegroundColor Yellow
+            Write-Host "并上手一款常见 AI Agent 客户端（如 dsh / Cursor / Cherry Studio）后再来安装。" -ForegroundColor Yellow
+            Write-Host "============================================================" -ForegroundColor Yellow
+            Pause-IfNeeded 1
+        }
+    }
+
+    $env:AMAZINGDRAW_PREREQ_PASSED = '1'
+    Write-Host ""
+    Write-Host "✓ 安装前确认通过，开始检查环境..." -ForegroundColor Green
+    Write-Host ""
+}
+
 # ── main ──
 if ($env:OS -ne 'Windows_NT') {
     Fail "install.bat 仅用于 Windows。macOS / Linux 请运行: bash install.sh"
 }
+
+Invoke-PrereqCheck
 
 $WantPy = Get-WantPythonFromPyds
 $PyWingetId = if ($WantPy -eq '3.12') { 'Python.Python.3.12' } else { 'Python.Python.3.9' }
@@ -606,7 +656,7 @@ if ($ForwardArgs.Count -gt 0) {
     $quoted = $ForwardArgs | ForEach-Object { ConvertTo-BashQuoted $_ }
     $argStr = ' ' + ($quoted -join ' ')
 }
-$bashCmd = 'cd ' + (ConvertTo-BashQuoted $posix) + ' && ./install.sh' + $argStr
+$bashCmd = 'cd ' + (ConvertTo-BashQuoted $posix) + ' && AMAZINGDRAW_PREREQ_PASSED=1 ./install.sh' + $argStr
 
 Write-Host ""
 Write-Host "== 交给 install.sh =="

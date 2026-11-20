@@ -747,9 +747,9 @@ async function selectCard(cardId) {
     const card = await res.json();
     state.activeCardData = card; // 缓存卡片详细数据供大模型网关读取
 
-    // 自动同步 Lightbox 大图视图（如果已经开启）
+    // 自动同步 Lightbox 大图视图（仅在卡片工作台视图开启时，避免相册大图浏览被后台切卡覆盖）
     const lightboxModal = document.getElementById("lightbox-modal");
-    if (lightboxModal && lightboxModal.classList.contains("open")) {
+    if (state.activeView === "chat" && lightboxModal && lightboxModal.classList.contains("open")) {
       const lightboxImg = document.getElementById("lightbox-img");
       if (lightboxImg && card.render_image) {
         lightboxImg.src = card.image_url || `/images/${card.render_image}`;
@@ -766,9 +766,47 @@ async function selectCard(cardId) {
 
     if (titleElem) {
       const themePart = theme ? ` · ${escapeHtml(theme)}` : "";
+      const copyText = `${person} · ${scene}${theme ? ` · ${theme}` : ""}`;
       titleElem.innerHTML = `
-        🎬 当前卡片: <strong style="color:var(--text-bright); font-weight:600;">${escapeHtml(person)}</strong> · ${escapeHtml(scene)}${themePart}
+        <span class="chat-card-title-prefix">🎬 当前卡片:</span>
+        <button type="button" class="chat-card-copy-trigger" title="点击复制卡片名称" aria-label="点击复制卡片名称">
+          <span class="chat-card-copy-text"><strong style="color:var(--text-bright); font-weight:600;">${escapeHtml(person)}</strong> · ${escapeHtml(scene)}${themePart}</span>
+        </button>
       `;
+      const copyBtn = titleElem.querySelector(".chat-card-copy-trigger");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+          let copied = false;
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(copyText);
+              copied = true;
+            }
+          } catch (_) {}
+          if (!copied) {
+            try {
+              const ta = document.createElement("textarea");
+              ta.value = copyText;
+              ta.style.position = "fixed";
+              ta.style.opacity = "0";
+              document.body.appendChild(ta);
+              ta.select();
+              copied = document.execCommand("copy");
+              ta.remove();
+            } catch (_) {}
+          }
+          if (!copied) {
+            showToast("复制失败，请手动选中复制", "error");
+            return;
+          }
+          copyBtn.classList.add("is-copied");
+          showToast("已复制卡片名称", "success");
+          clearTimeout(copyBtn._copyTimer);
+          copyBtn._copyTimer = setTimeout(() => {
+            copyBtn.classList.remove("is-copied");
+          }, 900);
+        });
+      }
     }
 
     // 3. 渲染右侧参数看板；仅「卡片」模式加载卡片聊天历史
@@ -824,8 +862,10 @@ function renderParamPanel(card) {
   const promptUpdated = prevPrompt && prevPrompt !== englishPrompt;
   const zhUpdated = prevZh && prevZh !== zhVal;
 
-  // 统计英文提示词中的单词总数
+  // 统计英文提示词中的单词总数与中文摘要字数
   const wordCount = englishPrompt ? englishPrompt.split(/\s+/).filter(x => x.trim().length > 0).length : 0;
+  const hasZhSummary = Boolean(zhVal && zhVal !== "未生成中文描述");
+  const zhCharCount = hasZhSummary ? zhVal.replace(/\s+/g, "").length : 0;
 
   let html = `
     <div class="prompt-board-wrapper">
@@ -839,10 +879,7 @@ function renderParamPanel(card) {
           </div>
           <span class="prompt-card-title"><i class="fa-solid fa-code"></i> prompt</span>
           <div class="prompt-card-actions">
-            <span class="prompt-words-badge">${wordCount} words</span>
-            <button class="btn-copy-prompt" title="复制提示词" data-prompt="${escapeHtml(englishPrompt)}" onclick="navigator.clipboard.writeText(this.getAttribute('data-prompt') || ''); showToast('提示词已复制', 'success')">
-              <i class="fa-regular fa-copy"></i>
-            </button>
+            <button type="button" class="prompt-words-badge is-copyable" data-copy-kind="prompt" title="点击复制提示词" aria-label="点击复制提示词">${wordCount} words</button>
           </div>
         </div>
         <div class="prompt-content-area">${englishPrompt ? escapeHtml(englishPrompt) : '<em style="color:var(--text-muted);">暂无提示词</em>'}</div>
@@ -857,6 +894,9 @@ function renderParamPanel(card) {
             <span class="dot maximize"></span>
           </div>
           <span class="prompt-card-title"><i class="fa-solid fa-language"></i> 中文摘要</span>
+          <div class="prompt-card-actions">
+            <button type="button" class="prompt-words-badge is-copyable" data-copy-kind="zh" title="点击复制中文摘要" aria-label="点击复制中文摘要">${zhCharCount} 字</button>
+          </div>
         </div>
         <div class="prompt-content-area chinese-content">${escapeHtml(zhVal)}</div>
       </div>
@@ -864,6 +904,47 @@ function renderParamPanel(card) {
   `;
 
   panelBody.innerHTML = html;
+
+  const copyPanelText = async (text, btn, okMsg) => {
+    if (!text) {
+      showToast("暂无可复制内容", "warning");
+      return;
+    }
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      }
+    } catch (_) {}
+    if (!copied) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand("copy");
+        ta.remove();
+      } catch (_) {}
+    }
+    if (!copied) {
+      showToast("复制失败，请手动选中复制", "error");
+      return;
+    }
+    btn.classList.add("is-copied");
+    showToast(okMsg, "success");
+    clearTimeout(btn._copyTimer);
+    btn._copyTimer = setTimeout(() => btn.classList.remove("is-copied"), 900);
+  };
+
+  panelBody.querySelector('[data-copy-kind="prompt"]')?.addEventListener("click", (e) => {
+    copyPanelText(englishPrompt, e.currentTarget, "提示词已复制");
+  });
+  panelBody.querySelector('[data-copy-kind="zh"]')?.addEventListener("click", (e) => {
+    copyPanelText(hasZhSummary ? zhVal : "", e.currentTarget, "中文摘要已复制");
+  });
 
   // 3. 记录上次的状态
   state.lastSlots = {

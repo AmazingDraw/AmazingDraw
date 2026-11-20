@@ -114,7 +114,7 @@ def add_shared_parsers(sub):
     c_workflow.add_argument(
         "--set",
         default="",
-        help="切换默认工作流：zi / krea / moss（也可写 moody_zib_zit / krea2_turbo / moody_moss）。省略则只查询。",
+        help="切换默认工作流：zi / krea / moody_moss（也可写 moody_zib_zit / krea2_turbo）。省略则只查询。",
     )
     c_doc = sub.add_parser("doc", help="查阅提示词、绘图、避坑、命令速查或配置指南")
     c_doc.add_argument(

@@ -782,6 +782,14 @@ def cmd_fill(args):
                 _next_step_line(),
             ]
 
+        if phase in ('slots', None) and (card.get("_trope") or {}).get("id"):
+            from trope_runtime import style_quality_trope_warnings
+            trope_warns = style_quality_trope_warnings(
+                card, str((card.get("slots") or {}).get("style_quality") or "")
+            )
+            if trope_warns:
+                status_lines.extend(trope_warns)
+
         card['_fill_progress'] = progress
         card["history"].append({
             "timestamp": datetime.now().isoformat(),

@@ -53,6 +53,47 @@ for _a in "$@"; do
 done
 export AMAZINGDRAW_INSTALL_NONINTERACTIVE
 
+# ── 安装前「灵魂三问」拦截（非交互模式或已由 install.bat 通过则跳过）──
+_prereq_abort() {
+  echo ""
+  echo "============================================================"
+  echo "[中止安装] 本项目面向已有 AI Agent 使用基础的用户，不是独立画图软件。"
+  echo "建议先了解 AI Agent、Skill 与基础命令行/路径概念，"
+  echo "并上手一款常见 AI Agent 客户端（如 dsh / Cursor / Cherry Studio）后再来安装。"
+  echo "============================================================"
+  exit 1
+}
+
+_prereq_ask() {
+  local _q="$1"
+  local _ans=""
+  echo ""
+  echo "$_q"
+  printf "请输入 y 确认，直接回车或输入其他内容退出 [y/N]: "
+  if ! read -r _ans; then
+    _ans=""
+  fi
+  _ans="$(printf '%s' "$_ans" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  case "$_ans" in
+    y|yes|是) return 0 ;;
+    *) _prereq_abort ;;
+  esac
+}
+
+if [ "${AMAZINGDRAW_INSTALL_NONINTERACTIVE}" != "1" ] && [ "${AMAZINGDRAW_PREREQ_PASSED:-0}" != "1" ]; then
+  echo "============================================================"
+  echo "== AmazingDraw 安装前确认（灵魂三问）=="
+  echo "本项目是给 AI Agent 装的 Skill 技能包，不是独立画图软件。"
+  echo "请依次确认以下 3 个问题（默认 N，任一选否将退出安装）："
+  echo "============================================================"
+  _prereq_ask "1/3 [概念关] 你知道什么是 AI Agent，并且清楚本项目是给 AI Agent 装的 Skill 技能包（不是双击即用的独立画图软件）吗？"
+  _prereq_ask "2/3 [工具关] 你电脑上已经装好、并且实际用过至少一款支持 Skill / 命令行的 AI Agent（如 dsh、Cursor、Cherry Studio、Devin 等）吗？"
+  _prereq_ask "3/3 [排错关] 如果安装或运行时提示路径不存在、Python/依赖缺失或权限报错，你能自己排查，或者把报错发给 AI 自己解决吗？"
+  echo ""
+  echo "✓ 安装前确认通过，开始检查环境..."
+  echo ""
+fi
+
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 # zip 根或仓库根：若当前目录下已有 tree/（即在 dist/ 里跑），则进入 tree。
 # 不会向上查找 dist；解压后的 zip 根没有 tree/，ROOT 保持为 zip 根。

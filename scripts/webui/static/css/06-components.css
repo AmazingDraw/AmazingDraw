@@ -22,7 +22,7 @@
 
 .btn-primary-minimal {
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--text-on-primary);
   border-color: transparent;
   box-shadow: none;
 }
@@ -33,7 +33,7 @@
 
 html.light-mode .btn-primary-minimal {
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--text-on-primary);
 }
 
 html.light-mode .btn-primary-minimal:hover {
@@ -41,10 +41,10 @@ html.light-mode .btn-primary-minimal:hover {
 }
 
 .btn-secondary-minimal {
-  background: var(--bg-elevated);
-  border-color: var(--border-color);
+  background: transparent;
+  border-color: var(--border-soft);
   color: var(--text-main);
-  box-shadow: var(--shadow-subtle);
+  box-shadow: none;
 }
 
 .btn-secondary-minimal:hover {
@@ -214,7 +214,7 @@ html.light-mode .btn-secondary-minimal:hover {
 
 /* Shared danger confirm modal */
 .danger-confirm-modal {
-  z-index: 9999;
+  z-index: 10010;
 }
 
 .danger-confirm-card {
@@ -292,15 +292,58 @@ html.light-mode .btn-secondary-minimal:hover {
   display: none;
 }
 
-.lightbox-overlay .lightbox-close {
-  position: absolute;
-  top: -40px;
-  right: 0;
-  color: #fff;
-  background: transparent;
-  border: none;
-  font-size: 1.5rem;
+.lightbox-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(20, 22, 28, 0.56);
+  color: rgba(255, 255, 255, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
   cursor: pointer;
+  z-index: 10001;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.lightbox-nav:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+  transform: translateY(-50%) scale(1.06);
+}
+
+.lightbox-prev {
+  left: 24px;
+}
+
+.lightbox-next {
+  right: 24px;
+}
+
+.lightbox-caption {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(16, 18, 24, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  max-width: 80vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 10001;
 }
 
 /* =====================================================================
@@ -375,31 +418,36 @@ html.light-mode .btn-secondary-minimal:hover {
 .autocomplete-item .badge-src.celebrity { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 
 /* =====================================================================
-   🔔 Toast Notifications Container
+   🔔 Toast Notifications Container (Top-right, avoids bottom input bar)
    ===================================================================== */
 .toast-container {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: var(--sp-4);
+  right: var(--sp-5);
+  bottom: auto;
+  left: auto;
+  transform: none;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
   z-index: 2000;
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 10px 16px;
   color: var(--text-bright);
-  font-size: 0.82rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font-size: var(--fs-base);
+  box-shadow: var(--shadow-soft);
   display: flex;
   align-items: center;
   gap: 8px;
-  animation: slideUpToast 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideInToast 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 200px;
   max-width: 380px;
 }
@@ -417,8 +465,8 @@ html.light-mode .btn-secondary-minimal:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(99, 102, 241, 0.12);
 }
 
-@keyframes slideUpToast {
-  from { transform: translateY(12px); opacity: 0; }
+@keyframes slideInToast {
+  from { transform: translateY(-8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 

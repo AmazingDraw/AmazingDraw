@@ -5,7 +5,7 @@ function initTheme() {
   const toggleBtn = document.getElementById("theme-toggle");
   if (!toggleBtn) return;
   
-  const savedTheme = localStorage.getItem("theme") || "dark";
+  const savedTheme = localStorage.getItem("theme") || "light";
   const updateBtnUI = (isLight) => {
     if (isLight) {
       document.documentElement.classList.add("light-mode");

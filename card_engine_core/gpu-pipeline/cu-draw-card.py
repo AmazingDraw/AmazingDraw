@@ -132,7 +132,8 @@ def _resolve_builtin_aliases() -> dict:
             "zi": "moody_zib_zit",
             "z": "moody_zib_zit",
             "krea": "krea2_turbo",
-            "moss": "moody_moss",
+            "moody_moss": "moody_moss",
+            "moodymoss": "moody_moss",
         }
 
 

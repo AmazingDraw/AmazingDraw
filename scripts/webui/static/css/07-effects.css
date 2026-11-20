@@ -4,34 +4,49 @@
    🎨 Modern Elegant Prompt Board Layout (Mac Window Vibe)
    ===================================================================== */
 .prompt-board-wrapper {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  margin-top: 6px;
+  gap: 0;
+  margin-top: 0;
 }
 
 .prompt-section-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 10px 2px 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   transition: var(--transition-smooth);
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-soft), var(--shadow-subtle);
+  box-shadow: none;
+}
+
+/* 英文 PROMPT 自动吃满剩余纵向高度；中文摘要按实际字数自适应贴底，消除下方空白 */
+.prompt-section-card:first-child {
+  flex: 1 1 0;
+  min-height: 140px;
+  padding-top: 4px;
+}
+
+.prompt-section-card:last-child {
+  flex: 0 0 auto;
+  padding-bottom: 2px;
 }
 
 html.light-mode .prompt-section-card {
-  background: #ffffff;
-  box-shadow: var(--shadow-soft), var(--shadow-subtle);
+  background: transparent;
+  border-color: var(--border-color);
+  box-shadow: none;
 }
 
 .prompt-section-card:hover {
-  border-color: rgba(124, 108, 255, 0.34);
-  box-shadow: 0 12px 28px rgba(101, 87, 221, 0.10), var(--shadow-subtle);
+  border-color: var(--border-color);
+  box-shadow: none;
 }
 
 .prompt-card-header {
@@ -47,9 +62,9 @@ html.light-mode .prompt-section-card {
   gap: 8px;
 }
 
-/* MacOS Window Dots */
+/* MacOS Window Dots — hidden in Gallery Mode */
 .mac-window-dots {
-  display: flex;
+  display: none;
   gap: 6px;
   margin-right: 4px;
 }
@@ -66,39 +81,59 @@ html.light-mode .prompt-section-card {
 .mac-window-dots .dot.maximize { background: #27c93f; }
 
 .prompt-card-title {
-  font-size: 0.75rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   gap: 6px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.12em;
 }
 
 .prompt-card-title i {
   color: var(--color-primary);
+  font-size: var(--fs-xs);
 }
 
 /* Words / Tag Badge */
 .prompt-words-badge {
-  background: var(--color-primary-dim);
-  color: var(--color-primary);
-  border: 1px solid rgba(79, 70, 229, 0.2);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 0.65rem;
-  font-weight: 600;
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
   font-family: var(--font-mono);
 }
 
+.prompt-words-badge.is-copyable {
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+
+.prompt-words-badge.is-copyable:hover {
+  background: rgba(127, 127, 127, 0.1);
+  color: var(--text-bright);
+}
+
+.prompt-words-badge.is-copyable:active {
+  transform: scale(0.97);
+}
+
+.prompt-words-badge.is-copyable.is-copied {
+  background: rgba(34, 197, 94, 0.14);
+  color: var(--accent-success, #16a34a);
+}
+
 .btn-copy-prompt {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   cursor: pointer;
   display: flex;
   justify-content: center;
@@ -107,43 +142,48 @@ html.light-mode .prompt-section-card {
 }
 
 .btn-copy-prompt:hover {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: var(--color-primary);
-  transform: translateY(-1px);
+  background: var(--bg-hover);
+  color: var(--text-bright);
+  border-color: var(--border-focus);
 }
 
 .prompt-content-area {
-  font-size: 0.78rem;
-  line-height: 1.55;
+  flex: 1 1 auto;
+  min-height: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.65;
   color: var(--text-main);
   word-break: break-word;
   white-space: pre-wrap;
   font-family: var(--font-mono);
   background: var(--bg-input);
   border-radius: var(--radius-md);
-  padding: 12px;
-  max-height: 280px;
+  padding: 12px 14px;
+  max-height: none;
   overflow-y: auto;
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-subtle);
+  border: 1px solid var(--border-soft);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 html.light-mode .prompt-content-area {
   background: var(--bg-input);
   border-color: var(--border-color);
   color: var(--text-main);
+  box-shadow: inset 0 1px 2px rgba(24, 24, 27, 0.03);
 }
 
 .prompt-content-area.chinese-content {
+  flex: 0 0 auto;
+  max-height: 220px;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: var(--fs-base);
+  line-height: 1.68;
   font-weight: 400;
 }
 
-/* Flash highlight keyframes for prompts */
+/* 取消切卡时的突兀外框闪烁高亮 */
 .prompt-section-card.updated-flash {
-  animation: borderGlow 1.2s ease;
+  animation: none;
 }
 
 @keyframes borderGlow {
@@ -159,12 +199,12 @@ html.light-mode .prompt-content-area {
 
 /* Quick Actions button details overrides */
 .queue-quick-actions {
-  gap: 8px !important; /* 加大队列间距 */
+  gap: 8px;
 }
 
 .queue-quick-actions button {
-  gap: 8px !important; /* 图标和文字保持 8px 完美空气感 */
-  font-weight: 500 !important;
+  gap: 8px;
+  font-weight: 500;
 }
 
 .queue-quick-actions button#btn-quick-terminate:hover {
@@ -276,21 +316,23 @@ html.light-mode .prompt-content-area {
 /* =====================================================================
    🎬 Modern Glassmorphic Director Thinking Bubble & Milestones
    ===================================================================== */
+.chat-message.ai .msg-bubble.director-thinking-bubble,
 .director-thinking-bubble {
-  background: linear-gradient(135deg, rgba(20, 21, 30, 0.92) 0%, rgba(10, 11, 16, 0.96) 100%) !important;
-  border: 1px solid rgba(79, 70, 229, 0.25) !important;
+  background: linear-gradient(135deg, rgba(20, 21, 30, 0.92) 0%, rgba(10, 11, 16, 0.96) 100%);
+  border: 1px solid var(--border-color);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), 
               inset 0 1px 1px rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
-  padding: 16px 20px !important;
-  border-radius: 12px !important;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
   max-width: 500px;
 }
 
 /* Light Mode Override for Director Thinking Bubble */
+html.light-mode .chat-message.ai .msg-bubble.director-thinking-bubble,
 html.light-mode .director-thinking-bubble {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 243, 240, 0.98) 100%) !important;
-  border: 1px solid rgba(79, 70, 229, 0.15) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 243, 240, 0.98) 100%);
+  border: 1px solid var(--border-color);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08), 
               inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
@@ -508,7 +550,7 @@ html.light-mode .director-thinking-bubble {
 /* Card Action Buttons Group */
 .sidebar-card-item {
   position: relative;
-  padding-right: 40px !important;
+  padding-right: 40px;
 }
 
 .sidebar-card-item .card-action-buttons {
@@ -651,7 +693,7 @@ html.light-mode .sidebar-card-item .card-action-btn.btn-archive.is-archiving:hov
 }
 
 .queue-runtime-detail .queue-runtime-content {
-  padding-right: 40px !important;
+  padding-right: 40px;
 }
 
 .queue-runtime-detail .queue-cancel-btn {
@@ -1166,12 +1208,40 @@ html.light-mode .panel-tab-btn.active {
 }
 
 /* =====================================================================
-   📸 Chat Image Bubble Snappy Fade-In
+   📸 Chat Image Bubble Snappy Fade-In & Slim Solid Photo Frame
    ===================================================================== */
+.chat-message.ai .msg-bubble.chat-image-bubble {
+  padding: 5px !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42), var(--specular-rim) !important;
+}
+
+html.light-mode .chat-message.ai .msg-bubble.chat-image-bubble {
+  padding: 5px !important;
+  background: #ffffff !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.11), 0 2px 6px rgba(15, 23, 42, 0.05) !important;
+}
+
+.chat-message.ai .msg-bubble.chat-image-bubble::before,
+.chat-image-bubble + .msg-time {
+  display: none !important;
+}
+
 .chat-image-bubble img {
   opacity: 0;
-  transition: opacity 0.15s ease-in-out;
+  transition: opacity 0.18s ease-in-out;
   cursor: zoom-in;
+  border-radius: 8px;
+  display: block;
+  box-shadow: none;
+}
+
+html.light-mode .chat-image-bubble img {
+  box-shadow: none;
 }
 
 .chat-image-bubble img.loaded {
@@ -1866,350 +1936,3 @@ html.light-mode .timeline-body .input-section {
   }
 }
 
-/* =====================================================================
-   🎛 Right mode rail (卡片/抽卡/配置/文档)
-   顶栏 68px 与 .chat-header 同高；左右无水平 padding，保证：
-   - border-left 从顶通到底
-   - 顶部分割线与中栏 header 底边对齐、横向通满
-   ===================================================================== */
-.chat-mode-sidebar {
-  position: relative;
-  width: 72px;
-  min-height: 100%;
-  align-self: stretch;
-  box-sizing: border-box;
-  /* 纵线通顶通底（含顶栏 68px 区域） */
-  border-left: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  flex-shrink: 0;
-  padding: 0;
-  z-index: 2;
-}
-
-.chat-mode-sidebar-top {
-  height: 68px;
-  min-height: 68px;
-  max-height: 68px;
-  box-sizing: border-box;
-  width: 100%;
-  flex-shrink: 0;
-  margin: 0;
-  border-bottom: none; /* 横线见 .main-workspace::after */
-  background: var(--bg-primary);
-}
-
-.chat-mode-sidebar-body {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 6px;
-  box-sizing: border-box;
-}
-
-.chat-mode-indicator {
-  position: absolute;
-  top: 0;
-  left: 6px;
-  width: calc(100% - 12px);
-  height: 0;
-  background: var(--color-primary);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    height 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.2s;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0;
-}
-
-.chat-mode-btn {
-  position: relative;
-  z-index: 1;
-  border: none;
-  width: 100%;
-  padding: 8px 0;
-  font-size: 0.7rem;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  transition: color 0.2s ease, transform 0.1s ease, background-color 0.2s ease !important;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.chat-mode-btn i {
-  font-size: 0.95rem;
-}
-
-.chat-mode-btn-sub {
-  font-size: 0.55rem;
-  opacity: 0.72;
-  letter-spacing: 0.02em;
-  line-height: 1;
-}
-
-.chat-mode-divider {
-  width: 55%;
-  height: 0;
-  border-top: 1px dashed var(--border-color);
-  margin: 6px 0;
-  opacity: 0.65;
-  flex-shrink: 0;
-}
-
-.chat-mode-btn:hover:not(.active) {
-  color: var(--text-bright) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-}
-
-html.light-mode .chat-mode-btn:hover:not(.active) {
-  background: rgba(0, 0, 0, 0.04) !important;
-}
-
-.chat-mode-btn:active {
-  transform: scale(0.95);
-}
-
-/* --- 单条对话删除悬浮按钮样式 --- */
-.msg-bubble-container {
-  position: relative;
-  max-width: 100%;
-}
-
-.btn-delete-msg {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.2s ease, color 0.2s ease, transform 0.2s ease;
-  padding: 8px;
-  font-size: 0.85rem;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-delete-msg:hover {
-  color: var(--color-danger, #ef4444) !important;
-  transform: translateY(-50%) scale(1.15);
-}
-
-.chat-message:hover .btn-delete-msg {
-  opacity: 0.6;
-}
-
-.chat-message .btn-delete-msg:hover {
-  opacity: 1;
-}
-
-/* AI 气泡: 垃圾桶显示在右侧 */
-.chat-message.ai .btn-delete-msg {
-  left: 100%;
-  margin-left: 8px;
-}
-
-/* User 气泡: 垃圾桶显示在左侧 */
-.chat-message.user .btn-delete-msg {
-  right: 100%;
-  margin-right: 8px;
-}
-
-/* 垂直模式选择器中的系统菜单（配置/文档）处于 active 状态下的高亮配色 */
-
-.chat-mode-btn.active {
-  color: #ffffff !important;
-}
-
-html.light-mode .chat-mode-btn.active {
-  color: #ffffff !important;
-}
-
-/* 诗词挂件交互特效 */
-.poetry-box:hover {
-  border-color: rgba(124, 108, 255, 0.45) !important;
-  background: rgba(124, 108, 255, 0.05) !important;
-  box-shadow: 0 4px 12px rgba(124, 108, 255, 0.04);
-}
-.poetry-box button:hover {
-  color: var(--color-primary) !important;
-}
-.poetry-box #poetry-text:hover {
-  color: var(--color-primary) !important;
-}
-.poetry-box #btn-play-poetry:hover {
-  background: var(--color-primary) !important;
-  color: #fff !important;
-  transform: scale(1.1);
-}
-
-@media (max-width: 1280px) {
-  .param-panel-right {
-    width: 400px;
-  }
-}
-
-@media (max-width: 1180px) {
-  .param-panel-right {
-    width: 340px;
-  }
-
-  .chat-mode-sidebar {
-    width: 64px;
-  }
-
-  .chat-mode-btn-sub {
-    display: none;
-  }
-}
-
-@media (max-width: 980px) {
-  .app-layout {
-    overflow: hidden;
-  }
-
-  .sidebar-left {
-    width: 220px !important;
-  }
-
-  .chat-header {
-    padding: 0 16px;
-  }
-
-  .chat-messages-body,
-  .chat-input-footer {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .chat-message,
-  .chat-input-container-inner {
-    max-width: 100%;
-  }
-
-  .main-workspace {
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .workspace-views-stack {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .chat-mode-sidebar {
-    order: 3;
-    width: 100%;
-    min-height: 0;
-    border-left: none;
-    border-top: 1px solid var(--border-color);
-    flex-direction: row;
-    align-items: stretch;
-  }
-
-  .chat-mode-sidebar-top {
-    display: none;
-  }
-
-  .chat-mode-sidebar-body {
-    flex: 1;
-    flex-direction: row;
-    justify-content: center;
-    gap: 10px;
-    padding: 10px 12px;
-  }
-
-  .chat-mode-indicator {
-    left: 0;
-    top: auto;
-    width: 0;
-    height: 2px;
-  }
-
-  .chat-mode-btn {
-    width: auto;
-    min-width: 72px;
-    padding: 8px 10px;
-  }
-
-  .chat-mode-divider {
-    display: none;
-  }
-
-  .param-panel-right {
-    display: none;
-  }
-
-  #resize-handle-right {
-    display: none;
-  }
-
-  .poetry-box {
-    margin: 16px 14px 10px;
-  }
-}
-
-@media (max-width: 720px) {
-  .sidebar-left {
-    width: 190px !important;
-  }
-
-  .chat-input-row {
-    gap: 8px;
-  }
-
-  .chat-input-row .btn-send,
-  .chat-input-row .btn-stop,
-  .btn-direct-toggle {
-    width: 42px;
-    height: 42px;
-  }
-
-  .chat-input-row textarea {
-    height: 42px;
-    min-height: 42px;
-  }
-}
-
-/* 📖 文档专属侧边栏导航按钮样式设计 */
-.doc-sidebar-tab-btn {
-  background: transparent;
-  color: var(--text-muted) !important;
-  transition: all 0.2s ease;
-}
-.doc-sidebar-tab-btn:hover {
-  background: rgba(124, 108, 255, 0.05) !important;
-  color: var(--color-primary) !important;
-}
-.doc-sidebar-tab-btn.active {
-  background: rgba(124, 108, 255, 0.1) !important;
-  color: var(--color-primary) !important;
-  font-weight: 600 !important;
-}
-html.light-mode .doc-sidebar-tab-btn.active {
-  background: rgba(124, 108, 255, 0.08) !important;
-}
-[data-theme="dark"] .doc-sidebar-tab-btn:hover {
-  background: rgba(124, 108, 255, 0.08) !important;
-}
-[data-theme="dark"] .doc-sidebar-tab-btn.active {
-  background: rgba(124, 108, 255, 0.15) !important;
-}

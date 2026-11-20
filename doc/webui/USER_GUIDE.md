@@ -1,4 +1,4 @@
-# Amazing Draw · WebUI 操作指南
+# WebUI 操作指南
 
 > **定位**：WebUI（`http://127.0.0.1:8318`）管**看图、管卡、相册、盯队列、改设置**；出卡只用工作台的**直投 / 精选**。连抽与常规 fill 走 CLI（`card_cli --help`）。
 

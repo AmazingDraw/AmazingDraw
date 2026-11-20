@@ -148,6 +148,14 @@ def albums_file() -> Path:
     return amazingdraw_home() / "albums.json"
 
 
+def x_posts_file() -> Path:
+    """X 发布记录账本。可用 AMAZING_DRAW_X_POSTS_FILE 覆盖（测试 / 容器）。"""
+    env = os.environ.get("AMAZING_DRAW_X_POSTS_FILE")
+    if isinstance(env, str) and env.strip():
+        return Path(os.path.expanduser(env.strip()))
+    return amazingdraw_home() / "x_posts.json"
+
+
 def workspace_dir(cfg: Optional[dict] = None, config_path: Optional[Path] = None,
                   create: bool = True) -> Path:
     """后台分离进程的 --cwd。
@@ -313,6 +321,7 @@ def _main(argv: List[str]) -> int:
             "custom_presets_dir": custom_presets_dir(cfg),
             "chat_dir": chat_dir(),
             "albums_file": albums_file(),
+            "x_posts_file": x_posts_file(),
             "workspace": workspace_dir(cfg),
             "cloud_preview_dir": cloud_preview_dir(),
             "png_cache": png_cache_path(cfg),

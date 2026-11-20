@@ -18,6 +18,17 @@
 
 ---
 
+> [!CAUTION]
+> **下载 / 安装前先过「灵魂三问」** —— 本项目是给 **AI Agent** 装的 **Skill 技能包**，**不是独立画图软件，没有双击即用的傻瓜界面**。
+>
+> 1. **概念关**：你知道什么是 **AI Agent**，并且清楚本项目是给 AI Agent 装的 **Skill 技能包**（不是独立软件）吗？
+> 2. **工具关**：你电脑上已经装好、并且实际用过至少一款支持 Skill / 命令行的 AI Agent（如 [dsh](https://github.com/deepseek-ai/deepseek-harness)、[Cursor](https://www.cursor.com/)、[Cherry Studio](https://github.com/CherryHQ/cherry-studio)、[Devin](https://devin.ai/) 等）吗？
+> 3. **排错关**：如果安装或运行时提示 **路径不存在、Python/依赖缺失或权限报错**，你能自己排查，或者把报错发给 AI 自己解决吗？
+>
+> **以上任一问题回答「否」，请先不要下载安装。** 建议先了解 AI Agent 与基础命令行/路径概念，并上手一款客户端（推荐 **dsh** / **Cursor** / **Cherry Studio**）后再回来。
+
+---
+
 说一句「**温泉旅馆，浴衣半敞，抽一张**」，引擎自己抽场景、选角色、定构图、组 prompt、投进 ComfyUI——你只管开口。
 
 ## ✨ 特性
@@ -26,7 +37,7 @@
 - 📚 **16 套词库、上百章节** —— 场景/角色/服装/纹身/饰品/宠物……命中场景自动路由选词
 - 🎚 **裸露分级 L1–L6** —— 从全包裹到展示级，一句话锁档
 - 🖥 **WebUI 卡片工作台** —— 看图、管卡、相册、队列；闪电=直投、骰子=精选
-- 🤖 **Agent 原生** —— `SKILL.md` 交给 [Cursor](https://www.cursor.com/) / [Claude Code](https://github.com/anthropics/claude-code) / [dsh](https://github.com/deepseek-ai/deepseek-harness) / [OpenClaw](https://github.com/openclaw/openclaw) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) 即用
+- 🤖 **Agent 原生** —— `SKILL.md` 交给 [Cursor](https://www.cursor.com/) / [Antigravity](https://antigravity.google/) / [dsh](https://github.com/deepseek-ai/deepseek-harness) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) / [Devin](https://devin.ai/) 即用
 - 🔧 **全开放自定义** —— 场景库、角色库、`user_presets/` 随你扩
 
 ## 🚀 安装与上手
@@ -42,7 +53,7 @@
 
 跑 WebUI / CLI 的 Python **必须和 zip 标签一致**。内核在 `card_engine_core/native/`，`assets.bin` 必须同树；不要混 `.so` / `.pyd`，也不要混用 3.9 / 3.12。解压目录不要拆散、不要解进 ComfyUI。
 
-**Windows 补充**：双击 `install.bat`（cmd / PowerShell 同样可以）。缺 Git Bash 或匹配的 **x64 Python** 时会尝试自动补（优先 winget）。ARM64 请仍用 x64 Git/Python。免确认：`install.bat -Yes` 或 `AMAZINGDRAW_INSTALL_YES=1`。已装好 Git Bash 时也可 `bash install.sh`（PowerShell 不能直接跑 `install.sh`）。ComfyUI 在其它盘时先设 `COMFYUI_DIR`。
+**Windows 补充**：双击 `install.bat`（cmd / PowerShell 同样可以）。缺 Git Bash 或匹配的 **x64 Python** 时会尝试自动补（优先 winget）。ARM64 请仍用 x64 Git/Python。免确认：`install.bat -Yes` 或 `AMAZINGDRAW_INSTALL_YES=1`。已装好 Git Bash 时也可 `bash install.sh`（PowerShell 不能直接跑 `install.sh`）。默认自动探测 C–H 盘常见 ComfyUI 目录与便携包/整合包；极偏路径可先设 `COMFYUI_DIR`。
 
 **WebUI 可选**：Skill / CLI / Agent 不需要。`install.bat` 会问是否 `pip install fastapi uvicorn`（失败只警告）。`-Yes` 默认跳过；要装加 `-WithWebUI` 或 `AMAZINGDRAW_WITH_WEBUI=1`。出图须自备 ComfyUI 与模型。
 
@@ -50,7 +61,7 @@
 
 ## 🎬 用法
 
-解压目录根有 `SKILL.md`——把**整个目录**交给 [Cursor](https://www.cursor.com/) / [Claude Code](https://github.com/anthropics/claude-code) / [dsh](https://github.com/deepseek-ai/deepseek-harness) / [OpenClaw](https://github.com/openclaw/openclaw) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) 等 AI Agent，一句话就能抽卡：
+解压目录根有 `SKILL.md`——把**整个目录**交给 [Cursor](https://www.cursor.com/) / [Antigravity](https://antigravity.google/) / [dsh](https://github.com/deepseek-ai/deepseek-harness) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) / [Devin](https://devin.ai/) 等 AI Agent，一句话就能抽卡：
 
 ```
 你   ：「猫耳女仆咖啡厅，半裸，三连抽」
